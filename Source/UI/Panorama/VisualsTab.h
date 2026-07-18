@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Features/Visuals/ModelGlow/ModelGlowState.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerStateIcons/PlayerStateIconsToShow.h>
 #include <GameClient/Panorama/PanoramaDropDown.h>
 #include <GameClient/Panorama/Slider.h>
@@ -15,6 +16,7 @@
 #include "Tabs/VisualsTab/PlayerModelGlowDropdownSelectionChangeHandler.h"
 #include "Tabs/VisualsTab/PlayerOutlineGlowColorModeDropdownSelectionChangeHandler.h"
 #include "Tabs/VisualsTab/PlayerOutlineGlowDropdownSelectionChangeHandler.h"
+#include "Tabs/VisualsTab/FloatSlider.h"
 
 template <typename HookContext>
 class VisualsTab {
@@ -30,6 +32,7 @@ public:
         initModelGlowTab(guiPanel);
         initOutlineGlowTab(guiPanel);
         initViewmodelTab(guiPanel);
+        initGrenadePredictionTab(guiPanel);
     }
 
     void updateFromConfig(auto&& mainMenu) const noexcept
@@ -38,6 +41,7 @@ public:
         updateOutlineGlowTab(mainMenu);
         updateModelGlowTab(mainMenu);
         updateViewmodelTab(mainMenu);
+        updateGrenadePredictionTab(mainMenu);
     }
 
 private:
@@ -126,6 +130,14 @@ private:
     {
         initDropDown<OnOffDropdownSelectionChangeHandler<HookContext, viewmodel_mod_vars::Enabled>>(guiPanel, "viewmodel_mod");
         initDropDown<OnOffDropdownSelectionChangeHandler<HookContext, viewmodel_mod_vars::ModifyFov>>(guiPanel, "viewmodel_fov_mod");
+    }
+
+    void initGrenadePredictionTab(auto&& guiPanel) const
+    {
+        initDropDown<OnOffDropdownSelectionChangeHandler<HookContext, grenade_prediction_vars::Enabled>>(guiPanel, "grenade_prediction_enable");
+        initDropDown<OnOffDropdownSelectionChangeHandler<HookContext, grenade_prediction_vars::AlwaysShowLastCache>>(guiPanel, "grenade_prediction_always_show_last_cache");
+        registerHueSliderUpdateHandler<grenade_prediction_vars::TrajectoryHue, "grenade_prediction_trajectory_hue">(guiPanel);
+        registerHueSliderUpdateHandler<grenade_prediction_vars::BounceHue, "grenade_prediction_bounce_hue">(guiPanel);
     }
 
     template <typename Handler>
@@ -229,6 +241,15 @@ private:
         updateSlider<viewmodel_mod_vars::Fov>(mainMenu, "viewmodel_fov");
     }
 
+    void updateGrenadePredictionTab(auto&& mainMenu) const noexcept
+    {
+        setDropDownSelectedIndex(mainMenu, "grenade_prediction_enable", !GET_CONFIG_VAR(grenade_prediction_vars::Enabled));
+        setDropDownSelectedIndex(mainMenu, "grenade_prediction_always_show_last_cache", !GET_CONFIG_VAR(grenade_prediction_vars::AlwaysShowLastCache));
+        updateHueSlider<grenade_prediction_vars::TrajectoryHue>(mainMenu, "grenade_prediction_trajectory_hue");
+        updateHueSlider<grenade_prediction_vars::BounceHue>(mainMenu, "grenade_prediction_bounce_hue");
+        updateFloatSlider(mainMenu, "grenade_prediction_cache_duration", GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration));
+    }
+
     template <typename ConfigVariable>
     void updateSlider(auto&& mainMenu, const char* sliderId) const noexcept
     {
@@ -238,6 +259,13 @@ private:
     void updateSlider(auto&& mainMenu, const char* sliderId, std::uint8_t value) const noexcept
     {
         auto&& slider = hookContext.template make<IntSlider>(mainMenu.findChildInLayoutFile(sliderId));
+        slider.updateSlider(value);
+        slider.updateTextEntry(value);
+    }
+
+    void updateFloatSlider(auto&& mainMenu, const char* sliderId, float value) const noexcept
+    {
+        auto&& slider = hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId));
         slider.updateSlider(value);
         slider.updateTextEntry(value);
     }
