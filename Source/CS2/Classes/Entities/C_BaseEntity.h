@@ -21,6 +21,8 @@ struct C_BaseEntity : CEntityInstance {
     using m_pSubclassVData = CEntitySubclassVDataBase*;
     using m_pRenderComponent = CRenderComponent*;
     using m_hOwnerEntity = CEntityHandle;
+    using m_vecViewOffset = Vector;
+    using m_vecAbsVelocity = Vector;
     using GetAbsOrigin = Vector*(C_BaseEntity* thisptr);
 };
 
