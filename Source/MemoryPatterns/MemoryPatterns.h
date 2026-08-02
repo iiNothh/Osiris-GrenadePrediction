@@ -35,7 +35,9 @@ constexpr auto kClientPatterns = []() consteval {
         .ADD_PATTERNS(EntityPatterns)
         .ADD_PATTERNS(EntitySystemPatterns)
 #if IS_WIN64()
+        .ADD_PATTERNS(DecoyProjectilePatterns)
         .ADD_PATTERNS(EngineTracePatterns)
+        .ADD_PATTERNS(GrenadeProjectilePatterns)
 #endif
         .ADD_PATTERNS(GameRulesPatterns)
         .ADD_PATTERNS(GameSceneNodePatterns)

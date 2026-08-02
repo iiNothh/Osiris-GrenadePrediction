@@ -23,7 +23,13 @@ public:
     void run() const noexcept
     {
         auto bombPlantAlertVisibility = Visibility::Hidden;
+#if IS_WIN64()
+        hookContext.template make<GrenadePrediction>().beginLiveGrenadeScan();
+#endif
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([this, &bombPlantAlertVisibility](const auto& entityIdentity) { handleEntityIdentity(entityIdentity, bombPlantAlertVisibility); });
+#if IS_WIN64()
+        hookContext.template make<GrenadePrediction>().endLiveGrenadeScan();
+#endif
         hookContext.template make<GrenadePrediction>().run();
         hookContext.template make<ModelGlow>().postUpdateInMainThread();
         if (bombPlantAlertVisibility == Visibility::Hidden)
@@ -57,6 +63,9 @@ private:
         } else if (entityTypeInfo.isGrenadeProjectile()) {
             updateModelGlow<GrenadeProjectileModelGlow>(baseEntity, entityTypeInfo);
             applyOutlineGlow<GrenadeProjectileOutlineGlow>(baseEntity, entityTypeInfo);
+#if IS_WIN64()
+            hookContext.template make<GrenadePrediction>().observeLiveGrenade(baseEntity, entityTypeInfo);
+#endif
         } else if (entityTypeInfo.isWeapon()) {
             updateModelGlow<WeaponModelGlow>(baseEntity.template as<BaseWeapon>(), entityTypeInfo);
             applyOutlineGlow<WeaponOutlineGlow>(baseEntity, entityTypeInfo);

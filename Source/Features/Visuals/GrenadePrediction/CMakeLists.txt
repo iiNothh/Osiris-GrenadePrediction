@@ -4,4 +4,5 @@ set(GRENADE_PREDICTION_HEADERS
 )
 
 add_subdirectory(Held)
+add_subdirectory(Live)
 add_subdirectory(Rendering)
