@@ -70,17 +70,18 @@ private:
     [[nodiscard]] bool createLine(cs2::CUIPanel* parent, const cs2::Vector& start, const cs2::Vector& end, const GrenadePredictionRenderStyle& style, float aspectRatio, cs2::PanelHandle& handle) noexcept
     {
         const auto projected = project(start, end, aspectRatio);
-        if (!projected)
+        if (!projected.hasValue())
             return false;
+        const auto& line = projected.value();
         auto panel = getOrCreate(parent, handle);
         if (!panel)
             return false;
         panel.setBackgroundColor(style.lineColor);
         panel.setTransformOrigin(cs2::CUILength::percent(0.0f), cs2::CUILength::percent(50.0f));
-        panel.setRotate2dCentered(projected->angleDegrees());
-        const auto left = projected->start.x < projected->end.x ? projected->start.x : projected->end.x;
-        const auto right = projected->start.x < projected->end.x ? projected->end.x : projected->start.x;
-        panel.setPosition(cs2::CUILength::percent((left + 1.0f) * 50.0f), cs2::CUILength::percent((1.0f - projected->start.y) * 50.0f));
+        panel.setRotate2dCentered(line.angleDegrees());
+        const auto left = line.start.x < line.end.x ? line.start.x : line.end.x;
+        const auto right = line.start.x < line.end.x ? line.end.x : line.start.x;
+        panel.setPosition(cs2::CUILength::percent((left + 1.0f) * 50.0f), cs2::CUILength::percent((1.0f - line.start.y) * 50.0f));
         panel.setWidth(cs2::CUILength::percent((right - left) * 50.0f));
         panel.setHeight(cs2::CUILength::pixels(style.lineWidth));
         panel.show();
@@ -90,7 +91,7 @@ private:
     [[nodiscard]] bool createMarker(cs2::CUIPanel* parent, const cs2::Vector& position, cs2::Color color, float size, float aspectRatio, cs2::PanelHandle& handle) noexcept
     {
         const auto point = projectPoint(position, aspectRatio);
-        if (!point)
+        if (!point.hasValue())
             return false;
         auto panel = getOrCreate(parent, handle);
         if (!panel)
@@ -100,7 +101,7 @@ private:
         panel.setWidth(cs2::CUILength::pixels(size));
         panel.setHeight(cs2::CUILength::pixels(size));
         panel.setTransformOrigin(cs2::CUILength::percent(50.0f), cs2::CUILength::percent(50.0f));
-        panel.setPosition(cs2::CUILength::percent((point->x + 1.0f) * 50.0f), cs2::CUILength::percent((1.0f - point->y) * 50.0f));
+        panel.setPosition(cs2::CUILength::percent((point.value().x + 1.0f) * 50.0f), cs2::CUILength::percent((1.0f - point.value().y) * 50.0f));
         panel.show();
         return true;
     }
