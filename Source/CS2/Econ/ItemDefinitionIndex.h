@@ -11,6 +11,8 @@ enum class ItemDefinitionIndex : std::uint16_t {
     Flashbang = 43,
     HEGrenade = 44,
     SmokeGrenade = 45,
+    Molotov = 46,
+    Decoy = 47,
     Incendiary = 48,
     M9Bayonet = 508
 };
