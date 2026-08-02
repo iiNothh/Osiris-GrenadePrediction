@@ -80,7 +80,7 @@ public:
 
     [[nodiscard]] static cs2::Vector clipVelocity(cs2::Vector velocity, cs2::Vector normal, float overbounce, float pushOff) noexcept
     {
-        const float backoff = Math::max(-velocity.dot(normal) * overbounce, 0.0f) + pushOff;
+        const float backoff = Math::maximum(-velocity.dot(normal) * overbounce, 0.0f) + pushOff;
         return velocity + normal * backoff;
     }
 

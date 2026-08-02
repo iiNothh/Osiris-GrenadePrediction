@@ -11,7 +11,7 @@ namespace Math
     return (std::bit_cast<std::uint32_t>(value) & 0x7F800000u) != 0x7F800000u;
 }
 
-[[nodiscard]] constexpr float max(float first, float second) noexcept
+[[nodiscard]] constexpr float maximum(float first, float second) noexcept
 {
     return first > second ? first : second;
 }
