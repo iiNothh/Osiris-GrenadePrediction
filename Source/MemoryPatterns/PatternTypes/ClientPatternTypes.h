@@ -5,7 +5,10 @@
 #include <CS2/Classes/CSceneObject.h>
 #include <CS2/Classes/CViewRender.h>
 #include <CS2/Classes/Entities/CCSPlayerController.h>
+#include <CS2/Classes/Entities/C_CSPlayerPawn.h>
+#include <CS2/Classes/Entities/C_CSWeaponBase.h>
 #include <CS2/Classes/Glow.h>
+#include <CS2/Classes/Vector.h>
 #include <CS2/Classes/VMatrix.h>
 #include <CS2/Panorama/CPanel2D.h>
 #include <Platform/Macros/IsPlatform.h>
@@ -25,6 +28,7 @@ STRONG_TYPE_ALIAS(PointerToClientMode, cs2::ClientModeCSNormal*);
 
 #if IS_WIN64()
 STRONG_TYPE_ALIAS(SetSceneObjectAttributeFloat4, void(*)(cs2::SceneObjectAttributes::FloatAttributes* attributes, unsigned int attributeNameHash, float value[4]));
+STRONG_TYPE_ALIAS(BuildGrenadeLaunchFunction, char(*)(cs2::C_CSWeaponBase*, cs2::C_CSPlayerPawn*, cs2::Vector*, cs2::Vector*, bool));
 #else
 STRONG_TYPE_ALIAS(SetSceneObjectAttributeFloat4, void(*)(cs2::SceneObjectAttributes::FloatAttributes* attributes, unsigned int attributeNameHash, double value1, double value2));
 #endif
