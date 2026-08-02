@@ -37,6 +37,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
     hookContext.template make<OutlineGlow>().onUnload();
     hookContext.template make<BombStatusPanel>().onUnload();
     hookContext.template make<InWorldPanels>().onUnload();
+    hookContext.template make<GrenadePrediction>().clearPrediction();
     hookContext.template make<PanoramaGUI>().onUnload();
     hookContext.hooks().viewRenderHook.uninstall();
     hookContext.template make<ClientModeHooks>().restoreGetViewmodelFov();

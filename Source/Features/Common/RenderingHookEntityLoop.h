@@ -6,6 +6,7 @@
 #include <GameClient/Entities/BaseModelEntity.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <Features/Visuals/ModelGlow/ModelGlow.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePrediction.h>
 #include <Features/Visuals/OutlineGlow/OutlineGlow.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoInWorld.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
@@ -23,6 +24,7 @@ public:
     {
         auto bombPlantAlertVisibility = Visibility::Hidden;
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([this, &bombPlantAlertVisibility](const auto& entityIdentity) { handleEntityIdentity(entityIdentity, bombPlantAlertVisibility); });
+        hookContext.template make<GrenadePrediction>().run();
         hookContext.template make<ModelGlow>().postUpdateInMainThread();
         if (bombPlantAlertVisibility == Visibility::Hidden)
             hookContext.template make<BombPlantAlert>().hide();

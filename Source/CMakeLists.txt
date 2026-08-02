@@ -1,5 +1,7 @@
 add_library(Osiris SHARED dllmain.cpp)
 
+add_subdirectory(Features/Visuals/GrenadePrediction)
+
 set_target_properties(Osiris PROPERTIES
   CXX_VISIBILITY_PRESET hidden
   C_VISIBILITY_PRESET hidden

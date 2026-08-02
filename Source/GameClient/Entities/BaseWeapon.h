@@ -37,6 +37,11 @@ public:
         return hookContext.template make<BaseEntity>(baseWeapon);
     }
 
+    [[nodiscard]] cs2::C_CSWeaponBase* raw() const noexcept
+    {
+        return baseWeapon;
+    }
+
     [[nodiscard]] bool isSniperRifle() const noexcept
     {
         switch (baseEntity().classify().typeIndex) {

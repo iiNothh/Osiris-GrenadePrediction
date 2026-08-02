@@ -3,6 +3,7 @@ target_sources(UnitTests PRIVATE
     EngineTraceTests.cpp
     EngineTraceTypesTests.cpp
     GrenadeLaunchTests.cpp
+    ViewToProjectionMatrixTests.cpp
 )
 
 add_subdirectory(Hud)
