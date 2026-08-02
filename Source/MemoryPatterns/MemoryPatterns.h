@@ -27,13 +27,16 @@ struct MemoryPatterns {
 
 constexpr auto kClientPatterns = []() consteval {
 #define ADD_PATTERNS(patterns) addPatterns([](auto patternPool) consteval { return patterns::addClientPatterns(patternPool); })
-    constexpr auto builder = PatternPoolBuilder<TempPatternPool<2000, 100>>{}
+    constexpr auto builder = PatternPoolBuilder<TempPatternPool<2000, 110>>{}
         .ADD_PATTERNS(BaseModelEntityPatterns)
         .ADD_PATTERNS(C4Patterns)
         .ADD_PATTERNS(ClientPatterns)
         .ADD_PATTERNS(CvarPatterns)
         .ADD_PATTERNS(EntityPatterns)
         .ADD_PATTERNS(EntitySystemPatterns)
+#if IS_WIN64()
+        .ADD_PATTERNS(EngineTracePatterns)
+#endif
         .ADD_PATTERNS(GameRulesPatterns)
         .ADD_PATTERNS(GameSceneNodePatterns)
         .ADD_PATTERNS(GlobalVarsPatterns)
