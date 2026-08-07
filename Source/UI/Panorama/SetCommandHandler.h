@@ -6,6 +6,7 @@
 #include <GameClient/Panorama/TextEntry.h>
 #include <Platform/Macros/FunctionAttributes.h>
 #include <Utils/StringParser.h>
+#include "Tabs/VisualsTab/FloatSlider.h"
 #include "Tabs/VisualsTab/HueSlider.h"
 #include "Tabs/VisualsTab/IntSlider.h"
 
@@ -98,6 +99,54 @@ private:
         const auto mainMenuPointer = hookContext.patternSearchResults().template get<MainMenuPanelPointer>();
         auto&& mainMenu = hookContext.template make<ClientPanel>(mainMenuPointer ? *mainMenuPointer : nullptr).uiPanel();
         return hookContext.template make<IntSlider>(mainMenu.findChildInLayoutFile(sliderId));
+    }
+
+    template <typename ConfigVariable>
+    void handleFloatSlider(const char* sliderId) const noexcept
+    {
+        const auto newVariableValue = handleFloatSlider(sliderId, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax, GET_CONFIG_VAR(ConfigVariable));
+        getFloatSlider(sliderId).updateTextEntry(newVariableValue);
+        hookContext.config().template setVariable<ConfigVariable>(typename ConfigVariable::ValueType{newVariableValue});
+    }
+
+    [[nodiscard]] float handleFloatSlider(const char* sliderId, float min, float max, float current) const noexcept
+    {
+        float value{};
+        if (!parser.parseFloat(value) || value == current || value < min || value > max)
+            return current;
+
+        getFloatSlider(sliderId).updateTextEntry(value);
+        return value;
+    }
+
+    template <typename ConfigVariable>
+    void handleFloatSliderTextEntry(const char* sliderId) const noexcept
+    {
+        const auto newVariableValue = handleFloatSliderTextEntry(sliderId, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax, GET_CONFIG_VAR(ConfigVariable));
+        hookContext.config().template setVariable<ConfigVariable>(typename ConfigVariable::ValueType{newVariableValue});
+    }
+
+    [[nodiscard]] float handleFloatSliderTextEntry(const char* sliderId, float min, float max, float current) const noexcept
+    {
+        auto&& slider = getFloatSlider(sliderId);
+        float value{};
+        if (!parser.parseFloat(value) || value < min || value > max) {
+            slider.updateTextEntry(current);
+            return current;
+        }
+
+        if (value == current)
+            return current;
+
+        slider.updateSlider(value);
+        return value;
+    }
+
+    [[nodiscard]] decltype(auto) getFloatSlider(const char* sliderId) const noexcept
+    {
+        const auto mainMenuPointer = hookContext.patternSearchResults().template get<MainMenuPanelPointer>();
+        auto&& mainMenu = hookContext.template make<ClientPanel>(mainMenuPointer ? *mainMenuPointer : nullptr).uiPanel();
+        return hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId));
     }
 
     StringParser& parser;
