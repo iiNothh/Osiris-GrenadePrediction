@@ -4,6 +4,7 @@
 
 #include "ConfigVariableTypes.h"
 #include <HookContext/HookContextMacros.h>
+#include <Utils/Math.h>
 
 template <typename HookContext>
 class ConfigSchema {
@@ -222,6 +223,9 @@ private:
                     hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{std::clamp(hue, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax)});
                 } else if constexpr (std::is_same_v<std::uint8_t, typename ConfigVariable::ValueType::ValueType>) {
                     hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{std::clamp(saturateCast<std::uint8_t>(value), ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax)});
+                } else if constexpr (std::is_same_v<float, typename ConfigVariable::ValueType::ValueType>) {
+                    if (Math::isFinite(value))
+                        hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{std::clamp(value, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax)});
                 } else {
                     static_assert(!std::is_same_v<ConfigVariable, ConfigVariable>, "Unsupported type");
                 }
