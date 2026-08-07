@@ -10,3 +10,4 @@ struct RangeConstrainedVariableParams {
 };
 
 using HueVariableParams = RangeConstrainedVariableParams<color::HueInteger>;
+using FloatVariableParams = RangeConstrainedVariableParams<float>;
