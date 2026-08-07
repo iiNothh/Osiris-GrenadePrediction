@@ -11,6 +11,7 @@
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 #include <GameClient/Panorama/PanoramaUiPanel.h>
 #include <GameClient/Panorama/Ui3dPanel.h>
+#include <Utils/Math.h>
 #include <Utils/StringBuilder.h>
 
 #include "PanoramaCommandDispatcher.h"
@@ -253,8 +254,11 @@ private:
 
     [[nodiscard]] color::HueInteger handleHueSlider(const char* sliderId, float value, color::HueInteger min, color::HueInteger max, color::HueInteger current) const noexcept
     {
+        if (!Math::isFinite(value) || value < static_cast<float>(min) || value > static_cast<float>(max))
+            return current;
+
         const auto hueIntegral = static_cast<color::HueInteger::UnderlyingType>(value);
-        if (hueIntegral < min || hueIntegral > max || hueIntegral == current)
+        if (hueIntegral == current)
             return current;
 
         const auto hue = color::HueInteger{hueIntegral};
