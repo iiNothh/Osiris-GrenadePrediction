@@ -5,6 +5,9 @@
 namespace cs2
 {
 
+struct C_DecoyProjectile : C_BaseCSGrenadeProjectile {
+};
+
 struct C_HEGrenadeProjectile : C_BaseCSGrenadeProjectile {
 };
 
