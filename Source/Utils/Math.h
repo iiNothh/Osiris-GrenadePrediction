@@ -11,7 +11,7 @@ namespace Math {
 
     [[nodiscard]] inline float abs(float x) noexcept
     {
-        return x < 0.0f ? -x : x;
+        return _mm_cvtss_f32(_mm_andnot_ps(_mm_set_ss(-0.0f), _mm_set_ss(x)));
     }
 
     inline void sincos(float x, float& sine, float& cosine) noexcept
@@ -20,8 +20,25 @@ namespace Math {
         constexpr float kHalfPi = kPi * 0.5f;
         constexpr float kTwoPi = kPi * 2.0f;
         constexpr float kInvTwoPi = 1.0f / kTwoPi;
+        constexpr float kMinimumConvertibleFloat = -2147483648.0f;
+        constexpr float kMaximumConvertibleFloat = 2147483520.0f;
 
-        x -= static_cast<float>(static_cast<int>(x * kInvTwoPi)) * kTwoPi;
+        if (!isFinite(x)) {
+            // Trigonometric functions are undefined for non-finite inputs.
+            sine = x - x;
+            cosine = sine;
+            return;
+        }
+
+        const auto turns = x * kInvTwoPi;
+        if (turns < kMinimumConvertibleFloat || turns > kMaximumConvertibleFloat) {
+            // The phase cannot be reduced accurately without an unsafe conversion; use zero phase.
+            sine = 0.0f;
+            cosine = 1.0f;
+            return;
+        }
+
+        x -= static_cast<float>(static_cast<int>(turns)) * kTwoPi;
         if (x > kPi)
             x -= kTwoPi;
         else if (x < -kPi)
