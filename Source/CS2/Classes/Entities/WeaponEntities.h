@@ -23,6 +23,9 @@ struct C_WeaponTec9 : C_CSWeaponBase {
 struct C_WeaponFiveSeven : C_CSWeaponBase {
 };
 
+struct C_WeaponCZ75a : C_CSWeaponBase {
+};
+
 struct C_DEagle : C_CSWeaponBase {
 };
 
