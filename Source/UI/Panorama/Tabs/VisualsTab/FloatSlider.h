@@ -1,9 +1,11 @@
 #pragma once
 
+#include <charconv>
+#include <limits>
+
 #include <GameClient/Panorama/PanoramaUiPanel.h>
 #include <GameClient/Panorama/Slider.h>
 #include <GameClient/Panorama/TextEntry.h>
-#include <Utils/StringBuilder.h>
 
 template <typename HookContext>
 class FloatSlider {
@@ -21,9 +23,20 @@ public:
 
     void updateTextEntry(float value) const noexcept
     {
-        const auto tenths = static_cast<std::uint32_t>(value * 10.0f + 0.5f);
-        panel().children()[1].clientPanel().template as<TextEntry>()
-            .setText(StringBuilderStorage<100>{}.builder().put(tenths / 10, '.', tenths % 10).cstring());
+        if (value != value || value > (std::numeric_limits<float>::max)() || value < -(std::numeric_limits<float>::max)()) {
+            panel().children()[1].clientPanel().template as<TextEntry>().setText("0.0");
+            return;
+        }
+
+        char text[64];
+        const auto result = std::to_chars(text, text + sizeof(text) - 1, value, std::chars_format::fixed, 1);
+        if (result.ec != std::errc{}) {
+            panel().children()[1].clientPanel().template as<TextEntry>().setText("0.0");
+            return;
+        }
+
+        *result.ptr = '\0';
+        panel().children()[1].clientPanel().template as<TextEntry>().setText(text);
     }
 
 private:
