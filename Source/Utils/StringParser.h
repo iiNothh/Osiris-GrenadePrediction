@@ -111,6 +111,8 @@ public:
                 explicitExponent = -explicitExponent;
         }
 
+        if (*string != '\0' && !isWhitespace(*string))
+            return false;
         if (!hasNonZeroDigit) {
             result = negative ? -0.0f : 0.0f;
             return true;
@@ -157,6 +159,19 @@ public:
     }
 
 private:
+    [[nodiscard]] static constexpr bool isWhitespace(char c) noexcept
+    {
+        switch (c) {
+        case ' ':
+        case '\t':
+        case '\n':
+        case '\r':
+            return true;
+        default:
+            return false;
+        }
+    }
+
     [[nodiscard]] static bool isFinite(std::floating_point auto value) noexcept
     {
         return value == value && value >= -(std::numeric_limits<decltype(value)>::max)() && value <= (std::numeric_limits<decltype(value)>::max)();
