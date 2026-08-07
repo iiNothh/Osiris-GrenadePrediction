@@ -4,6 +4,7 @@
 
 #include "ConfigStringConversionState.h"
 #include <Platform/Macros/FunctionAttributes.h>
+#include <Utils/Math.h>
 
 class ConfigFromString {
 public:
@@ -60,6 +61,12 @@ public:
             valueSetter(value);
     }
 
+    void floatValue(const char8_t* key, auto&& valueSetter, auto&& /* valueGetter */)
+    {
+        if (float value; parseFloat(key, value))
+            valueSetter(value);
+    }
+
 private:
     [[nodiscard]] bool parseBool(const char8_t* key, bool& value) noexcept
     {
@@ -83,6 +90,22 @@ private:
         if (shouldReadMe()) {
             const auto previousReadIndex = readIndex;
             if (readUntilStartOfValue(key) && parseUint(value)) {
+                parsed = true;
+                markElementReadAtCurrentNestingLevel();
+            } else {
+                readIndex = previousReadIndex;
+            }
+        }
+        increaseIndexInNestingLevel();
+        return parsed;
+    }
+
+    [[nodiscard]] bool parseFloat(const char8_t* key, float& value) noexcept
+    {
+        bool parsed = false;
+        if (shouldReadMe()) {
+            const auto previousReadIndex = readIndex;
+            if (readUntilStartOfValue(key) && parseFloat(value)) {
                 parsed = true;
                 markElementReadAtCurrentNestingLevel();
             } else {
@@ -184,6 +207,122 @@ private:
             }
         }
         return false;
+    }
+
+    [[nodiscard]] bool parseFloat(float& result) noexcept
+    {
+        const bool negative = readChar(u8'-');
+        std::uint32_t significand{};
+        std::size_t numberOfSignificantDigits{};
+        std::size_t firstSignificantDigitIndex{};
+        std::size_t numberOfDigitsBeforeDecimalPoint{};
+        std::size_t numberOfFractionalDigits{};
+        bool hasNonZeroDigit{};
+        bool hasFractionalDigit{};
+        bool hasStickyDigit{};
+
+        while (readIndex < buffer.size() && buffer[readIndex] >= u8'0' && buffer[readIndex] <= u8'9') {
+            addFloatDigit(buffer[readIndex++] - u8'0', numberOfDigitsBeforeDecimalPoint, significand, numberOfSignificantDigits, firstSignificantDigitIndex, hasNonZeroDigit, hasStickyDigit);
+            ++numberOfDigitsBeforeDecimalPoint;
+        }
+
+        if (numberOfDigitsBeforeDecimalPoint == 0)
+            return false;
+
+        if (readChar(u8'.')) {
+            while (readIndex < buffer.size() && buffer[readIndex] >= u8'0' && buffer[readIndex] <= u8'9') {
+                addFloatDigit(buffer[readIndex++] - u8'0', numberOfDigitsBeforeDecimalPoint + numberOfFractionalDigits, significand, numberOfSignificantDigits, firstSignificantDigitIndex, hasNonZeroDigit, hasStickyDigit);
+                hasFractionalDigit = true;
+                ++numberOfFractionalDigits;
+            }
+            if (!hasFractionalDigit)
+                return false;
+        }
+
+        int explicitExponent{};
+        if (readIndex < buffer.size() && (buffer[readIndex] == u8'e' || buffer[readIndex] == u8'E')) {
+            ++readIndex;
+            const bool negativeExponent = readChar(u8'-');
+            if (!negativeExponent)
+                (void)readChar(u8'+');
+
+            bool hasExponentDigit{};
+            while (readIndex < buffer.size() && buffer[readIndex] >= u8'0' && buffer[readIndex] <= u8'9') {
+                hasExponentDigit = true;
+                if (explicitExponent <= 1000)
+                    explicitExponent = explicitExponent * 10 + buffer[readIndex] - u8'0';
+                ++readIndex;
+            }
+            if (!hasExponentDigit)
+                return false;
+            if (negativeExponent)
+                explicitExponent = -explicitExponent;
+        }
+
+        if (!isValueTerminator())
+            return false;
+        if (!hasNonZeroDigit) {
+            result = negative ? -0.0f : 0.0f;
+            return true;
+        }
+        if (explicitExponent > 1000)
+            return false;
+        if (explicitExponent < -1000) {
+            result = negative ? -0.0f : 0.0f;
+            return true;
+        }
+
+        if (numberOfSignificantDigits == 10) {
+            const auto guardDigit = significand % 10;
+            significand /= 10;
+            if (guardDigit > 5 || (guardDigit == 5 && (hasStickyDigit || significand % 2 != 0)))
+                ++significand;
+            numberOfSignificantDigits = 9;
+        }
+
+        int decimalExponent = static_cast<int>(numberOfDigitsBeforeDecimalPoint) - static_cast<int>(firstSignificantDigitIndex) - 1 + explicitExponent;
+        if (significand == 1'000'000'000) {
+            significand = 100'000'000;
+            ++decimalExponent;
+        }
+
+        const int scale = decimalExponent - static_cast<int>(numberOfSignificantDigits) + 1;
+        float parsedValue = static_cast<float>(significand);
+        if (scale > 0) {
+            for (int i = 0; i < scale; ++i) {
+                parsedValue *= 10.0f;
+                if (!Math::isFinite(parsedValue))
+                    return false;
+            }
+        } else {
+            for (int i = 0; i > scale; --i)
+                parsedValue /= 10.0f;
+        }
+
+        result = negative ? -parsedValue : parsedValue;
+        return Math::isFinite(result);
+    }
+
+    static void addFloatDigit(std::uint32_t digit, std::size_t digitIndex, std::uint32_t& significand, std::size_t& numberOfSignificantDigits, std::size_t& firstSignificantDigitIndex, bool& hasNonZeroDigit, bool& hasStickyDigit) noexcept
+    {
+        if (!hasNonZeroDigit) {
+            if (digit == 0)
+                return;
+            hasNonZeroDigit = true;
+            firstSignificantDigitIndex = digitIndex;
+        }
+
+        if (numberOfSignificantDigits < 10) {
+            significand = significand * 10 + digit;
+            ++numberOfSignificantDigits;
+        } else if (digit != 0) {
+            hasStickyDigit = true;
+        }
+    }
+
+    [[nodiscard]] bool isValueTerminator() const noexcept
+    {
+        return readIndex == buffer.size() || isWhitespace(buffer[readIndex]) || buffer[readIndex] == u8',' || buffer[readIndex] == u8'}';
     }
 
     [[nodiscard]] bool parseBool(bool& result) noexcept
