@@ -112,7 +112,7 @@ private:
     [[nodiscard]] float handleFloatSlider(const char* sliderId, float min, float max, float current) const noexcept
     {
         float value{};
-        if (!parser.parseFloat(value) || value == current || value < min || value > max)
+        if (!parser.parseFloat(value) || value != value || value == current || value < min || value > max)
             return current;
 
         getFloatSlider(sliderId).updateTextEntry(value);
@@ -130,7 +130,7 @@ private:
     {
         auto&& slider = getFloatSlider(sliderId);
         float value{};
-        if (!parser.parseFloat(value) || value < min || value > max) {
+        if (!parser.parseFloat(value) || value != value || value < min || value > max) {
             slider.updateTextEntry(current);
             return current;
         }

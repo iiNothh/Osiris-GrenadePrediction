@@ -73,6 +73,8 @@ $.Osiris = (function () {
       this.addCommand('set', tabID + '/' + sliderID + '/' + Math.floor(slider.value));
     },
     floatSliderUpdated: function (tabID, sliderID, slider) {
+      if (!Number.isFinite(slider.value))
+        return;
       this.addCommand('set', tabID + '/' + sliderID + '/' + slider.value.toFixed(1));
     },
     sliderTextEntryUpdated: function (tabID, sliderID, panel) {
@@ -449,8 +451,8 @@ u8R"(
     slider.increment = 0.1;
 
     var textEntry = $.CreatePanel('TextEntry', sliderContainer, id + '_text', {
-      maxchars: "4",
-      textmode: "numeric",
+      maxchars: "48",
+      textmode: "text",
       style: "width: 75px; margin-left: 10px; padding-left: 10px; text-align: center; font-size: 20px; color: #ccccccff; font-weight: bold; font-family: Stratum2, notosans, 'Arial Unicode MS'; border: 2px solid #cccccc15;"
     });
 
