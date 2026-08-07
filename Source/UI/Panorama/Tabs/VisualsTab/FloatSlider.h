@@ -1,11 +1,11 @@
 #pragma once
 
-#include <charconv>
-#include <limits>
+#include <cstdint>
 
 #include <GameClient/Panorama/PanoramaUiPanel.h>
 #include <GameClient/Panorama/Slider.h>
 #include <GameClient/Panorama/TextEntry.h>
+#include <Utils/Math.h>
 
 template <typename HookContext>
 class FloatSlider {
@@ -18,28 +18,56 @@ public:
 
     void updateSlider(float value) const noexcept
     {
+        if (!Math::isFinite(value))
+            return;
+
         panel().children()[0].clientPanel().template as<Slider>().setValue(value);
     }
 
     void updateTextEntry(float value) const noexcept
     {
-        if (value != value || value > (std::numeric_limits<float>::max)() || value < -(std::numeric_limits<float>::max)()) {
+        char text[32];
+        if (!formatFixedOneDecimal(value, text, sizeof(text))) {
             panel().children()[1].clientPanel().template as<TextEntry>().setText("0.0");
             return;
         }
 
-        char text[64];
-        const auto result = std::to_chars(text, text + sizeof(text) - 1, value, std::chars_format::fixed, 1);
-        if (result.ec != std::errc{}) {
-            panel().children()[1].clientPanel().template as<TextEntry>().setText("0.0");
-            return;
-        }
-
-        *result.ptr = '\0';
         panel().children()[1].clientPanel().template as<TextEntry>().setText(text);
     }
 
 private:
+    [[nodiscard]] static bool formatFixedOneDecimal(float value, char* output, std::uint32_t outputSize) noexcept
+    {
+        // Keep the conversion below inside the exactly representable signed int range.
+        constexpr float kMaximumValue = 214748300.0f;
+        constexpr std::uint32_t kRequiredOutputSize = 13;
+        if (!Math::isFinite(value) || value < -kMaximumValue || value > kMaximumValue || outputSize < kRequiredOutputSize)
+            return false;
+
+        const auto roundedValue = value * 10.0f + (value < 0.0f ? -0.5f : 0.5f);
+        const auto scaledValue = static_cast<std::int32_t>(roundedValue);
+        const auto negative = scaledValue < 0;
+        const auto magnitude = negative
+            ? static_cast<std::uint32_t>(-(scaledValue + 1)) + 1
+            : static_cast<std::uint32_t>(scaledValue);
+
+        std::uint32_t divisor = 1;
+        while (magnitude / divisor >= 10)
+            divisor *= 10;
+
+        auto* position = output;
+        if (negative)
+            *position++ = '-';
+        do {
+            *position++ = static_cast<char>('0' + magnitude / divisor);
+            divisor /= 10;
+        } while (divisor != 0);
+        *position++ = '.';
+        *position++ = static_cast<char>('0' + magnitude % 10);
+        *position = '\0';
+        return true;
+    }
+
     [[nodiscard]] decltype(auto) panel() const noexcept
     {
         return hookContext.template make<PanoramaUiPanel>(panel_);
