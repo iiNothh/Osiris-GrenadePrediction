@@ -72,6 +72,9 @@ $.Osiris = (function () {
     sliderUpdated: function (tabID, sliderID, slider) {
       this.addCommand('set', tabID + '/' + sliderID + '/' + Math.floor(slider.value));
     },
+    floatSliderUpdated: function (tabID, sliderID, slider) {
+      this.addCommand('set', tabID + '/' + sliderID + '/' + slider.value.toFixed(1));
+    },
     sliderTextEntryUpdated: function (tabID, sliderID, panel) {
       this.addCommand('set', tabID + '/' + sliderID + '/' + panel.text);
     }
@@ -409,6 +412,44 @@ u8R"(
 
     var textEntry = $.CreatePanel('TextEntry', sliderContainer, id + '_text', {
       maxchars: "3",
+      textmode: "numeric",
+      style: "width: 75px; margin-left: 10px; padding-left: 10px; text-align: center; font-size: 20px; color: #ccccccff; font-weight: bold; font-family: Stratum2, notosans, 'Arial Unicode MS'; border: 2px solid #cccccc15;"
+    });
+
+    textEntry.SetPanelEvent('ontextentrysubmit', function () { $.Osiris.sliderTextEntryUpdated('visuals', `${id}_text`, textEntry); });
+    textEntry.SetPanelEvent('onfocus', function () { textEntry.style.backgroundColor = 'gradient(linear, 100% 0%, 0% 0%, from(#00000080), color-stop(0, #00000060), to(#00000080))'; });
+    textEntry.SetPanelEvent('onblur', function () { textEntry.style.backgroundColor = 'none'; });
+    textEntry.SetPanelEvent('onmouseover', function () { if (!textEntry.BHasKeyFocus()) textEntry.style.backgroundColor = 'gradient(linear, 100% 0%, 0% 0%, from(#000000ff), color-stop(0, #00000000), to(#00000050));'; });
+    textEntry.SetPanelEvent('onmouseout', function () { if (!textEntry.BHasKeyFocus()) textEntry.style.backgroundColor = 'none'; });
+  }
+
+  var createFloatSlider = function (parent, name, id, min, max, rowId = '') {
+    var container = $.CreatePanel('Panel', parent, rowId, {
+      class: "SettingsMenuDropdownContainer"
+    });
+
+    $.CreatePanel('Label', container, '', {
+      class: "half-width",
+      text: name
+    });
+
+    var sliderContainer = $.CreatePanel('Panel', container, id, {
+      style: "vertical-align: center; horizontal-align: right; flow-children: right; margin-right: 8px;"
+    });
+
+    var slider = $.CreatePanel('Slider', sliderContainer, '', {
+      class: "HorizontalSlider",
+      style: "width: 200px; vertical-align: center;",
+      direction: "horizontal"
+    });
+
+    slider.SetPanelEvent('onvaluechanged', function () { $.Osiris.floatSliderUpdated('visuals', id, slider); });
+    slider.min = min;
+    slider.max = max;
+    slider.increment = 0.1;
+
+    var textEntry = $.CreatePanel('TextEntry', sliderContainer, id + '_text', {
+      maxchars: "4",
       textmode: "numeric",
       style: "width: 75px; margin-left: 10px; padding-left: 10px; text-align: center; font-size: 20px; color: #ccccccff; font-weight: bold; font-family: Stratum2, notosans, 'Arial Unicode MS'; border: 2px solid #cccccc15;"
     });
