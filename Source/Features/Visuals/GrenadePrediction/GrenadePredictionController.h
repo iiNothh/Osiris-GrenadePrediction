@@ -37,4 +37,11 @@ public:
     {
         return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::Decoy, {.decoyShotTick = decoy.decoyShotTick()});
     }
+
+    template <typename Projectile>
+    static bool updateHELiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
+    {
+        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::HEGrenade,
+            {.heExplodeEffectTickBegin = projectile.explodeEffectTickBegin()});
+    }
 };
