@@ -18,4 +18,7 @@ struct CEntityHandle {
     std::uint32_t value;
 };
 
+template <typename>
+using CHandle = CEntityHandle;
+
 }

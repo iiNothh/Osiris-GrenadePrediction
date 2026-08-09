@@ -1,11 +1,11 @@
 #pragma once
 
-#include "C_BaseModelEntity.h"
+#include "C_BaseGrenade.h"
 
 namespace cs2
 {
 
-struct C_BaseCSGrenadeProjectile : C_BaseModelEntity {
+struct C_BaseCSGrenadeProjectile : C_BaseGrenade {
 };
 
 }
