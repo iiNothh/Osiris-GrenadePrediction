@@ -7,12 +7,17 @@ namespace grenade_prediction_params
     constexpr float kSimDt = 1.0f / 64.0f;
     constexpr int kMovementSubsteps = 2;
     constexpr float kMovementSubstepDt = 1.0f / 128.0f;
+    constexpr float kDefaultServerGravity = 800.0f;
     constexpr float kGravityScale = 0.40f;
     constexpr float kElasticity = 0.45f;
     constexpr float kStopSpeedSq = 400.0f;
     constexpr float kStopDisplacementSq = 1.42e-14f;
     constexpr float kMolotovSlope = 0.8660254f;
     constexpr float kClipPushOff = 0.03125f;
+    constexpr float kSteepFloorDampingNormalZ = 0.7f;
+    constexpr float kSteepFloorDampingSpeedSq = 96000.0f;
+    constexpr float kSteepFloorDampingDirectionDot = 0.5f;
+    constexpr float kSteepFloorDampingScaleBase = 1.5f;
 
     constexpr std::uint64_t kInFlightTraceMask = 0x200003001ULL;
     constexpr std::uint8_t kInFlightTraceCollisionGroup = 16;

@@ -6,34 +6,41 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
+#include <GameClient/EngineTrace/EngineTraceTypes.h>
+#include <GameClient/Entities/EntityClassifier.h>
+#include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
 #include <Utils/Math.h>
+
+struct StepResult {
+    bool traceSucceeded{true};
+    bool impactDetonate{};
+    bool hit{};
+    int contactsCount{};
+};
+
+template <typename HookContext> struct GrenadeSimulatorTestAccess;
 
 template <typename HookContext>
 class GrenadeSimulator {
 public:
-    explicit GrenadeSimulator(HookContext& hookContext) noexcept
-        : hookContext{hookContext}
-    {
-    }
+    explicit GrenadeSimulator(HookContext& hookContext) noexcept : hookContext{hookContext} {}
 
-    void setPlayerCollisionSnapshot(const GrenadePlayerCollisionSnapshot* snapshot) noexcept
-    {
-        playerCollisionSnapshot = snapshot;
-    }
+    void setPlayerCollisionSnapshot(const GrenadePlayerCollisionSnapshot* snapshot) noexcept { playerCollisionSnapshot = snapshot; }
 
     void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         trajectory.clear();
-        trajectoryOutput = &trajectory;
+        trajectory.endPos = launch.origin;
         playerResponseUsed = false;
+        passedPaneHandle = {};
+        hasPassedPane = false;
+        trajectoryOutput = &trajectory;
 
-        if (!validKind(kind) || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f) {
+        if (kind == cs2::GrenadeKind::None || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f) {
             trajectoryOutput = nullptr;
             return;
         }
-
-        trajectory.endPos = launch.origin;
 
         auto position = launch.origin;
         auto velocity = launch.velocity;
@@ -41,11 +48,8 @@ public:
         int bounceCount{};
         bool landedOnSurface{};
         for (int tick{}; tick < grenade_prediction_params::kMaxTicks; ++tick) {
-            if (pointTimer == 0 && !trajectory.appendPoint(position)) {
-                invalidate(trajectory, launch.origin);
-                return;
-            }
-
+            if (pointTimer == 0)
+                static_cast<void>(trajectory.appendPoint(position));
             const auto previousPosition = position;
             const auto result = step(position, velocity, kind, skipEntity, serverGravity);
             if (!result.traceSucceeded || !finite(position) || !finite(velocity)) {
@@ -69,47 +73,46 @@ public:
         }
 
         trajectoryOutput = nullptr;
-        if (!trajectory.valid)
-            return;
-        if (trajectory.pointsCount == 0 || !finite(trajectory.endPos)) {
-            invalidate(trajectory, launch.origin);
-            return;
-        }
-        if (trajectory.points[trajectory.pointsCount - 1].squareDistTo(trajectory.endPos) > 1.0f && !trajectory.appendPoint(trajectory.endPos))
-            invalidate(trajectory, launch.origin);
+        if (trajectory.valid && trajectory.pointsCount && trajectory.points[trajectory.pointsCount - 1].squareDistTo(trajectory.endPos) > 1.0f
+            && trajectory.pointsCount < Trajectory::kPointsCapacity)
+            static_cast<void>(trajectory.appendPoint(trajectory.endPos));
     }
 
 private:
-    struct StepResult {
+    struct CollisionResult {
         bool traceSucceeded{true};
         bool impactDetonate{};
-        bool hit{};
-        int contactsCount{};
+        bool stopped{};
     };
 
-    [[nodiscard]] static bool finite(cs2::Vector value) noexcept
-    {
-        return grenade_player_collision_mirror::finite(value);
-    }
-
-    [[nodiscard]] static bool validKind(cs2::GrenadeKind kind) noexcept
-    {
-        return kind != cs2::GrenadeKind::None;
-    }
-
+    [[nodiscard]] static bool finite(cs2::Vector value) noexcept { return grenade_player_collision_mirror::finite(value); }
     [[nodiscard]] static bool validTrace(const Optional<TraceResult>& trace) noexcept
     {
         return trace.hasValue() && Math::isFinite(trace.value().fraction) && trace.value().fraction >= 0.0f && trace.value().fraction <= 1.0f
             && finite(trace.value().endPos) && finite(trace.value().normal);
     }
-
     void invalidate(Trajectory& trajectory, cs2::Vector start) noexcept
     {
         trajectory.clear();
         trajectory.endPos = start;
         trajectoryOutput = nullptr;
     }
-
+    [[nodiscard]] Optional<TraceResult> traceInFlight(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
+    {
+        if constexpr (requires(HookContext& context, cs2::Vector traceStart, cs2::Vector traceEnd, void* first, void* second) {
+            context.template make<EngineTrace>().traceGrenadeHull(traceStart, traceEnd,
+                engine_trace::TraceFilterExcludedEntities{first, second}, grenade_prediction_params::kInFlightTraceMask,
+                grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
+        }) {
+            if (auto* const passedPane = resolvePassedPane()) {
+                return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
+                    engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}, grenade_prediction_params::kInFlightTraceMask,
+                    grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
+            }
+        }
+        return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity, grenade_prediction_params::kInFlightTraceMask,
+            grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
+    }
     [[nodiscard]] StepResult step(cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         StepResult result;
@@ -117,67 +120,131 @@ private:
             if (const auto* candidate = grenade_player_collision_mirror::select(*playerCollisionSnapshot, position);
                 candidate && grenade_player_collision_mirror::apply(position, *candidate, velocity)) {
                 playerResponseUsed = true;
-                if (!appendPlayerResponsePoint(position))
-                    return {.traceSucceeded = false};
+                appendPlayerResponsePoint(position);
             }
         }
-
         for (int substep{}; substep < grenade_prediction_params::kMovementSubsteps; ++substep) {
-            const float oldZ = velocity.z;
-            velocity.z -= serverGravity * grenade_prediction_params::kGravityScale * grenade_prediction_params::kMovementSubstepDt;
-            const auto movement = cs2::Vector{velocity.x * grenade_prediction_params::kMovementSubstepDt, velocity.y * grenade_prediction_params::kMovementSubstepDt,
-                (oldZ + velocity.z) * 0.5f * grenade_prediction_params::kMovementSubstepDt};
-            if (!finite(movement))
+            const auto collision = movementSubstep(position, velocity, kind, skipEntity, result, serverGravity);
+            if (!collision.traceSucceeded)
                 return {.traceSucceeded = false};
-
-            const auto trace = hookContext.template make<EngineTrace>().traceGrenadeHull(position, position + movement, skipEntity,
-                grenade_prediction_params::kInFlightTraceMask, grenade_prediction_params::kInFlightTraceCollisionGroup,
-                grenade_prediction_params::kInFlightTraceQueryByte);
-            if (!validTrace(trace))
-                return {.traceSucceeded = false};
-            if (trace.value().fraction >= 1.0f) {
-                position = position + movement;
-                continue;
-            }
-
-            position = trace.value().endPos;
-            result.hit = true;
-            ++result.contactsCount;
-            if (!appendWorldContactPoint(position))
-                return {.traceSucceeded = false};
-
-            auto bounce = clipVelocity(velocity, trace.value().normal, 2.0f) * grenade_prediction_params::kElasticity;
-            const float speedSq = bounce.squareLength();
-            if (!finite(bounce) || !Math::isFinite(speedSq))
-                return {.traceSucceeded = false};
-            if ((kind == cs2::GrenadeKind::Molotov || kind == cs2::GrenadeKind::Incendiary)
-                && (trace.value().normal.z >= grenade_prediction_params::kMolotovSlope || speedSq < grenade_prediction_params::kStopSpeedSq)) {
-                velocity = {};
+            if (collision.impactDetonate) {
                 result.impactDetonate = true;
                 return result;
             }
-            velocity = speedSq < grenade_prediction_params::kStopSpeedSq ? cs2::Vector{} : bounce;
         }
         return result;
     }
-
+    [[nodiscard]] CollisionResult movementSubstep(cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity,
+        StepResult& result, float serverGravity) noexcept
+    {
+        const float oldZ = velocity.z;
+        velocity.z -= serverGravity * grenade_prediction_params::kGravityScale * grenade_prediction_params::kMovementSubstepDt;
+        const auto movement = cs2::Vector{velocity.x * grenade_prediction_params::kMovementSubstepDt, velocity.y * grenade_prediction_params::kMovementSubstepDt,
+            (oldZ + velocity.z) * 0.5f * grenade_prediction_params::kMovementSubstepDt};
+        if (!finite(movement))
+            return {.traceSucceeded = false};
+        const auto trace = traceInFlight(position, position + movement, skipEntity);
+        if (!validTrace(trace))
+            return {.traceSucceeded = false};
+        if (trace.value().fraction >= 1.0f) {
+            position = position + movement;
+            return {};
+        }
+        cs2::CEntityHandle dynamicPropHandle{};
+        if (!hasPassedPane && getDynamicPropHandle(trace.value(), dynamicPropHandle)) {
+            passedPaneHandle = dynamicPropHandle;
+            hasPassedPane = true;
+            position = trace.value().endPos;
+            velocity = velocity * 0.4f;
+            result.hit = true;
+            return {};
+        }
+        position = trace.value().endPos;
+        result.hit = true;
+        ++result.contactsCount;
+        appendWorldContactPoint(position);
+        const auto response = applyContactResponse(trace.value(), velocity, kind);
+        if (response.stopped || response.impactDetonate)
+            return response;
+        const auto remainingTime = (1.0f - trace.value().fraction) * grenade_prediction_params::kMovementSubstepDt;
+        const auto continuation = traceInFlight(position, position + velocity * remainingTime, skipEntity);
+        if (!validTrace(continuation))
+            return {.traceSucceeded = false};
+        position = continuation.value().fraction >= 1.0f ? position + velocity * remainingTime : continuation.value().endPos;
+        return {};
+    }
+    [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept
+    {
+        auto bounce = clipVelocity(velocity, trace.normal, 2.0f) * grenade_prediction_params::kElasticity;
+        const float speedSq = bounce.squareLength();
+        if (!finite(bounce) || !Math::isFinite(speedSq))
+            return {.traceSucceeded = false};
+        if (trace.rawEntityHandle == engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
+            && speedSq > grenade_prediction_params::kSteepFloorDampingSpeedSq) {
+            const float directionDot = (bounce * (1.0f / Math::sqrt(speedSq))).dot(trace.normal);
+            if (directionDot > grenade_prediction_params::kSteepFloorDampingDirectionDot)
+                bounce = bounce * (grenade_prediction_params::kSteepFloorDampingScaleBase - directionDot);
+        }
+        if ((kind == cs2::GrenadeKind::Molotov || kind == cs2::GrenadeKind::Incendiary)
+            && (trace.normal.z >= grenade_prediction_params::kMolotovSlope || speedSq < grenade_prediction_params::kStopSpeedSq)) {
+            velocity = {};
+            return {.impactDetonate = true, .stopped = true};
+        }
+        if (speedSq < grenade_prediction_params::kStopSpeedSq) {
+            velocity = {};
+            return {.stopped = true};
+        }
+        velocity = bounce;
+        return {};
+    }
     [[nodiscard]] static cs2::Vector clipVelocity(cs2::Vector velocity, cs2::Vector normal, float overbounce) noexcept
     {
         const float projected = -velocity.dot(normal) * overbounce;
         const float backoff = (projected > 0.0f ? projected : 0.0f) + grenade_prediction_params::kClipPushOff;
         return velocity + normal * backoff;
     }
-
-    [[nodiscard]] bool appendWorldContactPoint(cs2::Vector point) noexcept
+    void appendWorldContactPoint(cs2::Vector point) noexcept
     {
-        return trajectoryOutput && trajectoryOutput->appendPoint(point) && trajectoryOutput->appendWorldContactMarker();
+        if (trajectoryOutput && trajectoryOutput->appendPoint(point))
+            static_cast<void>(trajectoryOutput->appendWorldContactMarker());
     }
-
-    [[nodiscard]] bool appendPlayerResponsePoint(cs2::Vector point) noexcept
+    void appendPlayerResponsePoint(cs2::Vector point) noexcept
     {
-        return trajectoryOutput && trajectoryOutput->appendPoint(point) && trajectoryOutput->appendPlayerResponseMarker();
+        if (trajectoryOutput && trajectoryOutput->appendPoint(point))
+            static_cast<void>(trajectoryOutput->appendPlayerResponseMarker());
     }
-
+    [[nodiscard]] bool getDynamicPropHandle(const TraceResult& traceResult, cs2::CEntityHandle& dynamicPropHandle) const noexcept
+    {
+        if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) {
+            context.template make<EntitySystem>().getEntityFromHandle(handle);
+            context.entityClassifier().template entityIs<cs2::C_DynamicProp>(nullptr);
+        }) return false;
+        else {
+            if (!traceResult.handleRead)
+                return false;
+            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle)};
+            const auto entitySystem = hookContext.template make<EntitySystem>();
+            auto* const entity = entitySystem.getEntityFromHandle(handle);
+            if (!entity || !entity->identity || entity->identity->entity != entity || entity->identity->handle != handle)
+                return false;
+            if (!hookContext.entityClassifier().template entityIs<cs2::C_DynamicProp>(entity->identity->entityClass))
+                return false;
+            dynamicPropHandle = handle;
+            return true;
+        }
+    }
+    [[nodiscard]] void* resolvePassedPane() const noexcept
+    {
+        if (!hasPassedPane)
+            return nullptr;
+        if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) { context.template make<EntitySystem>().getEntityFromHandle(handle); })
+            return nullptr;
+        else {
+            const auto entitySystem = hookContext.template make<EntitySystem>();
+            auto* const entity = entitySystem.getEntityFromHandle(passedPaneHandle);
+            return entity && entity->identity && entity->identity->entity == entity && entity->identity->handle == passedPaneHandle ? entity : nullptr;
+        }
+    }
     [[nodiscard]] static bool shouldDetonate(cs2::GrenadeKind kind, int tick) noexcept
     {
         const float elapsed = static_cast<float>(tick + 1) * grenade_prediction_params::kSimDt;
@@ -189,9 +256,9 @@ private:
         case cs2::GrenadeKind::Incendiary:
             return elapsed > grenade_prediction_params::kDetonateTimeMolotov + grenade_prediction_params::kClientTracerHorizonPadding;
         case cs2::GrenadeKind::Decoy:
-            return elapsed > grenade_prediction_params::kDetonateTimeDecoy;
+            return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeDecoy;
         case cs2::GrenadeKind::SmokeGrenade:
-            return elapsed > grenade_prediction_params::kDetonateTimeSmokeCap;
+            return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeSmokeCap;
         default:
             return false;
         }
@@ -199,6 +266,9 @@ private:
 
     HookContext& hookContext;
     const GrenadePlayerCollisionSnapshot* playerCollisionSnapshot{};
-    Trajectory* trajectoryOutput{};
     bool playerResponseUsed{};
+    cs2::CEntityHandle passedPaneHandle{};
+    bool hasPassedPane{};
+    Trajectory* trajectoryOutput{};
+    friend struct GrenadeSimulatorTestAccess<HookContext>;
 };
