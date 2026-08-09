@@ -7,6 +7,7 @@
 #include "CvarPatternsWindows.h"
 #include "EntityPatternsWindows.h"
 #include "EntitySystemPatternsWindows.h"
+#include "EngineTracePatternsWindows.h"
 #include "FileSystemPatternsWindows.h"
 #include "HostageServicesPatternsWindows.h"
 #include "GameRulesPatternsWindows.h"
