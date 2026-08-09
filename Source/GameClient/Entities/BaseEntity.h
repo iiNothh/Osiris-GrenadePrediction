@@ -13,6 +13,7 @@
 #include <GameClient/Entities/TeamNumber.h>
 #include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
 #include <OutlineGlow/GlowSceneObjects.h>
+#include <Utils/Optional.h>
 
 #include <GameClient/EntitySystem/EntityIdentity.h>
 #include <GameClient/GameSceneNode.h>
@@ -148,7 +149,14 @@ public:
 
     [[nodiscard]] TeamNumber teamNumber() const noexcept
     {
-        return TeamNumber{hookContext.patternSearchResults().template get<OffsetToTeamNumber>().of(entity).valueOr({})};
+        return optionalTeamNumber().valueOr(TeamNumber{});
+    }
+
+    [[nodiscard]] Optional<TeamNumber> optionalTeamNumber() const noexcept
+    {
+        return hookContext.patternSearchResults().template get<OffsetToTeamNumber>().of(entity).toOptional().transform([](const auto teamNumber) noexcept {
+            return TeamNumber{teamNumber};
+        });
     }
 
     [[nodiscard]] auto vData() const noexcept
