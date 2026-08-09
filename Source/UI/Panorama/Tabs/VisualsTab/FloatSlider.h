@@ -40,7 +40,7 @@ private:
     {
         // Keep the conversion below inside the exactly representable signed int range.
         constexpr float kMaximumValue = 214748300.0f;
-        constexpr std::uint32_t kRequiredOutputSize = 13;
+        constexpr std::uint32_t kRequiredOutputSize = 14;
         if (!Math::isFinite(value) || value < -kMaximumValue || value > kMaximumValue || outputSize < kRequiredOutputSize)
             return false;
 
@@ -51,15 +51,16 @@ private:
             ? static_cast<std::uint32_t>(-(scaledValue + 1)) + 1
             : static_cast<std::uint32_t>(scaledValue);
 
+        const auto integerPart = magnitude / 10;
         std::uint32_t divisor = 1;
-        while (magnitude / divisor >= 10)
+        while (integerPart / divisor >= 10)
             divisor *= 10;
 
         auto* position = output;
         if (negative)
             *position++ = '-';
         do {
-            *position++ = static_cast<char>('0' + magnitude / divisor);
+            *position++ = static_cast<char>('0' + (integerPart / divisor) % 10);
             divisor /= 10;
         } while (divisor != 0);
         *position++ = '.';
