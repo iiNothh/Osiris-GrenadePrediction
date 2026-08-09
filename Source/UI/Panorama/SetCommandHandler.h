@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Features/Combat/SniperRifles/NoScopeInaccuracyVis/NoScopeInaccuracyVisConfigVariables.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoInWorld.h>
 #include <GameClient/Panorama/Slider.h>
 #include <GameClient/Panorama/TextEntry.h>
@@ -50,6 +51,10 @@ private:
             handleIntSlider<viewmodel_mod_vars::Fov>("viewmodel_fov");
         } else if (feature == "viewmodel_fov_text") {
             handleIntSliderTextEntry<viewmodel_mod_vars::Fov>("viewmodel_fov");
+        } else if (feature == "grenade_prediction_cache_duration") {
+            handleFloatSlider<grenade_prediction_vars::CacheDuration>("grenade_prediction_cache_duration");
+        } else if (feature == "grenade_prediction_cache_duration_text") {
+            handleFloatSliderTextEntry<grenade_prediction_vars::CacheDuration>("grenade_prediction_cache_duration");
         }
     }
 
