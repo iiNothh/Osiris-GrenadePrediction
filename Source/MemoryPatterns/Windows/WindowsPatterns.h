@@ -14,6 +14,7 @@
 #include "GameRulesPatternsWindows.h"
 #include "GameSceneNodePatternsWindows.h"
 #include "GlobalVarsPatternsWindows.h"
+#include "GrenadeProjectilePatternsWindows.h"
 #include "GlowPropertyPatternsWindows.h"
 #include "GlowSceneObjectPatternsWindows.h"
 #include "MemAllocPatternsWindows.h"
