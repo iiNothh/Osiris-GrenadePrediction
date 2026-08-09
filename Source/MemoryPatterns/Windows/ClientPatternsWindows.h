@@ -18,6 +18,7 @@ struct ClientPatterns {
             .template addPattern<LocalPlayerControllerPointer, CodePattern{"48 83 3D ? ? ? ? 00 0F 95"}.add(3).abs(5)>()
             .template addPattern<ManageGlowSceneObjectPointer, CodePattern{"E8 ? ? ? ? 48 8B 4F ? 0F 28 7C"}.add(1).abs()>()
             .template addPattern<SetSceneObjectAttributeFloat4, CodePattern{"0F 11 74 24 ? E8 ? ? ? ? FF C6 48 ? C3"}.add(6).abs()>()
+            .template addPattern<BuildGrenadeLaunchFunction, CodePattern{"4C 8D 4C 24 ? C6 44 24 ? 01 4C 8D 44 24 ? 48 8B D7 48 8B CE E8 ? ? ? ?"}.add(22).abs()>()
             .template addPattern<PointerToClientMode, CodePattern{"57 48 83 EC ? 33 DB 48 8D 3D ? ? ? ? 48 8D"}.add(10).abs()>();
     }
 };
