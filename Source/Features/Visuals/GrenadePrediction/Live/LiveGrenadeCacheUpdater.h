@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
+#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeLifecycle.h>
 
 class LiveGrenadeCacheUpdater {
 public:
@@ -20,7 +21,8 @@ public:
     }
 
     template <typename Projectile>
-    [[nodiscard]] bool update(const Projectile& projectile, cs2::CEntityHandle projectileHandle, cs2::GrenadeKind kind) noexcept
+    [[nodiscard]] bool update(const Projectile& projectile, cs2::CEntityHandle projectileHandle, cs2::GrenadeKind kind,
+        const LiveGrenadeLifecycleState& lifecycleState = {}) noexcept
     {
         const auto initialPosition = projectile.initialPosition();
         const auto initialVelocity = projectile.initialVelocity();
@@ -28,7 +30,8 @@ public:
         if (!initialPosition.hasValue() || !initialVelocity.hasValue() || !thrower.hasValue())
             return false;
 
-        return cache.upsert({projectileHandle, thrower.value(), initialPosition.value(), initialVelocity.value(), kind});
+        return cache.upsert({projectileHandle, thrower.value(), initialPosition.value(), initialVelocity.value(), kind, 0, false,
+            getLiveGrenadeLifecycle(kind, lifecycleState) == LiveGrenadeLifecycle::Remove});
     }
 
 private:
