@@ -167,6 +167,14 @@ private:
         configConversion.uint(u8"Fov", loadVariable<viewmodel_mod_vars::Fov>(), saveVariable<viewmodel_mod_vars::Fov>());
         configConversion.endObject();
 
+        configConversion.beginObject(u8"GrenadePrediction");
+        configConversion.boolean(u8"Enabled", loadVariable<grenade_prediction_vars::Enabled>(), saveVariable<grenade_prediction_vars::Enabled>());
+        configConversion.uint(u8"TrajectoryHue", loadVariable<grenade_prediction_vars::TrajectoryHue>(), saveVariable<grenade_prediction_vars::TrajectoryHue>());
+        configConversion.uint(u8"BounceHue", loadVariable<grenade_prediction_vars::BounceHue>(), saveVariable<grenade_prediction_vars::BounceHue>());
+        configConversion.floatValue(u8"CacheDuration", loadVariable<grenade_prediction_vars::CacheDuration>(), saveVariable<grenade_prediction_vars::CacheDuration>());
+        configConversion.uint(u8"LastTrajectoryVisibilityMode", loadVariable<grenade_prediction_vars::LastTrajectoryVisibility>(), saveVariable<grenade_prediction_vars::LastTrajectoryVisibility>());
+        configConversion.endObject();
+
         configConversion.endObject();
     }
 
@@ -232,7 +240,10 @@ private:
             };
         } else if constexpr (std::is_enum_v<typename ConfigVariable::ValueType>) {
             return [this](std::integral auto value) {
-                hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(static_cast<ConfigVariable::ValueType>(value));
+                if constexpr (std::is_same_v<ConfigVariable, grenade_prediction_vars::LastTrajectoryVisibility>)
+                    hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(grenade_prediction_vars::normalizeLastTrajectoryVisibilityMode(saturateCast<std::uint8_t>(value)));
+                else
+                    hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(static_cast<ConfigVariable::ValueType>(value));
             };
         } else {
             return [this](ConfigVariable::ValueType value) {
