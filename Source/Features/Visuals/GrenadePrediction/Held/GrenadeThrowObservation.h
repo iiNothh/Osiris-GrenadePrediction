@@ -31,6 +31,14 @@ struct GrenadeThrowObservation {
         return released;
     }
 
+    void retainThrowStrength(float throwStrength) noexcept
+    {
+        if (!isStrengthLocked() && throwStrength >= 0.0f && throwStrength <= 1.0f) {
+            retainedThrowStrength = throwStrength;
+            hasRetainedThrowStrength = true;
+        }
+    }
+
     [[nodiscard]] bool observeThrowTime(const void* weapon, float throwTime) noexcept
     {
         if (weapon != observedWeapon)
@@ -64,10 +72,13 @@ struct GrenadeThrowObservation {
     [[nodiscard]] bool hasPendingExecution() const noexcept { return hasPendingThrowTime; }
     [[nodiscard]] const void* pendingWeapon() const noexcept { return hasPendingThrowTime ? observedWeapon : nullptr; }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
+    [[nodiscard]] bool isStrengthLocked() const noexcept { return hasPendingThrowTime || finalized; }
     [[nodiscard]] bool isFinalized() const noexcept { return finalized; }
 
     void resetThrowSequence() noexcept
     {
+        retainedThrowStrength = 1.0f;
+        hasRetainedThrowStrength = false;
         pendingThrowTime = 0.0f;
         hasPendingThrowTime = false;
         finalized = false;
@@ -85,6 +96,8 @@ struct GrenadeThrowObservation {
     const void* observedWeapon{};
     bool hasPinBaseline{};
     bool previousPinPulled{};
+    float retainedThrowStrength{1.0f};
+    bool hasRetainedThrowStrength{};
     float pendingThrowTime{};
     bool hasPendingThrowTime{};
     bool finalized{};

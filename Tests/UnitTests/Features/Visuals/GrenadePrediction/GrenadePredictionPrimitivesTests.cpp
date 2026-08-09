@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
@@ -39,6 +40,31 @@ TEST(GrenadePredictionThrowObservationTest, CommitsOnlyTheOwnedCompletedSequence
     EXPECT_FALSE(observation.consumeActualExecution(true, 10.0f));
     EXPECT_TRUE(observation.consumeActualExecution(true, 10.1f));
     EXPECT_TRUE(observation.isFinalized());
+}
+
+TEST(GrenadePredictionThrowObservationTest, UsesDefaultStrengthBeforePinIsPulled)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+
+    EXPECT_TRUE(observation.observeWeapon(&weapon));
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+}
+
+TEST(GrenadePredictionControllerTest, CapturesRealStrengthAfterObservingPinPull)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+
+    GrenadePredictionController::observeHeldThrow(observation, &weapon, false, 0.25f);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+
+    GrenadePredictionController::observeHeldThrow(observation, &weapon, true, 0.25f);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
 TEST(GrenadePredictionLaunchTest, RejectsUnavailableNativeLaunch)
