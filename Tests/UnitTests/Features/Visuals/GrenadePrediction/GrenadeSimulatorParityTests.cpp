@@ -1,0 +1,117 @@
+#include <limits>
+
+#include <gtest/gtest.h>
+
+#include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
+#include <Mocks/GrenadePrediction/ScriptedGrenadeTrace.h>
+
+namespace
+{
+
+using Simulator = GrenadeSimulator<GrenadeSimulatorTestHookContext>;
+
+TEST(GrenadeSimulationParityTest, FallsBackToDefaultGravity)
+{
+    ScriptedGrenadeCvarSystem cvars;
+    EXPECT_FLOAT_EQ(grenade_prediction::resolveServerGravity(cvars), 800.0f);
+    cvars.gravity = std::numeric_limits<float>::infinity();
+    EXPECT_FLOAT_EQ(grenade_prediction::resolveServerGravity(cvars), 800.0f);
+    cvars.gravity = -1.0f;
+    EXPECT_FLOAT_EQ(grenade_prediction::resolveServerGravity(cvars), 800.0f);
+}
+
+TEST(GrenadeSimulationParityTest, UsesReferenceTrajectoryCapacityAndExhaustionPolicy)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    Trajectory trajectory;
+    simulator.simulate(trajectory, {{}, {100.0f, 0.0f, 0.0f}}, cs2::GrenadeKind::SmokeGrenade, nullptr, 800.0f);
+    ASSERT_TRUE(trajectory.valid);
+    EXPECT_EQ(Trajectory::kPointsCapacity, 500);
+    EXPECT_EQ(trajectory.pointsCount, Trajectory::kPointsCapacity);
+    EXPECT_NEAR(trajectory.endPos.x, 1803.125f, 0.001f);
+}
+
+TEST(GrenadeSimulationParityTest, RecordsContactsUntilReferenceMarkerCapacity)
+{
+    GrenadeSimulatorTestHookContext context;
+    for (int i{}; i <= 20; ++i) {
+        context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}});
+        context.trace.push(TraceResult{1.0f, {}, {}});
+    }
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    Trajectory trajectory;
+    simulator.simulate(trajectory, {{}, {1.0e12f, 0.0f, 0.0f}}, cs2::GrenadeKind::SmokeGrenade, nullptr, 800.0f);
+    EXPECT_TRUE(trajectory.valid);
+    EXPECT_EQ(trajectory.worldContactMarkersCount, 20);
+    EXPECT_EQ(trajectory.markersCount, 20);
+}
+
+TEST(GrenadeSimulationParityTest, StoresReferenceFreeFlightKinematics)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    Trajectory trajectory;
+    simulator.simulate(trajectory, {{}, {100.0f, 0.0f, 0.0f}}, cs2::GrenadeKind::HEGrenade, nullptr, 800.0f);
+    ASSERT_TRUE(trajectory.valid);
+    ASSERT_EQ(trajectory.pointsCount, 54);
+    EXPECT_NEAR(trajectory.points[1].x, 3.125f, 0.001f);
+    EXPECT_NEAR(trajectory.points[1].z, -0.15625f, 0.001f);
+    EXPECT_NEAR(trajectory.endPos.z, -430.6640625f, 0.001f);
+}
+
+TEST(GrenadeSimulationParityTest, UsesReferenceDecoyAndSmokeTimeoutTicks)
+{
+    EXPECT_FALSE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::shouldDetonate(cs2::GrenadeKind::Decoy, 640));
+    EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::shouldDetonate(cs2::GrenadeKind::Decoy, 641));
+    EXPECT_FALSE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::shouldDetonate(cs2::GrenadeKind::SmokeGrenade, 1152));
+    EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::shouldDetonate(cs2::GrenadeKind::SmokeGrenade, 1153));
+}
+
+TEST(GrenadeSimulationParityTest, ContinuesTraceForTheUnusedCollisionSubstep)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}});
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{1000.0f, 0.0f, 0.0f};
+    EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade).traceSucceeded);
+    EXPECT_EQ(context.trace.calls, 3);
+}
+
+TEST(GrenadeSimulationParityTest, DampsDynamicPaneAndExcludesItFromLaterTraces)
+{
+    GrenadeSimulatorTestHookContext context;
+    const cs2::CEntityHandle pane{42u};
+    context.entitySystem.setDynamicProp(pane);
+    context.trace.push(TraceResult{0.5f, {4.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, false, static_cast<std::int32_t>(pane.value), true});
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 5.0f, 5.0f};
+    void* const owner = &context;
+    EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade, owner).traceSucceeded);
+    EXPECT_EQ(velocity, (cs2::Vector{40.0f, 2.0f, -1.5f}));
+    EXPECT_EQ(context.trace.lastExcludedFirst, owner);
+    EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
+}
+
+TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyToConfirmedWorld)
+{
+    GrenadeSimulatorTestHookContext context;
+    Simulator simulator{context};
+    cs2::Vector worldVelocity{100.0f, 0.0f, -1000.0f};
+    cs2::Vector unknownVelocity = worldVelocity;
+    static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
+        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, false, engine_trace::kWorldEntityHandle}, worldVelocity, cs2::GrenadeKind::HEGrenade));
+    static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
+        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}}, unknownVelocity, cs2::GrenadeKind::HEGrenade));
+    EXPECT_NEAR(worldVelocity.z, 227.24025f, 0.001f);
+    EXPECT_NEAR(unknownVelocity.z, 450.0140625f, 0.001f);
+}
+
+}
