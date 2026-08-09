@@ -3,6 +3,7 @@
 #include <CS2/Classes/Entities/CBaseAnimGraph.h>
 #include <CS2/Classes/Entities/C_CSGO_PreviewPlayer.h>
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
+#include <CS2/Classes/Entities/C_DynamicProp.h>
 #include <CS2/Classes/Entities/C_Hostage.h>
 #include <CS2/Classes/Entities/GrenadeProjectiles.h>
 #include <CS2/Classes/Entities/WeaponEntities.h>
@@ -57,6 +58,7 @@ constexpr auto kEntityClassNames = TypedStaticStringPool{}
     .add<C_SmokeGrenadeProjectile>("C_SmokeGrenadeProjectile")
     .add<C_MolotovProjectile>("C_MolotovProjectile")
     .add<C_FlashbangProjectile>("C_FlashbangProjectile")
+    .add<C_DynamicProp>("C_DynamicProp")
     .add<C_C4>("C_C4")
     .add<CPlantedC4>("C_PlantedC4")
     .add<C_Hostage>("C_Hostage")
