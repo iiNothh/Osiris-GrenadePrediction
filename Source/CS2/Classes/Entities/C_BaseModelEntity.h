@@ -6,8 +6,11 @@
 namespace cs2
 {
 
+struct CCollisionProperty;
+
 struct C_BaseModelEntity : C_BaseEntity {
     using m_Glow = CGlowProperty;
+    using m_Collision = CCollisionProperty;
 };
 
 }
