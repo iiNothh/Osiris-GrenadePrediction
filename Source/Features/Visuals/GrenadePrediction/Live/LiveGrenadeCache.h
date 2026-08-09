@@ -21,6 +21,7 @@ struct LiveGrenadeSnapshot {
     cs2::GrenadeKind kind{cs2::GrenadeKind::None};
     std::uint64_t firstObservationSequence{};
     bool seen{};
+    bool lifecycleEnded{};
 };
 
 static_assert(std::is_trivially_copyable_v<LiveGrenadeSnapshot>);
@@ -86,12 +87,25 @@ public:
 
         Optional<LiveGrenadeSnapshot> newest;
         for (const auto& grenade : grenades) {
-            if (grenade.throwerHandle != throwerHandle)
+            if (grenade.throwerHandle != throwerHandle || grenade.lifecycleEnded)
                 continue;
             if (!newest.hasValue() || grenade.firstObservationSequence > newest.value().firstObservationSequence)
                 newest = grenade;
         }
         return newest;
+    }
+
+    [[nodiscard]] bool contains(const LiveGrenadeSnapshot& snapshot) const noexcept
+    {
+        if (!scanComplete || !isValid(snapshot))
+            return false;
+
+        for (const auto& grenade : grenades) {
+            if (grenade.projectileHandle == snapshot.projectileHandle && grenade.throwerHandle == snapshot.throwerHandle
+                && grenade.firstObservationSequence == snapshot.firstObservationSequence)
+                return !grenade.lifecycleEnded;
+        }
+        return false;
     }
 
     [[nodiscard]] const DynamicArray<LiveGrenadeSnapshot>& entries() const noexcept
