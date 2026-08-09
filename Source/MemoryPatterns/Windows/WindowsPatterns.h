@@ -6,6 +6,7 @@
 #include "CollisionPropertyPatternsWindows.h"
 #include "ConVarPatternsWindows.h"
 #include "CvarPatternsWindows.h"
+#include "DecoyProjectilePatternsWindows.h"
 #include "EntityPatternsWindows.h"
 #include "EntitySystemPatternsWindows.h"
 #include "EngineTracePatternsWindows.h"
