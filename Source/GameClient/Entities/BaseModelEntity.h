@@ -1,7 +1,10 @@
 #pragma once
 
+#include <type_traits>
+
 #include <CS2/Classes/Entities/C_BaseModelEntity.h>
 #include <GameClient/Entities/BaseEntity.h>
+#include <GameClient/Entities/CollisionProperty.h>
 #include <MemoryPatterns/PatternTypes/BaseModelEntityPatternTypes.h>
 
 #include "GlowProperty.h"
@@ -31,6 +34,14 @@ public:
     [[nodiscard]] decltype(auto) glowProperty() const noexcept
     {
         return hookContext.template make<GlowProperty>(hookContext.patternSearchResults().template get<OffsetToGlowProperty>().of(baseModelEntity).get());
+    }
+
+    [[nodiscard]] decltype(auto) collisionProperty() const noexcept
+    {
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionProperty>())
+            return hookContext.template make<CollisionProperty>(hookContext.patternSearchResults().template get<OffsetToCollisionProperty>().of(baseModelEntity).valueOr(nullptr));
+        else
+            return hookContext.template make<CollisionProperty>(nullptr);
     }
 
 private:
