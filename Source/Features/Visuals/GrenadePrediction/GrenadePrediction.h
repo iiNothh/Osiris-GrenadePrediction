@@ -140,8 +140,14 @@ private:
             context().state().invalidateTempTrajectory();
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToPinPulled>()) {
             const auto pinPulled = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional();
-            if (pinPulled.hasValue())
-                static_cast<void>(observation.observePinState(weapon, pinPulled.value()));
+            if (pinPulled.hasValue()) {
+                Optional<float> throwStrength;
+                if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
+                    if (pinPulled.value())
+                        throwStrength = hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
+                }
+                GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), throwStrength);
+            }
         }
     }
     void draw(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept

@@ -5,6 +5,13 @@
 
 class GrenadePredictionController {
 public:
+    static void observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, Optional<float> throwStrength) noexcept
+    {
+        static_cast<void>(observation.observePinState(weapon, pinPulled));
+        if (pinPulled && throwStrength.hasValue())
+            observation.retainThrowStrength(throwStrength.value());
+    }
+
     static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeActualExecution(hasCurtime, curtime))
