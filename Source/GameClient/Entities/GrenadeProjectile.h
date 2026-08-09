@@ -21,16 +21,16 @@ public:
 
     [[nodiscard]] Optional<cs2::Vector> initialPosition() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToGrenadeInitialPosition>())
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToGrenadeInitialPosition>()) {
             return finite(hookContext.patternSearchResults().template get<OffsetToGrenadeInitialPosition>().of(grenadeProjectile).toOptional());
-        return {};
+        } else return {};
     }
 
     [[nodiscard]] Optional<cs2::Vector> initialVelocity() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToGrenadeInitialVelocity>())
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToGrenadeInitialVelocity>()) {
             return finite(hookContext.patternSearchResults().template get<OffsetToGrenadeInitialVelocity>().of(grenadeProjectile).toOptional());
-        return {};
+        } else return {};
     }
 
     [[nodiscard]] Optional<cs2::CEntityHandle> thrower() const noexcept

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <CS2/Classes/GlobalVars.h>
+#include <MemoryPatterns/PatternTypes/GlobalVarsPatternTypes.h>
 #include <Utils/Optional.h>
 
 template <typename HookContext>

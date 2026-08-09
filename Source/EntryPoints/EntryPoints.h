@@ -3,6 +3,7 @@
 #include "GlobalContext/GlobalContext.h"
 #include "Hooks/PeepEventsHook.h"
 #include "Utils/ReturnAddress.h"
+#include <Features/Visuals/GrenadePrediction/GrenadePrediction.h>
 
 [[NOINLINE]] void finishInit(auto& hookContext)
 {
@@ -31,6 +32,7 @@ int SDLHook_PeepEvents(void* events, int numevents, int action, unsigned minType
 
 [[NOINLINE]] void unload(auto& hookContext) noexcept
 {
+    hookContext.template make<GrenadePrediction>().onUnload();
     hookContext.template make<BombTimer>().onUnload();
     hookContext.template make<DefusingAlert>().onUnload();
     hookContext.template make<PostRoundTimer>().onUnload();

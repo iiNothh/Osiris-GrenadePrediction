@@ -10,6 +10,7 @@
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoInWorld.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlert.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePrediction.h>
 
 template <typename HookContext>
 class RenderingHookEntityLoop {
@@ -22,20 +23,33 @@ public:
     void run() const noexcept
     {
         auto bombPlantAlertVisibility = Visibility::Hidden;
-        hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([this, &bombPlantAlertVisibility](const auto& entityIdentity) { handleEntityIdentity(entityIdentity, bombPlantAlertVisibility); });
+        auto* localPawn = static_cast<cs2::C_CSPlayerPawn*>(nullptr);
+        cs2::CEntityHandle localPawnHandle{};
+        auto grenadePrediction = hookContext.template make<GrenadePrediction>();
+        grenadePrediction.beginLiveGrenadeScan();
+        hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([this, &bombPlantAlertVisibility, &localPawn, &localPawnHandle](const auto& entityIdentity) { handleEntityIdentity(entityIdentity, bombPlantAlertVisibility, localPawn, localPawnHandle); });
+        grenadePrediction.endLiveGrenadeScan();
+        if (localPawn) {
+            auto&& playerPawn = hookContext.template make<PlayerPawn>(localPawn);
+            grenadePrediction.handleGrenadePrediction(playerPawn, playerPawn.getActiveWeapon(), localPawnHandle);
+        } else {
+            grenadePrediction.clearPrediction();
+        }
         hookContext.template make<ModelGlow>().postUpdateInMainThread();
         if (bombPlantAlertVisibility == Visibility::Hidden)
             hookContext.template make<BombPlantAlert>().hide();
     }
 
 private:
-    void handleEntityIdentity(const cs2::CEntityIdentity& entityIdentity, Visibility& bombPlantAlertVisibility) const noexcept
+    void handleEntityIdentity(const cs2::CEntityIdentity& entityIdentity, Visibility& bombPlantAlertVisibility, cs2::C_CSPlayerPawn*& localPawn, cs2::CEntityHandle& localPawnHandle) const noexcept
     {
         const auto entityTypeInfo = hookContext.entityClassifier().classifyEntity(entityIdentity.entityClass);
+        hookContext.template make<GrenadePrediction>().updateLiveGrenade(entityIdentity, entityTypeInfo);
         auto&& baseEntity = hookContext.template make<BaseEntity>(static_cast<cs2::C_BaseEntity*>(entityIdentity.entity));
 
         if (entityTypeInfo.template is<cs2::C_CSPlayerPawn>()) {
             auto&& playerPawn = baseEntity.template as<PlayerPawn>();
+            if (playerPawn.isControlledByLocalPlayer()) { localPawn = static_cast<cs2::C_CSPlayerPawn*>(entityIdentity.entity); localPawnHandle = entityIdentity.handle; }
             hookContext.template make<PlayerInfoInWorld>().drawPlayerInformation(playerPawn);
             updateModelGlow<PlayerModelGlow>(playerPawn, entityTypeInfo);
             applyOutlineGlow<PlayerOutlineGlow>(playerPawn, entityTypeInfo);

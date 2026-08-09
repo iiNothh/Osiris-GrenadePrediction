@@ -39,7 +39,7 @@ public:
     [[nodiscard]] decltype(auto) collisionProperty() const noexcept
     {
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionProperty>())
-            return hookContext.template make<CollisionProperty>(hookContext.patternSearchResults().template get<OffsetToCollisionProperty>().of(baseModelEntity).valueOr(nullptr));
+            return hookContext.template make<CollisionProperty>(hookContext.patternSearchResults().template get<OffsetToCollisionProperty>().of(baseModelEntity).get());
         else
             return hookContext.template make<CollisionProperty>(nullptr);
     }

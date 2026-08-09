@@ -17,16 +17,16 @@ public:
 
     [[nodiscard]] Optional<cs2::Vector> mins() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionMins>())
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionMins>()) {
             return hookContext.patternSearchResults().template get<OffsetToCollisionMins>().of(collisionProperty).toOptional();
-        return {};
+        } else return {};
     }
 
     [[nodiscard]] Optional<cs2::Vector> maxs() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionMaxs>())
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionMaxs>()) {
             return hookContext.patternSearchResults().template get<OffsetToCollisionMaxs>().of(collisionProperty).toOptional();
-        return {};
+        } else return {};
     }
 
 private:

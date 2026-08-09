@@ -89,8 +89,7 @@ public:
                 }
             }
             return trace(start, end, excludedEntities, mask, collisionGroup, queryByte, managerHolder, shapeBuilder, traceShape, initFilter, nullptr);
-        }
-        return {};
+        } else return {};
     }
 
 private:
@@ -126,8 +125,7 @@ private:
             const bool handleRead = fraction < 1.0f && engine_trace::isValidOutputOffset(rawEntityHandleOffset, sizeof(std::int32_t));
             const auto rawEntityHandle = handleRead ? readOutput<std::int32_t>(output, rawEntityHandleOffset) : std::int32_t{};
             return TraceResult{fraction, endPosition, normal, handleRead && rawEntityHandle == engine_trace::kWorldEntityHandle, rawEntityHandle, handleRead};
-        }
-        return TraceResult{fraction, endPosition, normal};
+        } else return TraceResult{fraction, endPosition, normal};
     }
 
     template <typename T>
