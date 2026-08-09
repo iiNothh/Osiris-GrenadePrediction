@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Entities/WeaponEntities.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
@@ -12,6 +14,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <GameClient/Entities/GrenadeProjectile.h>
+#include <GameClient/Entities/DecoyProjectile.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/Entities/SmokeGrenadeProjectile.h>
 #include <GameClient/GlobalVars.h>
@@ -24,20 +27,46 @@ public:
     explicit GrenadePrediction(HookContext& hookContext) noexcept : hookContext{hookContext} {}
 
     void beginLiveGrenadeScan() noexcept { LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.beginScan(); }
-    void endLiveGrenadeScan() noexcept { LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.endScan(); }
+    void endLiveGrenadeScan(cs2::C_CSPlayerPawn* localPawn, cs2::CEntityHandle localPawnHandle) noexcept
+    {
+        auto& state = context().state();
+        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
+        state.liveGrenadeAuthority.observeLocalPawn(localPawnHandle);
+        const auto currentTime = hookContext.globalVars().curtime();
+        state.liveGrenadeAuthority.update(state.liveGrenadeCache, currentTime);
+
+        const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
+        if (!projectile.hasValue() || !state.liveGrenadeAuthority.shouldAdopt(projectile.value()))
+            return;
+
+        auto gravity = grenade_prediction::serverGravity(hookContext.cvarSystem());
+        if (!gravity.hasValue())
+            return;
+
+        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, localPawn);
+        auto simulator = hookContext.template make<GrenadeSimulator>();
+        simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+        simulator.simulate(state.liveGrenadeTrajectoryScratch, {projectile.value().initialPosition, projectile.value().initialVelocity}, projectile.value().kind,
+            localPawn, gravity.value());
+        if (!state.liveGrenadeTrajectoryScratch.valid || !state.liveGrenadeTrajectoryScratch.pointsCount)
+            return;
+
+        state.commitLiveTrajectory(currentTime.valueOr(0.0f), currentTime.hasValue());
+        state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
+    }
 
     void updateLiveGrenade(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
         const auto kind = GrenadeKindMapper::fromProjectile(type);
         if (kind == cs2::GrenadeKind::None || !identity.entity)
             return;
-        if (kind == cs2::GrenadeKind::SmokeGrenade) {
-            const auto smoke = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
-            if (!smoke.hasValue() || smoke.value())
-                return;
-        }
         const auto grenade = GrenadeProjectile{hookContext, static_cast<cs2::C_BaseCSGrenadeProjectile*>(identity.entity)};
-        static_cast<void>(LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.update(grenade, identity.handle, kind));
+        LiveGrenadeLifecycleState lifecycleState;
+        if (kind == cs2::GrenadeKind::SmokeGrenade)
+            lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
+        else if (kind == cs2::GrenadeKind::Decoy)
+            lifecycleState.decoyShotTick = DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}.decoyShotTick();
+        static_cast<void>(LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
     }
 
     void handleGrenadePrediction(auto&& playerPawn, auto&& activeWeapon, cs2::CEntityHandle localPawnHandle) noexcept
@@ -56,9 +85,18 @@ public:
         auto* const pawn = static_cast<cs2::C_CSPlayerPawn*>(static_cast<cs2::C_BaseEntity*>(playerPawn.baseEntity()));
         if (!weapon || kind == cs2::GrenadeKind::None) { hideLive(); return; }
 
+        observeHeldThrow(weapon);
+        if (state.throwObservation.consumeActualExecution(hasCurtime, time)) {
+            if (state.ownsTempTrajectory(weapon, state.throwObservation.pendingSequence()))
+                state.commitTempTrajectory(time, hasCurtime);
+            state.invalidateTempTrajectory();
+            hideLive();
+            return;
+        }
+
         const bool shouldUpdate = state.updateScheduler.shouldUpdate(false, hookContext.globalVars().frametime().hasValue(), hookContext.globalVars().frametime().valueOr(0.0f));
         if (!shouldUpdate) return;
-        const auto launch = prepareGrenadeLaunch(false, true, false, true, [&]() noexcept {
+        const auto launch = prepareGrenadeLaunch(false, true, state.throwObservation.isFinalized(), true, [&]() noexcept {
             return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn);
         });
         if (launch.status != GrenadeLaunchPreparationStatus::Ready) { hideLive(); return; }
@@ -107,6 +145,21 @@ private:
     [[nodiscard]] decltype(auto) context() const noexcept { return hookContext.template make<GrenadePredictionContext>(); }
     [[nodiscard]] auto renderer() noexcept { return hookContext.template make<GrenadeTrajectoryRenderer>(); }
     void hideLive() noexcept { renderer().hide(context().state().liveContainerPanelHandle); }
+    void observeHeldThrow(cs2::C_BaseCSGrenade* weapon) noexcept
+    {
+        auto& observation = context().state().throwObservation;
+        static_cast<void>(observation.observeWeapon(weapon));
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToPinPulled>()) {
+            const auto pinPulled = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional();
+            if (pinPulled.hasValue())
+                static_cast<void>(observation.observePinState(weapon, pinPulled.value()));
+        }
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowTime>()) {
+            const auto throwTime = hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional();
+            if (throwTime.hasValue())
+                static_cast<void>(observation.observeThrowTime(weapon, throwTime.value()));
+        }
+    }
     void draw(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept
     {
         const auto hue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::TrajectoryHue)).toHueFloat();
