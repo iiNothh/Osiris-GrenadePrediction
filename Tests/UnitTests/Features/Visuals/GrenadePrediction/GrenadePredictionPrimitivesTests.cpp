@@ -29,6 +29,13 @@ struct Projectile {
     [[nodiscard]] Optional<cs2::CEntityHandle> thrower() const noexcept { return owner; }
 };
 
+struct FlashbangWeapon {};
+struct HEGrenadeWeapon {};
+struct SmokeGrenadeWeapon {};
+struct MolotovWeapon {};
+struct IncendiaryWeapon {};
+struct DecoyWeapon {};
+
 TEST(GrenadePredictionThrowObservationTest, CommitsOnlyTheOwnedCompletedSequence)
 {
     GrenadeThrowObservation observation;
@@ -58,12 +65,128 @@ TEST(GrenadePredictionControllerTest, CapturesRealStrengthAfterObservingPinPull)
     const int weapon{};
     static_cast<void>(observation.observeWeapon(&weapon));
 
-    GrenadePredictionController::observeHeldThrow(observation, &weapon, false, 0.25f);
+    GrenadePredictionController::observeHeldThrow(observation, &weapon, false, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
 
-    GrenadePredictionController::observeHeldThrow(observation, &weapon, true, 0.25f);
+    GrenadePredictionController::observeHeldThrow(observation, &weapon, true, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
+}
+
+TEST(GrenadePredictionControllerTest, ResetsCompletedPartialFlashThrowWhenReacquiringFlashbang)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon thrownFlashbang;
+    const FlashbangWeapon reacquiredFlashbang;
+
+    GrenadePredictionController::observeHeldThrow(observation, &thrownFlashbang, true, []() noexcept { return Optional<float>{0.5f}; });
+    ASSERT_TRUE(observation.observeThrowTime(&thrownFlashbang, 10.0f));
+    ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
+
+    GrenadePredictionController::observeHeldThrow(observation, &reacquiredFlashbang, false, []() noexcept { return Optional<float>{0.0f}; });
+
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    EXPECT_FALSE(observation.isFinalized());
+}
+
+TEST(GrenadePredictionControllerTest, ResetsPartialFlashThrowWhenObservingAnotherGrenadeKind)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon flashbang;
+    const HEGrenadeWeapon heGrenade;
+
+    GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.5f}; });
+    ASSERT_TRUE(observation.observeThrowTime(&flashbang, 10.0f));
+
+    GrenadePredictionController::observeHeldThrow(observation, &heGrenade, false, []() noexcept { return Optional<float>{0.0f}; });
+
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    EXPECT_FALSE(observation.hasPendingExecution());
+}
+
+TEST(GrenadePredictionControllerTest, ResetsPendingStrengthForANewObservationOfTheSameKind)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon firstFlashbang;
+    const FlashbangWeapon secondFlashbang;
+
+    GrenadePredictionController::observeHeldThrow(observation, &firstFlashbang, true, []() noexcept { return Optional<float>{0.5f}; });
+    ASSERT_TRUE(observation.observeThrowTime(&firstFlashbang, 10.0f));
+
+    GrenadePredictionController::observeHeldThrow(observation, &secondFlashbang, false, []() noexcept { return Optional<float>{0.0f}; });
+
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    EXPECT_FALSE(observation.hasPendingExecution());
+}
+
+TEST(GrenadePredictionControllerTest, RetainsPinnedZeroStrengthForTheCurrentThrow)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon flashbang;
+
+    GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.0f}; });
+    ASSERT_TRUE(observation.observeThrowTime(&flashbang, 10.0f));
+    GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.5f}; });
+
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
+}
+
+TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForAnUnpinnedFlashbang)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon flashbang;
+    bool readThrowStrength{};
+
+    GrenadePredictionController::observeHeldThrow(observation, &flashbang, false, [&]() noexcept {
+        readThrowStrength = true;
+        return Optional<float>{0.0f};
+    });
+
+    EXPECT_FALSE(readThrowStrength);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+}
+
+TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForUnpinnedGenericGrenadeTransitions)
+{
+    GrenadeThrowObservation observation;
+    const HEGrenadeWeapon heGrenade;
+    const SmokeGrenadeWeapon smokeGrenade;
+    const MolotovWeapon molotov;
+    const IncendiaryWeapon incendiary;
+    const DecoyWeapon decoy;
+    const void* const weapons[]{&heGrenade, &smokeGrenade, &molotov, &incendiary, &decoy};
+
+    for (const auto* weapon : weapons) {
+        bool readThrowStrength{};
+        GrenadePredictionController::observeHeldThrow(observation, weapon, false, [&]() noexcept {
+            readThrowStrength = true;
+            return Optional<float>{0.0f};
+        });
+        EXPECT_FALSE(readThrowStrength);
+        EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+        EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    }
+}
+
+TEST(GrenadePredictionControllerTest, ReadsAndRetainsPinnedZeroStrengthForCurrentCycle)
+{
+    GrenadeThrowObservation observation;
+    const FlashbangWeapon flashbang;
+    bool readThrowStrength{};
+
+    GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, [&]() noexcept {
+        readThrowStrength = true;
+        return Optional<float>{0.0f};
+    });
+
+    EXPECT_TRUE(readThrowStrength);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 

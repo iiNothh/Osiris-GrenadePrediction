@@ -141,12 +141,13 @@ private:
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToPinPulled>()) {
             const auto pinPulled = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional();
             if (pinPulled.hasValue()) {
-                Optional<float> throwStrength;
                 if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
-                    if (pinPulled.value())
-                        throwStrength = hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
+                    GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), [&]() noexcept {
+                        return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
+                    });
+                } else {
+                    GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), []() noexcept { return Optional<float>{}; });
                 }
-                GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), throwStrength);
             }
         }
     }
