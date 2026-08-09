@@ -209,6 +209,14 @@ $.Osiris = (function () {
     });
 
     $.CreatePanel('Label', viewmodelTabButton, '', { text: "Viewmodel" });
+
+    var grenadePredictionTabButton = $.CreatePanel('RadioButton', centerContainer, 'grenade_prediction_button', {
+        group: "VisualsNavBar",
+        class: "content-navbar__tabs__btn",
+        onactivate: "$.Osiris.navigateToSubTab('visuals', 'grenade_prediction');"
+    });
+
+    $.CreatePanel('Label', grenadePredictionTabButton, '', { text: "Grenade Prediction" });
   };
 
   var createCombatNavbar = function () {
@@ -768,6 +776,25 @@ u8R"(
   createYesNoDropDown(viewmodelFov, "Modify Viewmodel Fov", 'visuals', 'viewmodel_fov_mod');
   separator(viewmodelFov);
   createSlider(viewmodelFov, "Fov", 'viewmodel_fov', 40, 90);
+
+  var _grenadePredictionTab = createSubTab(visuals, 'grenade_prediction');
+  _grenadePredictionTab.style.overflow = 'squish squish';
+
+  var grenadePredictionTab = $.CreatePanel('Panel', _grenadePredictionTab, '', { style: 'flow-children: down; horizontal-align: center; overflow: squish scroll;' });
+
+  var grenadePredictionMaster = createSection(grenadePredictionTab, 'Grenade Prediction');
+  createOnOffDropDown(grenadePredictionMaster, "Master Switch", 'visuals', 'grenade_prediction_enable');
+
+  separator(grenadePredictionMaster);
+  separator(grenadePredictionMaster);
+  createHueSlider(grenadePredictionMaster, "Trajectory Color", 'grenade_prediction_trajectory_hue', 0, 359);
+  separator(grenadePredictionMaster);
+  createHueSlider(grenadePredictionMaster, "Bounce Color", 'grenade_prediction_bounce_hue', 0, 359);
+
+  var grenadePredictionCache = createSection(grenadePredictionTab, 'Cache');
+  createDropDown(grenadePredictionCache, 'Last Trajectory Visibility', 'visuals', 'grenade_prediction_last_trajectory_visibility', ['Explode', 'Always', 'Off', 'Custom']);
+  separator(grenadePredictionCache);
+  createFloatSlider(grenadePredictionCache, 'Custom Duration (seconds)', 'grenade_prediction_cache_duration', 0.0, 60.0, 'grenade_prediction_cache_duration_row');
 
   $.Osiris.navigateToSubTab('visuals', 'player_info');
 

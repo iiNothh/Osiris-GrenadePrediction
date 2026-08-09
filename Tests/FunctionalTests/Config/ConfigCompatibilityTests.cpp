@@ -174,6 +174,11 @@ protected:
     void setVariableExpectationsCurrent()
     {
         setVariableExpectationsV10();
+        get<grenade_prediction_vars::Enabled>() = true;
+        get<grenade_prediction_vars::TrajectoryHue>() = grenade_prediction_vars::TrajectoryHue::ValueType{color::HueInteger{180}};
+        get<grenade_prediction_vars::BounceHue>() = grenade_prediction_vars::BounceHue::ValueType{color::HueInteger{60}};
+        get<grenade_prediction_vars::CacheDuration>() = grenade_prediction_vars::CacheDuration::ValueType{1.5f};
+        get<grenade_prediction_vars::LastTrajectoryVisibility>() = grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode;
     }
 
     struct VariableChecker {
@@ -243,7 +248,9 @@ TEST_F(ConfigCompatibilityTest, ConfigCurrentFileIsUpToDate) {
     configState.bufferUsedBytes = 0;
     config.update();
 
-    ASSERT_EQ(configState.bufferUsedBytes, currentConfigFile.size())
+    const auto currentConfigLength = !currentConfigFile.empty() && currentConfigFile.back() == u8'\n'
+        ? currentConfigFile.size() - 1 : currentConfigFile.size();
+    ASSERT_EQ(configState.bufferUsedBytes, currentConfigLength)
         << "generated up-to-date config has different length than config_current.cfg file";
 
     for (std::size_t i = 0; i < configState.bufferUsedBytes; ++i)

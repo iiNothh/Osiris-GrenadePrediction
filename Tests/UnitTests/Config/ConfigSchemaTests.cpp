@@ -60,6 +60,10 @@ TEST_F(ConfigSchemaTest, SchemaIsValid) {
         EXPECT_LT(nestingLevels.back(), config_params::kMaxObjectIndex);
         ++nestingLevels.back();
     }));
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::_, testing::_, testing::_)).WillRepeatedly(testing::Invoke([this] {
+        EXPECT_GT(nestingLevels.size(), 0);
+        ++nestingLevels.back();
+    }));
 
     configSchema.performConversion(mockConfigConversion);
 }
@@ -90,6 +94,12 @@ TEST_F(ConfigSchemaTest, EachConfigVariableIsLoadedOnce) {
                     configVariableIndexes.insert(configVariableIndex);
                 })));
             valueSetter(std::uint64_t{}); 
+        })));
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::_, testing::_, testing::_))
+        .WillRepeatedly(testing::WithArg<1>(testing::Invoke([this](auto valueSetter) {
+            EXPECT_CALL(mockConfig, setVariableWithoutAutoSave(testing::_, testing::_))
+                .WillOnce(testing::WithArg<0>(testing::Invoke([this](std::size_t configVariableIndex) { configVariableIndexes.insert(configVariableIndex); })));
+            valueSetter(0.0f);
         })));
 
     configSchema.performConversion(mockConfigConversion);
@@ -124,6 +134,12 @@ TEST_F(ConfigSchemaTest, EachConfigVariableIsSavedOnce) {
                     return std::any{};
             })));
             valueGetter(); 
+        })));
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::_, testing::_, testing::_))
+        .WillRepeatedly(testing::WithArg<2>(testing::Invoke([this](auto valueGetter) {
+            EXPECT_CALL(mockConfig, getVariable(testing::_))
+                .WillOnce(testing::WithArg<0>(testing::Invoke([this](std::size_t configVariableIndex) { configVariableIndexes.insert(configVariableIndex); return std::any{}; })));
+            valueGetter();
         })));
 
     configSchema.performConversion(mockConfigConversion);
