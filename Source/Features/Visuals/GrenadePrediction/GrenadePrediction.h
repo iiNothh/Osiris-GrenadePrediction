@@ -54,6 +54,8 @@ public:
         LiveGrenadeLifecycleState lifecycleState;
         if (kind == cs2::GrenadeKind::SmokeGrenade)
             lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
+        else if (kind == cs2::GrenadeKind::HEGrenade)
+            return static_cast<void>(GrenadePredictionController::updateHELiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle));
         else if (kind == cs2::GrenadeKind::Decoy)
             return static_cast<void>(GrenadePredictionController::updateDecoyLiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle,
                 DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
