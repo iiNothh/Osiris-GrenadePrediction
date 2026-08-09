@@ -3,6 +3,7 @@
 #include "BaseModelEntityPatternsWindows.h"
 #include "C4PatternsWindows.h"
 #include "ClientPatternsWindows.h"
+#include "CollisionPropertyPatternsWindows.h"
 #include "ConVarPatternsWindows.h"
 #include "CvarPatternsWindows.h"
 #include "EntityPatternsWindows.h"
