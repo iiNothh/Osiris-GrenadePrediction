@@ -9,7 +9,6 @@
 #include <CS2/Classes/Vector.h>
 #include <CS2/Constants/EntityHandle.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeKind.h>
-#include <Utils/DynamicArray.h>
 #include <Utils/Math.h>
 #include <Utils/Optional.h>
 
@@ -33,8 +32,8 @@ public:
     void beginScan() noexcept
     {
         scanComplete = false;
-        for (auto& grenade : grenades)
-            grenade.seen = false;
+        for (std::size_t i = 0; i < grenadeCount; ++i)
+            grenades[i].seen = false;
     }
 
     [[nodiscard]] bool upsert(LiveGrenadeSnapshot snapshot) noexcept
@@ -42,31 +41,30 @@ public:
         if (!isValid(snapshot))
             return false;
 
-        for (auto& grenade : grenades) {
-            if (grenade.projectileHandle == snapshot.projectileHandle) {
-                snapshot.firstObservationSequence = grenade.firstObservationSequence;
+        for (std::size_t i = 0; i < grenadeCount; ++i) {
+            if (grenades[i].projectileHandle == snapshot.projectileHandle) {
+                snapshot.firstObservationSequence = grenades[i].firstObservationSequence;
                 snapshot.seen = true;
-                grenade = snapshot;
+                grenades[i] = snapshot;
                 return true;
             }
         }
 
-        if (grenades.getSize() == maxEntries || nextFirstObservationSequence == std::numeric_limits<std::uint64_t>::max())
+        if (grenadeCount == maxEntries || nextFirstObservationSequence == (std::numeric_limits<std::uint64_t>::max)())
             return false;
 
         snapshot.firstObservationSequence = nextFirstObservationSequence;
         snapshot.seen = true;
-        if (!grenades.pushBack(snapshot))
-            return false;
+        grenades[grenadeCount++] = snapshot;
         ++nextFirstObservationSequence;
         return true;
     }
 
     void endScan() noexcept
     {
-        for (std::size_t i = 0; i < grenades.getSize();) {
+        for (std::size_t i = 0; i < grenadeCount;) {
             if (!grenades[i].seen)
-                grenades.fastRemoveAt(i);
+                grenades[i] = grenades[--grenadeCount];
             else
                 ++i;
         }
@@ -75,7 +73,7 @@ public:
 
     void clear() noexcept
     {
-        grenades.clear();
+        grenadeCount = 0;
         nextFirstObservationSequence = 1;
         scanComplete = true;
     }
@@ -86,7 +84,8 @@ public:
             return {};
 
         Optional<LiveGrenadeSnapshot> newest;
-        for (const auto& grenade : grenades) {
+        for (std::size_t i = 0; i < grenadeCount; ++i) {
+            const auto& grenade = grenades[i];
             if (grenade.throwerHandle != throwerHandle || grenade.lifecycleEnded)
                 continue;
             if (!newest.hasValue() || grenade.firstObservationSequence > newest.value().firstObservationSequence)
@@ -100,17 +99,13 @@ public:
         if (!scanComplete || !isValid(snapshot))
             return false;
 
-        for (const auto& grenade : grenades) {
+        for (std::size_t i = 0; i < grenadeCount; ++i) {
+            const auto& grenade = grenades[i];
             if (grenade.projectileHandle == snapshot.projectileHandle && grenade.throwerHandle == snapshot.throwerHandle
                 && grenade.firstObservationSequence == snapshot.firstObservationSequence)
                 return !grenade.lifecycleEnded;
         }
         return false;
-    }
-
-    [[nodiscard]] const DynamicArray<LiveGrenadeSnapshot>& entries() const noexcept
-    {
-        return grenades;
     }
 
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
@@ -126,7 +121,8 @@ private:
         return handle.value != cs2::INVALID_EHANDLE_INDEX;
     }
 
-    DynamicArray<LiveGrenadeSnapshot> grenades;
+    LiveGrenadeSnapshot grenades[maxEntries]{};
+    std::size_t grenadeCount{};
     std::uint64_t nextFirstObservationSequence{1};
     bool scanComplete{true};
 };
