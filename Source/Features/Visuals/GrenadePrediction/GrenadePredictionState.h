@@ -34,7 +34,10 @@ struct GrenadePredictionState {
     GrenadeTrajectoryPresentationState lastCachePresentationState{};
 
     float lastCommitCurtime{};
+    float lastValidCurtime{};
     bool hasCommitCurtime{};
+    bool hasLastValidCurtime{};
+    bool rollbackDetected{};
 
     void invalidateTempTrajectory() noexcept { tempTrajectory.clear(); tempTrajectoryWeapon = nullptr; tempTrajectorySequence = 0; }
     void invalidateCommittedTrajectory() noexcept { lastCommittedTrajectory.clear(); }
@@ -43,29 +46,52 @@ struct GrenadePredictionState {
     {
         return tempTrajectory.valid && tempTrajectory.pointsCount && tempTrajectoryWeapon == weapon && tempTrajectorySequence == sequence;
     }
-    void commitTempTrajectory(float curtime, bool hasCurtime) noexcept
+    void commitLiveGrenadeTrajectory() noexcept { copyTrajectory(lastCommittedTrajectory, liveGrenadeTrajectoryScratch); }
+    [[nodiscard]] bool stageOwnedTempTrajectory(const void* weapon, std::uint32_t sequence) noexcept
     {
+        if (liveGrenadeAuthority.hasObservedLiveProjectile() || !ownsTempTrajectory(weapon, sequence))
+            return false;
         copyTrajectory(lastCommittedTrajectory, tempTrajectory);
-        if (hasCurtime) { lastCommitCurtime = curtime; hasCommitCurtime = true; }
+        return true;
     }
-    void commitLiveTrajectory(float curtime, bool hasCurtime) noexcept
+    void finalizeStagedTrajectory(bool hasCandidate, bool hasCurtime, float curtime) noexcept
     {
-        copyTrajectory(lastCommittedTrajectory, liveGrenadeTrajectoryScratch);
+        if (!hasCandidate)
+            return;
         if (hasCurtime) { lastCommitCurtime = curtime; hasCommitCurtime = true; }
+        else if (hasLastValidCurtime) { lastCommitCurtime = lastValidCurtime; hasCommitCurtime = true; }
+    }
+    void resetForRollback() noexcept
+    {
+        throwObservation.reset();
+        invalidateTempTrajectory();
+        invalidateCommittedTrajectory();
+        liveGrenadeTrajectoryScratch.clear();
+        updateScheduler.reset();
+        liveGrenadeAuthority.reset();
+        rollbackDetected = true;
     }
     [[nodiscard]] LastGrenadeCacheVisibility cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime, float curtime, bool projectilePresent) noexcept
     {
+        if (hasCurtime) {
+            const bool rolledBack = (hasLastValidCurtime && curtime < lastValidCurtime) || (hasCommitCurtime && curtime < lastCommitCurtime);
+            lastValidCurtime = curtime;
+            hasLastValidCurtime = true;
+            if (rolledBack) { resetForRollback(); return LastGrenadeCacheVisibility::Invalidate; }
+        }
         mode = grenade_prediction_vars::normalizeLastTrajectoryVisibilityMode(static_cast<std::uint8_t>(mode));
         if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Off)
             return LastGrenadeCacheVisibility::Invalidate;
-        if (!lastCommittedTrajectory.valid || !lastCommittedTrajectory.pointsCount)
-            return LastGrenadeCacheVisibility::Hide;
         if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Always)
-            return LastGrenadeCacheVisibility::Show;
+            return lastCommittedTrajectory.valid && lastCommittedTrajectory.pointsCount ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Hide;
         if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode)
-            return projectilePresent ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
+            return lastCommittedTrajectory.valid && lastCommittedTrajectory.pointsCount && projectilePresent ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
         duration = grenade_prediction_vars::normalizeCacheDuration(duration);
-        return hasCurtime && hasCommitCurtime && duration > 0.0f && curtime - lastCommitCurtime <= duration ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
+        if (!(duration > 0.0f))
+            return LastGrenadeCacheVisibility::Invalidate;
+        if (!lastCommittedTrajectory.valid || !lastCommittedTrajectory.pointsCount || !hasCurtime || !hasCommitCurtime)
+            return LastGrenadeCacheVisibility::Hide;
+        return curtime - lastCommitCurtime <= duration ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
     }
 
 private:

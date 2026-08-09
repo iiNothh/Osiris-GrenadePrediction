@@ -10,9 +10,8 @@ public:
         if (!state.throwObservation.consumeActualExecution(hasCurtime, curtime))
             return false;
 
-        if (state.ownsTempTrajectory(weapon, state.throwObservation.pendingSequence()))
-            state.commitTempTrajectory(curtime, hasCurtime);
-        state.invalidateTempTrajectory();
+        const bool stagedTrajectoryReady = state.stageOwnedTempTrajectory(weapon, state.throwObservation.pendingSequence());
+        state.finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
         return true;
     }
 
@@ -24,10 +23,11 @@ public:
         state.liveGrenadeAuthority.update(state.liveGrenadeCache, currentTime);
 
         const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
-        if (!projectile.hasValue() || !state.liveGrenadeAuthority.shouldAdopt(projectile.value()) || !simulate(projectile.value()))
+        if (!projectile.hasValue() || !state.liveGrenadeAuthority.observeForSimulation(projectile.value()) || !simulate(projectile.value()))
             return false;
 
-        state.commitLiveTrajectory(currentTime.valueOr(0.0f), currentTime.hasValue());
+        state.commitLiveGrenadeTrajectory();
+        state.finalizeStagedTrajectory(true, currentTime.hasValue(), currentTime.valueOr(0.0f));
         state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
         return true;
     }
