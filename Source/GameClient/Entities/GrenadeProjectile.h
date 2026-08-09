@@ -44,6 +44,13 @@ public:
         return {};
     }
 
+    [[nodiscard]] Optional<std::int32_t> explodeEffectTickBegin() const noexcept
+    {
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToExplodeEffectTickBegin>())
+            return hookContext.patternSearchResults().template get<OffsetToExplodeEffectTickBegin>().of(grenadeProjectile).toOptional();
+        else return {};
+    }
+
 private:
     [[nodiscard]] static Optional<cs2::Vector> finite(Optional<cs2::Vector> value) noexcept
     {
