@@ -58,6 +58,7 @@ constexpr auto kEntityClassNames = TypedStaticStringPool{}
     .add<C_SmokeGrenadeProjectile>("C_SmokeGrenadeProjectile")
     .add<C_MolotovProjectile>("C_MolotovProjectile")
     .add<C_FlashbangProjectile>("C_FlashbangProjectile")
+    .add<C_DecoyProjectile>("C_DecoyProjectile")
     .add<C_DynamicProp>("C_DynamicProp")
     .add<C_C4>("C_C4")
     .add<CPlantedC4>("C_PlantedC4")
