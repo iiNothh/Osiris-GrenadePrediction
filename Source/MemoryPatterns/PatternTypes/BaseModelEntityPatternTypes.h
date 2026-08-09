@@ -10,3 +10,4 @@ template <typename FieldType, typename OffsetType>
 using BaseModelEntityOffset = FieldOffset<cs2::C_BaseModelEntity, FieldType, OffsetType>;
 
 STRONG_TYPE_ALIAS(OffsetToGlowProperty, BaseModelEntityOffset<cs2::C_BaseModelEntity::m_Glow, std::int32_t>);
+STRONG_TYPE_ALIAS(OffsetToCollisionProperty, BaseModelEntityOffset<cs2::C_BaseModelEntity::m_Collision, std::int32_t>);
