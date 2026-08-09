@@ -212,7 +212,7 @@ private:
     [[nodiscard]] bool parseFloat(float& result) noexcept
     {
         const bool negative = readChar(u8'-');
-        std::uint32_t significand{};
+        std::uint64_t significand{};
         std::size_t numberOfSignificantDigits{};
         std::size_t firstSignificantDigitIndex{};
         std::size_t numberOfDigitsBeforeDecimalPoint{};
@@ -303,7 +303,7 @@ private:
         return Math::isFinite(result);
     }
 
-    static void addFloatDigit(std::uint32_t digit, std::size_t digitIndex, std::uint32_t& significand, std::size_t& numberOfSignificantDigits, std::size_t& firstSignificantDigitIndex, bool& hasNonZeroDigit, bool& hasStickyDigit) noexcept
+    static void addFloatDigit(std::uint32_t digit, std::size_t digitIndex, std::uint64_t& significand, std::size_t& numberOfSignificantDigits, std::size_t& firstSignificantDigitIndex, bool& hasNonZeroDigit, bool& hasStickyDigit) noexcept
     {
         if (!hasNonZeroDigit) {
             if (digit == 0)

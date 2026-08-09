@@ -2,6 +2,7 @@
 
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <string_view>
 
@@ -63,7 +64,7 @@ public:
         if (negative)
             ++string;
 
-        std::uint32_t significand{};
+        std::uint64_t significand{};
         std::size_t numberOfSignificantDigits{};
         std::size_t firstSignificantDigitIndex{};
         std::size_t numberOfDigitsBeforeDecimalPoint{};
@@ -177,7 +178,7 @@ private:
         return value == value && value >= -(std::numeric_limits<decltype(value)>::max)() && value <= (std::numeric_limits<decltype(value)>::max)();
     }
 
-    static void addFloatDigit(std::uint32_t digit, std::size_t digitIndex, std::uint32_t& significand, std::size_t& numberOfSignificantDigits, std::size_t& firstSignificantDigitIndex, bool& hasNonZeroDigit, bool& hasStickyDigit) noexcept
+    static void addFloatDigit(std::uint32_t digit, std::size_t digitIndex, std::uint64_t& significand, std::size_t& numberOfSignificantDigits, std::size_t& firstSignificantDigitIndex, bool& hasNonZeroDigit, bool& hasStickyDigit) noexcept
     {
         if (!hasNonZeroDigit) {
             if (digit == 0)
