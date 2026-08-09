@@ -28,11 +28,12 @@ public:
         auto grenadePrediction = hookContext.template make<GrenadePrediction>();
         grenadePrediction.beginLiveGrenadeScan();
         hookContext.template make<EntitySystem>().forEachNetworkableEntityIdentity([this, &bombPlantAlertVisibility, &localPawn, &localPawnHandle](const auto& entityIdentity) { handleEntityIdentity(entityIdentity, bombPlantAlertVisibility, localPawn, localPawnHandle); });
-        grenadePrediction.endLiveGrenadeScan();
         if (localPawn) {
+            grenadePrediction.endLiveGrenadeScan(localPawn, localPawnHandle);
             auto&& playerPawn = hookContext.template make<PlayerPawn>(localPawn);
             grenadePrediction.handleGrenadePrediction(playerPawn, playerPawn.getActiveWeapon(), localPawnHandle);
         } else {
+            grenadePrediction.endLiveGrenadeScan(nullptr, {});
             grenadePrediction.clearPrediction();
         }
         hookContext.template make<ModelGlow>().postUpdateInMainThread();
