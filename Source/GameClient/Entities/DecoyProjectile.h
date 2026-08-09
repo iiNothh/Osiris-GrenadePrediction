@@ -21,7 +21,8 @@ public:
     {
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToDecoyShotTick>())
             return hookContext.patternSearchResults().template get<OffsetToDecoyShotTick>().of(decoyProjectile).toOptional();
-        return {};
+        else
+            return {};
     }
 
 private:
