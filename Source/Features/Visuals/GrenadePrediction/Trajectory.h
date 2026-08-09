@@ -15,7 +15,7 @@ struct TrajectoryMarker {
 };
 
 struct Trajectory {
-    static constexpr int kPointsCapacity = 600;
+    static constexpr int kPointsCapacity = 500;
     static constexpr int kWorldContactMarkersCapacity = 20;
     static constexpr int kMarkersCapacity = kWorldContactMarkersCapacity + 1;
 

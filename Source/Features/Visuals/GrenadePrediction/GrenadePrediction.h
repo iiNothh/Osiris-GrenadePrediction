@@ -33,14 +33,12 @@ public:
         auto& state = context().state();
         const auto currentTime = hookContext.globalVars().curtime();
         static_cast<void>(GrenadePredictionController::completeLiveGrenadeScan(state, localPawnHandle, currentTime, [&](const auto& projectile) noexcept {
-            auto gravity = grenade_prediction::serverGravity(hookContext.cvarSystem());
-            if (!gravity.hasValue())
-                return false;
+            const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
 
             GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, localPawn);
             auto simulator = hookContext.template make<GrenadeSimulator>();
             simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-            simulator.simulate(state.liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, localPawn, gravity.value());
+            simulator.simulate(state.liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, localPawn, gravity);
             return state.liveGrenadeTrajectoryScratch.valid && state.liveGrenadeTrajectoryScratch.pointsCount;
         }));
     }
@@ -91,12 +89,11 @@ public:
         });
         if (launch.status != GrenadeLaunchPreparationStatus::Ready) { hideLive(); return; }
 
-        auto gravity = grenade_prediction::serverGravity(hookContext.cvarSystem());
-        if (!gravity.hasValue()) { hideLive(); return; }
+        const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
         auto simulator = hookContext.template make<GrenadeSimulator>();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, pawn);
         simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-        simulator.simulate(state.tempTrajectory, launch.state.value(), kind, pawn, gravity.value());
+        simulator.simulate(state.tempTrajectory, launch.state.value(), kind, pawn, gravity);
         if (!state.tempTrajectory.valid || !state.tempTrajectory.pointsCount) { state.invalidateTempTrajectory(); hideLive(); return; }
         state.tagTempTrajectory(weapon, state.throwObservation.sequence);
         draw(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
