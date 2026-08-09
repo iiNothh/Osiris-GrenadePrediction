@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <type_traits>
 
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
@@ -18,7 +17,7 @@ struct LiveGrenadeSnapshot {
     cs2::Vector initialPosition{};
     cs2::Vector initialVelocity{};
     cs2::GrenadeKind kind{cs2::GrenadeKind::None};
-    std::uint64_t firstObservationSequence{};
+    std::uint32_t observationSequence{};
     bool seen{};
     bool lifecycleEnded{};
 };
@@ -43,20 +42,19 @@ public:
 
         for (std::size_t i = 0; i < grenadeCount; ++i) {
             if (grenades[i].projectileHandle == snapshot.projectileHandle) {
-                snapshot.firstObservationSequence = grenades[i].firstObservationSequence;
+                snapshot.observationSequence = grenades[i].observationSequence;
                 snapshot.seen = true;
                 grenades[i] = snapshot;
                 return true;
             }
         }
 
-        if (grenadeCount == maxEntries || nextFirstObservationSequence == (std::numeric_limits<std::uint64_t>::max)())
+        if (grenadeCount == maxEntries)
             return false;
 
-        snapshot.firstObservationSequence = nextFirstObservationSequence;
+        snapshot.observationSequence = nextObservationSequence();
         snapshot.seen = true;
         grenades[grenadeCount++] = snapshot;
-        ++nextFirstObservationSequence;
         return true;
     }
 
@@ -74,8 +72,18 @@ public:
     void clear() noexcept
     {
         grenadeCount = 0;
-        nextFirstObservationSequence = 1;
+        nextSequence = 1;
         scanComplete = true;
+    }
+
+    void invalidate(cs2::CEntityHandle projectileHandle) noexcept
+    {
+        for (std::size_t i = 0; i < grenadeCount;) {
+            if (grenades[i].projectileHandle == projectileHandle)
+                grenades[i] = grenades[--grenadeCount];
+            else
+                ++i;
+        }
     }
 
     [[nodiscard]] Optional<LiveGrenadeSnapshot> newestForThrower(cs2::CEntityHandle throwerHandle) const noexcept
@@ -88,7 +96,7 @@ public:
             const auto& grenade = grenades[i];
             if (grenade.throwerHandle != throwerHandle || grenade.lifecycleEnded)
                 continue;
-            if (!newest.hasValue() || grenade.firstObservationSequence > newest.value().firstObservationSequence)
+            if (!newest.hasValue() || grenade.observationSequence > newest.value().observationSequence)
                 newest = grenade;
         }
         return newest;
@@ -96,13 +104,13 @@ public:
 
     [[nodiscard]] bool contains(const LiveGrenadeSnapshot& snapshot) const noexcept
     {
-        if (!scanComplete || !isValid(snapshot))
+        if (!isValid(snapshot))
             return false;
 
         for (std::size_t i = 0; i < grenadeCount; ++i) {
             const auto& grenade = grenades[i];
             if (grenade.projectileHandle == snapshot.projectileHandle && grenade.throwerHandle == snapshot.throwerHandle
-                && grenade.firstObservationSequence == snapshot.firstObservationSequence)
+                && grenade.observationSequence == snapshot.observationSequence)
                 return !grenade.lifecycleEnded;
         }
         return false;
@@ -123,6 +131,14 @@ private:
 
     LiveGrenadeSnapshot grenades[maxEntries]{};
     std::size_t grenadeCount{};
-    std::uint64_t nextFirstObservationSequence{1};
+    [[nodiscard]] std::uint32_t nextObservationSequence() noexcept
+    {
+        const auto sequence = nextSequence;
+        if (++nextSequence == 0)
+            nextSequence = 1;
+        return sequence;
+    }
+
+    std::uint32_t nextSequence{1};
     bool scanComplete{true};
 };

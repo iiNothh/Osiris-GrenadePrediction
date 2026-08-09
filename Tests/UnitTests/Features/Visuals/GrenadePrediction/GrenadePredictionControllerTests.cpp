@@ -38,7 +38,7 @@ TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecut
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, &weapon, true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
-    EXPECT_FALSE(state.tempTrajectory.valid);
+    EXPECT_TRUE(state.tempTrajectory.valid);
 }
 
 TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)

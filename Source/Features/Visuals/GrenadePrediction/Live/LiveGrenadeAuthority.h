@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
-#include <Utils/Math.h>
 
 enum class GrenadeTrajectoryAuthority { HeldPrediction, LiveProjectile };
 
@@ -22,8 +21,10 @@ public:
     void reset() noexcept
     {
         acceptedSnapshot = {};
+        highestObservedObservationSequence = 0;
         acceptedTime = 0.0f;
         accepted = false;
+        hasHighestObserved = false;
         hasAcceptedTime = false;
         source = GrenadeTrajectoryAuthority::HeldPrediction;
     }
@@ -35,20 +36,24 @@ public:
         return cache.newestForThrower(localPawnHandle);
     }
 
-    [[nodiscard]] bool shouldAdopt(const LiveGrenadeSnapshot& snapshot) const noexcept
+    [[nodiscard]] bool observeForSimulation(const LiveGrenadeSnapshot& snapshot) noexcept
     {
-        return !accepted || snapshot.firstObservationSequence != acceptedSnapshot.firstObservationSequence;
+        if (!hasHighestObserved || snapshot.observationSequence > highestObservedObservationSequence) {
+            highestObservedObservationSequence = snapshot.observationSequence;
+            hasHighestObserved = true;
+            accepted = false;
+            hasAcceptedTime = false;
+            source = GrenadeTrajectoryAuthority::HeldPrediction;
+            return true;
+        }
+        return snapshot.observationSequence == highestObservedObservationSequence
+            && (!accepted || snapshot.observationSequence != acceptedSnapshot.observationSequence);
     }
 
     void accept(const LiveGrenadeSnapshot& snapshot, Optional<float> currentTime = {}) noexcept
     {
-        if (!LiveGrenadeCache::isValid(snapshot)) {
-            reset();
-            return;
-        }
-
         acceptedSnapshot = snapshot;
-        if (currentTime.hasValue() && Math::isFinite(currentTime.value())) {
+        if (currentTime.hasValue()) {
             acceptedTime = currentTime.value();
             hasAcceptedTime = true;
         } else {
@@ -84,17 +89,22 @@ public:
     }
 
 private:
+public:
     [[nodiscard]] bool isFlashbangInEarlyHideWindow(Optional<float> currentTime) const noexcept
     {
         return acceptedSnapshot.kind == cs2::GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
-            && Math::isFinite(currentTime.value()) && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
+            && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
     }
+    [[nodiscard]] bool hasObservedLiveProjectile() const noexcept { return hasHighestObserved; }
 
+private:
     cs2::CEntityHandle localPawnHandle{};
     LiveGrenadeSnapshot acceptedSnapshot{};
     float acceptedTime{};
     bool hasLocalPawnHandle{};
     bool accepted{};
+    bool hasHighestObserved{};
     bool hasAcceptedTime{};
+    std::uint32_t highestObservedObservationSequence{};
     GrenadeTrajectoryAuthority source{GrenadeTrajectoryAuthority::HeldPrediction};
 };
