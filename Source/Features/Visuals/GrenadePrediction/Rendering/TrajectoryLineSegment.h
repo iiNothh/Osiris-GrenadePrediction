@@ -71,12 +71,12 @@ struct TrajectoryLineSegment {
             return false;
 
         result = {.midpointX = (clippedX0 + clippedX1) * 50.0f, .midpointY = (clippedY0 + clippedY1) * 50.0f,
-            .width = length * 100.0f, .angleDegrees = angleDegrees(physicalDy, dx)};
+            .width = length * 100.0f, .angleDegrees = calculateAngleDegrees(physicalDy, dx)};
         return Math::isFinite(result.midpointX) && Math::isFinite(result.midpointY) && Math::isFinite(result.width) && Math::isFinite(result.angleDegrees);
     }
 
 private:
-    [[nodiscard]] static float angleDegrees(float y, float x) noexcept
+    [[nodiscard]] static float calculateAngleDegrees(float y, float x) noexcept
     {
         constexpr float kPi = 3.14159265358979323846f;
         constexpr float kHalfPi = kPi * 0.5f;
