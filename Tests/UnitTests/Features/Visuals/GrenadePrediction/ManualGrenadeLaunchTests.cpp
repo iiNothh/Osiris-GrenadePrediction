@@ -56,6 +56,36 @@ TEST(ManualGrenadeLaunchTest, UsesFullStrengthUntilPinnedStrengthIsCaptured)
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
+TEST(ManualGrenadeLaunchTest, SkipsAvailableNativeLaunchUntilRealStrengthIsCaptured)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    int nativeCalls{};
+    int manualCalls{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+
+    const auto manual = prepareGrenadeLaunch(false, true, false, observation.hasRetainedThrowStrength,
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return GrenadeLaunchState{{1.0f, 0.0f, 0.0f}, {observation.retainedThrowStrength, 0.0f, 0.0f}}; });
+
+    ASSERT_TRUE(manual.state.hasValue());
+    EXPECT_EQ(manual.status, GrenadeLaunchPreparationStatus::Ready);
+    EXPECT_EQ(nativeCalls, 0);
+    EXPECT_EQ(manualCalls, 1);
+    EXPECT_FLOAT_EQ(manual.state.value().velocity.x, 1.0f);
+
+    observation.retainThrowStrength(0.5f);
+    const auto native = prepareGrenadeLaunch(false, true, false, observation.hasRetainedThrowStrength,
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{{2.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
+
+    ASSERT_TRUE(native.state.hasValue());
+    EXPECT_EQ(native.status, GrenadeLaunchPreparationStatus::Ready);
+    EXPECT_EQ(nativeCalls, 1);
+    EXPECT_EQ(manualCalls, 1);
+    EXPECT_FLOAT_EQ(native.state.value().velocity.x, 3.0f);
+}
+
 TEST(ManualGrenadeLaunchTest, RetainsPinnedZeroStrength)
 {
     GrenadeThrowObservation observation;
