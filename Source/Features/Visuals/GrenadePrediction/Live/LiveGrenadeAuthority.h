@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
 
 enum class GrenadeTrajectoryAuthority { HeldPrediction, LiveProjectile };
@@ -8,6 +10,7 @@ class LiveGrenadeAuthority {
 public:
     static constexpr float flashHorizon{1.5f + 0.125f};
     static constexpr float flashEarlyHideLead{0.020f};
+    static constexpr std::uint32_t maxSimulationRetryDelayFrames{32};
 
     void observeLocalPawn(cs2::CEntityHandle handle) noexcept
     {
@@ -21,12 +24,14 @@ public:
     void reset() noexcept
     {
         acceptedSnapshot = {};
+        newestObservedSnapshot = {};
         highestObservedObservationSequence = 0;
         acceptedTime = 0.0f;
         accepted = false;
         hasHighestObserved = false;
         hasAcceptedTime = false;
         source = GrenadeTrajectoryAuthority::HeldPrediction;
+        resetSimulationRetryBackoff();
     }
 
     [[nodiscard]] Optional<LiveGrenadeSnapshot> newestLocalProjectile(const LiveGrenadeCache& cache) const noexcept
@@ -40,10 +45,12 @@ public:
     {
         if (!hasHighestObserved || snapshot.observationSequence > highestObservedObservationSequence) {
             highestObservedObservationSequence = snapshot.observationSequence;
+            newestObservedSnapshot = snapshot;
             hasHighestObserved = true;
             accepted = false;
             hasAcceptedTime = false;
             source = GrenadeTrajectoryAuthority::HeldPrediction;
+            resetSimulationRetryBackoff();
             return true;
         }
         return snapshot.observationSequence == highestObservedObservationSequence
@@ -62,6 +69,7 @@ public:
         }
         accepted = true;
         source = GrenadeTrajectoryAuthority::LiveProjectile;
+        resetSimulationRetryBackoff();
     }
 
     [[nodiscard]] const LiveGrenadeSnapshot& acceptedLiveProjectile() const noexcept
@@ -74,13 +82,42 @@ public:
         return accepted;
     }
 
-    void update(const LiveGrenadeCache& cache, Optional<float> currentTime = {}) noexcept
+    [[nodiscard]] bool isSimulationRetryDue(const LiveGrenadeSnapshot& snapshot, std::uint32_t frame) const noexcept
     {
-        if (!accepted)
+        return !hasRetryObservationSequence || snapshot.observationSequence != retryObservationSequence || !hasScheduledRetry
+            || frame - nextSimulationRetryFrame < (std::uint32_t{1} << 31);
+    }
+
+    void recordSimulationFailure(const LiveGrenadeSnapshot& snapshot, std::uint32_t frame) noexcept
+    {
+        if (!hasRetryObservationSequence || snapshot.observationSequence != retryObservationSequence)
+            resetSimulationRetryBackoff();
+
+        retryObservationSequence = snapshot.observationSequence;
+        hasRetryObservationSequence = true;
+        nextSimulationRetryFrame = frame + nextSimulationRetryDelayFrames;
+        hasScheduledRetry = true;
+        if (nextSimulationRetryDelayFrames < maxSimulationRetryDelayFrames)
+            nextSimulationRetryDelayFrames *= 2;
+    }
+
+    void resetSimulationRetryBackoff() noexcept
+    {
+        nextSimulationRetryDelayFrames = 1;
+        hasRetryObservationSequence = false;
+        hasScheduledRetry = false;
+    }
+
+    void update(const LiveGrenadeCache& cache) noexcept
+    {
+        if (!cache.isScanComplete())
             return;
 
-        if (!cache.contains(acceptedSnapshot) || isFlashbangInEarlyHideWindow(currentTime))
+        if ((hasHighestObserved && !cache.contains(newestObservedSnapshot)) || (accepted && !cache.contains(acceptedSnapshot))) {
             reset();
+            return;
+        }
+
     }
 
     [[nodiscard]] GrenadeTrajectoryAuthority trajectoryAuthority() const noexcept
@@ -96,15 +133,22 @@ public:
             && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
     }
     [[nodiscard]] bool hasObservedLiveProjectile() const noexcept { return hasHighestObserved; }
+    [[nodiscard]] bool blocksHeldPrediction() const noexcept { return hasHighestObserved && !accepted; }
 
 private:
     cs2::CEntityHandle localPawnHandle{};
     LiveGrenadeSnapshot acceptedSnapshot{};
+    LiveGrenadeSnapshot newestObservedSnapshot{};
     float acceptedTime{};
     bool hasLocalPawnHandle{};
     bool accepted{};
     bool hasHighestObserved{};
     bool hasAcceptedTime{};
+    bool hasRetryObservationSequence{};
+    bool hasScheduledRetry{};
     std::uint32_t highestObservedObservationSequence{};
+    std::uint32_t retryObservationSequence{};
+    std::uint32_t nextSimulationRetryFrame{};
+    std::uint32_t nextSimulationRetryDelayFrames{1};
     GrenadeTrajectoryAuthority source{GrenadeTrajectoryAuthority::HeldPrediction};
 };

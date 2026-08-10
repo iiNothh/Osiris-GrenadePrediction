@@ -24,6 +24,8 @@ struct LiveGrenadeSnapshot {
 
 static_assert(std::is_trivially_copyable_v<LiveGrenadeSnapshot>);
 
+enum class LiveGrenadeCacheScanStatus { Complete, Overflowed };
+
 class LiveGrenadeCache {
 public:
     static constexpr std::size_t maxEntries{64};
@@ -31,6 +33,7 @@ public:
     void beginScan() noexcept
     {
         scanComplete = false;
+        scanStatus = LiveGrenadeCacheScanStatus::Complete;
         for (std::size_t i = 0; i < grenadeCount; ++i)
             grenades[i].seen = false;
     }
@@ -49,8 +52,10 @@ public:
             }
         }
 
-        if (grenadeCount == maxEntries)
+        if (grenadeCount == maxEntries) {
+            scanStatus = LiveGrenadeCacheScanStatus::Overflowed;
             return false;
+        }
 
         snapshot.observationSequence = nextObservationSequence();
         snapshot.seen = true;
@@ -74,6 +79,7 @@ public:
         grenadeCount = 0;
         nextSequence = 1;
         scanComplete = true;
+        scanStatus = LiveGrenadeCacheScanStatus::Complete;
     }
 
     void invalidate(cs2::CEntityHandle projectileHandle) noexcept
@@ -88,7 +94,7 @@ public:
 
     [[nodiscard]] Optional<LiveGrenadeSnapshot> newestForThrower(cs2::CEntityHandle throwerHandle) const noexcept
     {
-        if (!scanComplete || !isValidHandle(throwerHandle))
+        if (!hasAuthoritativeScan() || !isValidHandle(throwerHandle))
             return {};
 
         Optional<LiveGrenadeSnapshot> newest;
@@ -104,7 +110,7 @@ public:
 
     [[nodiscard]] bool contains(const LiveGrenadeSnapshot& snapshot) const noexcept
     {
-        if (!isValid(snapshot))
+        if (!hasAuthoritativeScan() || !isValid(snapshot))
             return false;
 
         for (std::size_t i = 0; i < grenadeCount; ++i) {
@@ -114,6 +120,26 @@ public:
                 return !grenade.lifecycleEnded;
         }
         return false;
+    }
+
+    [[nodiscard]] LiveGrenadeCacheScanStatus status() const noexcept
+    {
+        return scanStatus;
+    }
+
+    [[nodiscard]] bool isScanComplete() const noexcept
+    {
+        return scanComplete;
+    }
+
+    [[nodiscard]] bool hasOverflowed() const noexcept
+    {
+        return scanStatus == LiveGrenadeCacheScanStatus::Overflowed;
+    }
+
+    [[nodiscard]] bool hasAuthoritativeScan() const noexcept
+    {
+        return scanComplete && !hasOverflowed();
     }
 
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
@@ -141,4 +167,5 @@ private:
 
     std::uint32_t nextSequence{1};
     bool scanComplete{true};
+    LiveGrenadeCacheScanStatus scanStatus{LiveGrenadeCacheScanStatus::Complete};
 };

@@ -11,6 +11,8 @@
 #include <Utils/Math.h>
 
 #include <Features/Visuals/GrenadePrediction/Rendering/TrajectoryLineSegment.h>
+#include <Features/Visuals/GrenadePrediction/Rendering/TrajectoryRenderPlan.h>
+#include <Features/Visuals/GrenadePrediction/Trajectory.h>
 
 struct GrenadeTrajectoryPanelStyleState {
     int pointsCount{};
@@ -57,7 +59,9 @@ public:
 
         auto childrenProxy = containerPanel.children();
         int childCount = (childrenProxy.vector && childrenProxy.vector->memory) ? childrenProxy.vector->size : 0;
-        const int segmentCount = trajectory.pointsCount - 1;
+        TrajectoryRenderPlan renderPlan;
+        renderPlan.build(trajectory);
+        const int segmentCount = renderPlan.lineSegmentCount;
         const int neededPanels = segmentCount + trajectory.markersCount + (trajectory.validLanding ? 1 : 0);
         if (childCount < 0 || childCount > kMaxPanels || neededPanels > kMaxPanels) {
             containerPanel.setVisible(false);
@@ -103,6 +107,7 @@ public:
         }
 
         int index = 0;
+        auto previousPoint = converter.toClipSpace(trajectory.points[renderPlan.pointIndex(0)]);
         for (int i = 0; i < segmentCount; ++i) {
             auto child = children[index++];
             if (updateStyles) {
@@ -110,7 +115,8 @@ public:
                 child.setBackgroundColor(trajectoryColor);
             }
             TrajectoryLineSegment segment{};
-            if (TrajectoryLineSegment::fromClipSpace(converter.toClipSpace(trajectory.points[i]), converter.toClipSpace(trajectory.points[i + 1]), aspectRatio, segment)) {
+            const auto nextPoint = converter.toClipSpace(trajectory.points[renderPlan.pointIndex(i + 1)]);
+            if (TrajectoryLineSegment::fromClipSpace(previousPoint, nextPoint, aspectRatio, segment)) {
                 child.setWidth(cs2::CUILength::percent(segment.width));
                 child.setRotate2dCentered(segment.angleDegrees);
                 child.setVisible(true);
@@ -119,6 +125,7 @@ public:
             } else {
                 child.setVisible(false);
             }
+            previousPoint = nextPoint;
         }
 
         for (int i = 0; i < trajectory.markersCount; ++i) {
@@ -155,10 +162,10 @@ public:
     }
 
 private:
-    static constexpr int kMaxPoints = 600;
-    static constexpr int kMaxMarkers = 21;
-    static constexpr int kMaxPanels = kMaxPoints + kMaxMarkers;
-    static constexpr float kNearW = 0.001f;
+    static constexpr int kMaxPoints = Trajectory::kPointsCapacity;
+    static constexpr int kMaxMarkers = Trajectory::kMarkersCapacity;
+    static constexpr int kMaxPanels = TrajectoryRenderPlan::kPanelCapacity;
+    static constexpr float kNearW = TrajectoryLineSegment::kNearW;
     static constexpr float kTrajectoryLineThickness = 2.0f;
     static constexpr float kBounceDotSize = 8.0f;
     static constexpr float kEndMarkerSize = 10.0f;
