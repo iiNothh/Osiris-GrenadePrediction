@@ -5,6 +5,41 @@
 
 class GrenadePredictionController {
 public:
+    static bool advanceScheduler(GrenadePredictionUpdateScheduler& scheduler, bool force, Optional<float> frametime) noexcept
+    {
+        return scheduler.shouldUpdate(force, frametime.hasValue(), frametime.valueOr(0.0f));
+    }
+
+    template <typename HideLive, typename HideCached>
+    static void updateCacheValidity(GrenadePredictionState& state, grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime, float curtime,
+        bool projectilePresent, HideLive&& hideLive, HideCached&& hideCached) noexcept
+    {
+        if (state.cacheVisibility(mode, duration, hasCurtime, curtime, projectilePresent) != LastGrenadeCacheVisibility::Invalidate)
+            return;
+        state.invalidateCommittedTrajectory();
+        if (state.rollbackDetected) {
+            state.rollbackDetected = false;
+            hideLive();
+        }
+        hideCached();
+    }
+
+    template <typename Draw, typename Hide>
+    static void renderLastCommittedTrajectory(GrenadePredictionState& state, grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime,
+        float curtime, bool projectilePresent, Draw&& draw, Hide&& hide) noexcept
+    {
+        if (state.cacheVisibility(mode, duration, hasCurtime, curtime, projectilePresent) == LastGrenadeCacheVisibility::Show)
+            draw();
+        else
+            hide();
+    }
+
+    static void resetPresentationState(GrenadePredictionState& state) noexcept
+    {
+        state.livePresentationState = {};
+        state.lastCachePresentationState = {};
+    }
+
     static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled) noexcept
     {
         return observation.observePinState(weapon, pinPulled);
@@ -64,6 +99,7 @@ public:
         state.commitLiveGrenadeTrajectory();
         state.finalizeStagedTrajectory(true, currentTime.hasValue(), currentTime.valueOr(0.0f));
         state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
+        state.invalidateTempTrajectory();
         return true;
     }
 
