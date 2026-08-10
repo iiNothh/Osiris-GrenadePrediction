@@ -78,8 +78,8 @@ public:
         auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
         if (!weapon || kind == cs2::GrenadeKind::None) { state.throwObservation.reset(); state.invalidateTempTrajectory(); hideLive(); renderCachedTrajectory(hasCurtime, time); return; }
 
-        const bool releaseEdge = observeHeldThrow(weapon);
         const auto throwTime = hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional();
+        const bool releaseEdge = observeHeldThrow(weapon, throwTime);
         const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weapon, throwTime.value());
         if (GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), hasCurtime, time)) {
             hideLive();
@@ -96,7 +96,7 @@ public:
             shouldUpdate = state.updateScheduler.shouldUpdate(true, hookContext.globalVars().frametime().hasValue(), hookContext.globalVars().frametime().valueOr(0.0f));
         if (!shouldUpdate) return;
         auto simulator = hookContext.template make<GrenadeSimulator>();
-        const auto launch = prepareGrenadeLaunch(false, shouldUpdate, state.throwObservation.isFinalized(), true,
+        const auto launch = prepareGrenadeLaunch(false, shouldUpdate, state.throwObservation.isFinalized(), state.throwObservation.hasRetainedThrowStrength,
             [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
             [&]() noexcept -> Optional<GrenadeLaunchState> {
                 const auto eyeAngles = playerPawn.eyeAngles();
@@ -161,24 +161,25 @@ private:
     [[nodiscard]] decltype(auto) context() const noexcept { return hookContext.template make<GrenadePredictionContext>(); }
     [[nodiscard]] auto renderer() noexcept { return hookContext.template make<GrenadeTrajectoryRenderer>(); }
     void hideLive() noexcept { renderer().hide(context().state().liveContainerPanelHandle); }
-    [[nodiscard]] bool observeHeldThrow(cs2::C_BaseCSGrenade* weapon) noexcept
+    [[nodiscard]] bool observeHeldThrow(cs2::C_BaseCSGrenade* weapon, Optional<float> throwTime) noexcept
     {
         auto& observation = context().state().throwObservation;
         if (observation.observeWeapon(weapon))
             context().state().invalidateTempTrajectory();
+        bool pinPulled{};
+        bool releaseEdge{};
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToPinPulled>()) {
-            const auto pinPulled = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional();
-            if (pinPulled.hasValue()) {
-                if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
-                    return GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), [&]() noexcept {
-                        return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
-                    });
-                } else {
-                    return GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), []() noexcept { return Optional<float>{}; });
-                }
+            if (const auto pinState = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional(); pinState.hasValue()) {
+                pinPulled = pinState.value();
+                releaseEdge = GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled);
             }
         }
-        return false;
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
+            GrenadePredictionController::captureThrowStrength(observation, pinPulled, throwTime, [&]() noexcept {
+                return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
+            });
+        }
+        return releaseEdge;
     }
     void draw(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept
     {

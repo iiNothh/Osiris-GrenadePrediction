@@ -41,6 +41,33 @@ TEST(GrenadeThrowObservationParityTest, UnavailableThrowTimeDoesNotClearPendingE
     EXPECT_TRUE(observation.consumeActualExecution(true, 10.1f));
 }
 
+TEST(GrenadeThrowObservationParityTest, CapturesLateStrengthBeforeReadableThrowTimeLocksSequence)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+
+    GrenadePredictionController::captureThrowStrength(observation, false, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.25f}; });
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
+    EXPECT_TRUE(observation.observeThrowTime(&weapon, 10.0f));
+
+    GrenadePredictionController::captureThrowStrength(observation, true, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.5f}; });
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
+}
+
+TEST(GrenadeThrowObservationParityTest, CapturesPinnedZeroStrength)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.0f}; });
+
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
+}
+
 TEST(GrenadeThrowObservationParityTest, ActualExecutionWithoutRetainedStrengthDoesNotCommitTrajectory)
 {
     GrenadePredictionState state;
