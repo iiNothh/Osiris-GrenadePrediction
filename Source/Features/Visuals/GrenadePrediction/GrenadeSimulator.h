@@ -28,6 +28,48 @@ public:
 
     void setPlayerCollisionSnapshot(const GrenadePlayerCollisionSnapshot* snapshot) noexcept { playerCollisionSnapshot = snapshot; }
 
+    static float normalizeThrowStrength(float strength) noexcept
+    {
+        return strength > 0.4f && strength < 0.6f ? 0.5f : strength;
+    }
+
+    static cs2::Vector forwardFromAngles(float pitch, float yaw) noexcept
+    {
+        float sinePitch, cosinePitch, sineYaw, cosineYaw;
+        Math::sincos(pitch * 3.14159265f / 180.0f, sinePitch, cosinePitch);
+        Math::sincos(yaw * 3.14159265f / 180.0f, sineYaw, cosineYaw);
+        return {cosinePitch * cosineYaw, cosinePitch * sineYaw, -sinePitch};
+    }
+
+    static cs2::Vector computeInitialVelocity(cs2::Vector viewAngles, float baseVelocity, float throwStrength) noexcept
+    {
+        const float strength = normalizeThrowStrength(throwStrength);
+        const float pitch = viewAngles.x - (90.0f - Math::abs(viewAngles.x)) * 10.0f / 90.0f;
+        const float nativeVelocity = baseVelocity * 0.9f;
+        const float clampedVelocity = nativeVelocity < 15.0f ? 15.0f : nativeVelocity > 750.0f ? 750.0f : nativeVelocity;
+        return forwardFromAngles(pitch, viewAngles.y) * ((strength * 0.7f + 0.3f) * clampedVelocity);
+    }
+
+    [[nodiscard]] Optional<cs2::Vector> computeSpawnPosition(cs2::Vector eyePos, cs2::Vector viewAngles, float throwStrength, void* skipEntity) noexcept
+    {
+        if (!finite(eyePos) || !finite(viewAngles))
+            return {};
+        const float strength = normalizeThrowStrength(throwStrength);
+        const auto forward = forwardFromAngles(viewAngles.x - (90.0f - Math::abs(viewAngles.x)) * 10.0f / 90.0f, viewAngles.y);
+        if (!finite(forward))
+            return {};
+        eyePos.z += strength * grenade_prediction_params::kThrowZOffsetScale - grenade_prediction_params::kThrowZOffsetScale;
+        const auto traceEnd = eyePos + forward * grenade_prediction_params::kSpawnTraceForward;
+        const auto trace = traceGrenadeHull(eyePos, traceEnd, skipEntity);
+        if (!validTrace(trace))
+            return {};
+        const auto hitPos = trace.value().fraction < 1.0f ? trace.value().endPos : traceEnd;
+        auto spawnPos = hitPos - forward * grenade_prediction_params::kSpawnPullBack;
+        if ((spawnPos - eyePos).dot(forward) < 0.0f)
+            spawnPos = eyePos;
+        return finite(spawnPos) ? Optional<cs2::Vector>{spawnPos} : Optional<cs2::Vector>{};
+    }
+
     void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         trajectory.clear();
@@ -96,6 +138,10 @@ private:
         trajectory.clear();
         trajectory.endPos = start;
         trajectoryOutput = nullptr;
+    }
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
+    {
+        return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity);
     }
     [[nodiscard]] Optional<TraceResult> traceInFlight(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {

@@ -192,7 +192,9 @@ TEST(GrenadePredictionControllerTest, ReadsAndRetainsPinnedZeroStrengthForCurren
 
 TEST(GrenadePredictionLaunchTest, RejectsUnavailableNativeLaunch)
 {
-    const auto unavailable = prepareGrenadeLaunch(false, true, false, false, []() noexcept { return Optional<GrenadeLaunchState>{}; });
+    const auto unavailable = prepareGrenadeLaunch(false, true, false, false,
+        []() noexcept { return Optional<GrenadeLaunchState>{}; },
+        []() noexcept { return Optional<GrenadeLaunchState>{}; });
     EXPECT_EQ(unavailable.status, GrenadeLaunchPreparationStatus::Unavailable);
 }
 

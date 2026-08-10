@@ -20,6 +20,7 @@
 #include <GameClient/Entities/SmokeGrenadeProjectile.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
+#include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
 #include <MemoryPatterns/PatternTypes/WeaponPatternTypes.h>
 
 template <typename HookContext>
@@ -94,13 +95,29 @@ public:
         if (scheduledTransition)
             shouldUpdate = state.updateScheduler.shouldUpdate(true, hookContext.globalVars().frametime().hasValue(), hookContext.globalVars().frametime().valueOr(0.0f));
         if (!shouldUpdate) return;
-        const auto launch = prepareGrenadeLaunch(false, shouldUpdate, state.throwObservation.isFinalized(), true, [&]() noexcept {
-            return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn);
-        });
+        auto simulator = hookContext.template make<GrenadeSimulator>();
+        const auto launch = prepareGrenadeLaunch(false, shouldUpdate, state.throwObservation.isFinalized(), true,
+            [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
+            [&]() noexcept -> Optional<GrenadeLaunchState> {
+                const auto eyeAngles = playerPawn.eyeAngles();
+                const auto origin = playerPawn.absOrigin();
+                if (!eyeAngles.hasValue() || !origin.hasValue())
+                    return {};
+                float eyeHeight = grenade_prediction_params::kDefaultEyeHeight;
+                if (const auto viewOffset = hookContext.patternSearchResults().template get<OffsetToViewOffset>().of(static_cast<cs2::C_BaseEntity*>(pawn)).toOptional(); viewOffset.hasValue()
+                    && viewOffset.value().z > 30.0f && viewOffset.value().z < 70.0f)
+                    eyeHeight = viewOffset.value().z;
+                const auto spawn = simulator.computeSpawnPosition(origin.value() + cs2::Vector{0.0f, 0.0f, eyeHeight}, eyeAngles.value(), state.throwObservation.retainedThrowStrength, pawn);
+                if (!spawn.hasValue())
+                    return {};
+                auto velocity = GrenadeSimulator<HookContext>::computeInitialVelocity(eyeAngles.value(), grenade_prediction_params::kBaseThrowVelocity, state.throwObservation.retainedThrowStrength);
+                if (const auto playerVelocity = playerPawn.baseEntity().absVelocity(); playerVelocity.hasValue())
+                    velocity = velocity + playerVelocity.value() * grenade_prediction_params::kPlayerVelocityScale;
+                return GrenadeLaunchState{spawn.value(), velocity};
+            });
         if (launch.status != GrenadeLaunchPreparationStatus::Ready) { if (launch.status != GrenadeLaunchPreparationStatus::Unscheduled) hideLive(); renderCachedTrajectory(hasCurtime, time); return; }
 
         const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
-        auto simulator = hookContext.template make<GrenadeSimulator>();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, pawn);
         simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
         simulator.simulate(state.tempTrajectory, launch.state.value(), kind, pawn, gravity);
