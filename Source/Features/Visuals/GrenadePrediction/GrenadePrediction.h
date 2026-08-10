@@ -77,8 +77,19 @@ public:
         auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
         if (!weapon || kind == cs2::GrenadeKind::None) { state.throwObservation.reset(); state.invalidateTempTrajectory(); hideLive(); renderCachedTrajectory(hasCurtime, time); return; }
 
-        observeHeldThrow(weapon);
-        const bool scheduledTransition = state.throwObservation.observeThrowTime(weapon, hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional().valueOr(0.0f));
+        const bool releaseEdge = observeHeldThrow(weapon);
+        const auto throwTime = hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional();
+        const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weapon, throwTime.value());
+        if (GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), hasCurtime, time)) {
+            hideLive();
+            renderCachedTrajectory(hasCurtime, time);
+            return;
+        }
+        if (!throwTime.hasValue() && GrenadePredictionController::completeLegacyHeldThrow(state, weapon, releaseEdge, hasCurtime, time)) {
+            hideLive();
+            renderCachedTrajectory(hasCurtime, time);
+            return;
+        }
         bool shouldUpdate = state.updateScheduler.shouldUpdate(false, hookContext.globalVars().frametime().hasValue(), hookContext.globalVars().frametime().valueOr(0.0f));
         if (scheduledTransition)
             shouldUpdate = state.updateScheduler.shouldUpdate(true, hookContext.globalVars().frametime().hasValue(), hookContext.globalVars().frametime().valueOr(0.0f));
@@ -133,7 +144,7 @@ private:
     [[nodiscard]] decltype(auto) context() const noexcept { return hookContext.template make<GrenadePredictionContext>(); }
     [[nodiscard]] auto renderer() noexcept { return hookContext.template make<GrenadeTrajectoryRenderer>(); }
     void hideLive() noexcept { renderer().hide(context().state().liveContainerPanelHandle); }
-    void observeHeldThrow(cs2::C_BaseCSGrenade* weapon) noexcept
+    [[nodiscard]] bool observeHeldThrow(cs2::C_BaseCSGrenade* weapon) noexcept
     {
         auto& observation = context().state().throwObservation;
         if (observation.observeWeapon(weapon))
@@ -142,14 +153,15 @@ private:
             const auto pinPulled = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional();
             if (pinPulled.hasValue()) {
                 if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
-                    GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), [&]() noexcept {
+                    return GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), [&]() noexcept {
                         return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
                     });
                 } else {
-                    GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), []() noexcept { return Optional<float>{}; });
+                    return GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled.value(), []() noexcept { return Optional<float>{}; });
                 }
             }
         }
+        return false;
     }
     void draw(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept
     {

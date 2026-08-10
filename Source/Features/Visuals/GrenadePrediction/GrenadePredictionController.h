@@ -5,19 +5,31 @@
 
 class GrenadePredictionController {
 public:
-    static void observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
+    static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
     {
-        static_cast<void>(observation.observePinState(weapon, pinPulled));
+        const bool releaseEdge = observation.observePinState(weapon, pinPulled);
         if (pinPulled) {
             const auto throwStrength = readThrowStrength();
             if (throwStrength.hasValue())
                 observation.retainThrowStrength(throwStrength.value());
         }
+        return releaseEdge;
     }
 
     static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeActualExecution(hasCurtime, curtime))
+            return false;
+
+        const bool stagedTrajectoryReady = state.throwObservation.canCommitActualExecution()
+            && state.stageOwnedTempTrajectory(weapon, state.throwObservation.pendingSequence());
+        state.finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
+        return true;
+    }
+
+    static bool completeLegacyHeldThrow(GrenadePredictionState& state, const void* weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
+    {
+        if (!state.throwObservation.canCommitRelease(releaseEdge) || !state.throwObservation.consumeLegacyRelease(releaseEdge))
             return false;
 
         const bool stagedTrajectoryReady = state.stageOwnedTempTrajectory(weapon, state.throwObservation.pendingSequence());
