@@ -111,9 +111,12 @@ private:
             addSecondExcludedEntity(&filter, excludedEntities.first, excludedEntities.second);
         traceShape(managerHolder, &descriptor, &start, &end, &filter, &output);
 
-        const auto fraction = readOutput<float>(output, hookContext.patternSearchResults().template get<CGameTraceFractionOffset>());
-        const auto endPosition = readOutput<cs2::Vector>(output, hookContext.patternSearchResults().template get<CGameTraceEndPositionOffset>());
-        const auto normal = readOutput<cs2::Vector>(output, hookContext.patternSearchResults().template get<CGameTraceNormalOffset>());
+        const auto fractionOffset = hookContext.patternSearchResults().template get<CGameTraceFractionOffset>();
+        const auto endPositionOffset = hookContext.patternSearchResults().template get<CGameTraceEndPositionOffset>();
+        const auto normalOffset = hookContext.patternSearchResults().template get<CGameTraceNormalOffset>();
+        const auto fraction = readOutput<float>(output, fractionOffset);
+        const auto endPosition = readOutput<cs2::Vector>(output, endPositionOffset);
+        const auto normal = readOutput<cs2::Vector>(output, normalOffset);
 
         if (!engine_trace::isFinite(fraction) || fraction < 0.0f || fraction > 1.0f
             || !engine_trace::isFinite(endPosition) || !engine_trace::isFinite(normal)
@@ -122,7 +125,8 @@ private:
 
         if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<CGameTraceRawEntityHandleOffset>()) {
             const auto rawEntityHandleOffset = hookContext.patternSearchResults().template get<CGameTraceRawEntityHandleOffset>();
-            const bool handleRead = fraction < 1.0f && engine_trace::isValidOutputOffset(rawEntityHandleOffset, sizeof(std::int32_t));
+            const bool handleRead = fraction < 1.0f && engine_trace::isValidRawEntityHandleOffset(
+                rawEntityHandleOffset, endPositionOffset, normalOffset, fractionOffset);
             const auto rawEntityHandle = handleRead ? readOutput<std::int32_t>(output, rawEntityHandleOffset) : std::int32_t{};
             return TraceResult{fraction, endPosition, normal, handleRead && rawEntityHandle == engine_trace::kWorldEntityHandle, rawEntityHandle, handleRead};
         } else return TraceResult{fraction, endPosition, normal};

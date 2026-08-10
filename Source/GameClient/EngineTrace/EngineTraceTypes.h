@@ -66,6 +66,15 @@ static_assert(sizeof(OutputStorage) == kOutputCapacity && alignof(OutputStorage)
         && !doRegionsOverlap(static_cast<std::size_t>(normalOffset), sizeof(cs2::Vector), static_cast<std::size_t>(fractionOffset), sizeof(float));
 }
 
+[[nodiscard]] constexpr bool isValidRawEntityHandleOffset(std::int32_t rawEntityHandleOffset, std::int32_t endPositionOffset,
+    std::int32_t normalOffset, std::int32_t fractionOffset) noexcept
+{
+    return isValidOutputOffset(rawEntityHandleOffset, sizeof(std::int32_t))
+        && !doRegionsOverlap(static_cast<std::size_t>(rawEntityHandleOffset), sizeof(std::int32_t), static_cast<std::size_t>(endPositionOffset), sizeof(cs2::Vector))
+        && !doRegionsOverlap(static_cast<std::size_t>(rawEntityHandleOffset), sizeof(std::int32_t), static_cast<std::size_t>(normalOffset), sizeof(cs2::Vector))
+        && !doRegionsOverlap(static_cast<std::size_t>(rawEntityHandleOffset), sizeof(std::int32_t), static_cast<std::size_t>(fractionOffset), sizeof(float));
+}
+
 [[nodiscard]] constexpr bool isFinite(float value) noexcept
 {
     return (std::bit_cast<std::uint32_t>(value) & 0x7F800000u) != 0x7F800000u;

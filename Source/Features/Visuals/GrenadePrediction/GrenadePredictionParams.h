@@ -6,7 +6,7 @@ namespace grenade_prediction_params
 {
     constexpr float kSimDt = 1.0f / 64.0f;
     constexpr int kMovementSubsteps = 2;
-    constexpr float kMovementSubstepDt = 1.0f / 128.0f;
+    constexpr float kMovementSubstepDt = kSimDt / kMovementSubsteps;
     constexpr float kDefaultServerGravity = 800.0f;
     constexpr float kGravityScale = 0.40f;
     constexpr float kElasticity = 0.45f;
