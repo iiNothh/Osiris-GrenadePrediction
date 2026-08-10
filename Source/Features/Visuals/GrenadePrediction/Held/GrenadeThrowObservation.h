@@ -2,6 +2,14 @@
 
 #include <cstdint>
 
+#include <Utils/Math.h>
+
+enum class GrenadeThrowPhase : std::uint8_t {
+    Observing,
+    PendingExecution,
+    Finalized
+};
+
 struct GrenadeThrowObservation {
     [[nodiscard]] bool observeWeapon(const void* weapon) noexcept
     {
@@ -43,18 +51,20 @@ struct GrenadeThrowObservation {
     {
         if (weapon != observedWeapon)
             return false;
+        if (!Math::isFinite(throwTime))
+            return false;
         if (!(throwTime > 0.0f)) {
-            if (!hasPendingThrowTime)
+            if (phase != GrenadeThrowPhase::PendingExecution)
                 return false;
             pendingThrowTime = 0.0f;
-            hasPendingThrowTime = false;
+            phase = GrenadeThrowPhase::Observing;
             return true;
         }
-        if (finalized)
+        if (phase == GrenadeThrowPhase::Finalized)
             return false;
-        if (!hasPendingThrowTime || pendingThrowTime != throwTime) {
+        if (phase != GrenadeThrowPhase::PendingExecution || pendingThrowTime != throwTime) {
             pendingThrowTime = throwTime;
-            hasPendingThrowTime = true;
+            phase = GrenadeThrowPhase::PendingExecution;
             return true;
         }
         return false;
@@ -62,35 +72,33 @@ struct GrenadeThrowObservation {
 
     [[nodiscard]] bool consumeActualExecution(bool hasCurtime, float curtime) noexcept
     {
-        if (!hasCurtime || !hasPendingThrowTime || finalized || curtime <= pendingThrowTime)
+        if (!hasCurtime || !Math::isFinite(curtime) || phase != GrenadeThrowPhase::PendingExecution || curtime <= pendingThrowTime)
             return false;
-        finalized = true;
-        hasPendingThrowTime = false;
+        phase = GrenadeThrowPhase::Finalized;
         return true;
     }
 
     [[nodiscard]] bool consumeLegacyRelease(bool releaseEdge) noexcept
     {
-        if (!releaseEdge || hasPendingThrowTime || finalized)
+        if (!releaseEdge || phase != GrenadeThrowPhase::Observing)
             return false;
-        finalized = true;
+        phase = GrenadeThrowPhase::Finalized;
         return true;
     }
 
-    [[nodiscard]] bool hasPendingExecution() const noexcept { return hasPendingThrowTime; }
-    [[nodiscard]] const void* pendingWeapon() const noexcept { return hasPendingThrowTime ? observedWeapon : nullptr; }
+    [[nodiscard]] bool hasPendingExecution() const noexcept { return phase == GrenadeThrowPhase::PendingExecution; }
+    [[nodiscard]] const void* pendingWeapon() const noexcept { return phase == GrenadeThrowPhase::PendingExecution ? observedWeapon : nullptr; }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
     [[nodiscard]] bool canCommitActualExecution() const noexcept { return hasRetainedThrowStrength; }
-    [[nodiscard]] bool isStrengthLocked() const noexcept { return hasPendingThrowTime || finalized; }
-    [[nodiscard]] bool isFinalized() const noexcept { return finalized; }
+    [[nodiscard]] bool isStrengthLocked() const noexcept { return phase != GrenadeThrowPhase::Observing; }
+    [[nodiscard]] bool isFinalized() const noexcept { return phase == GrenadeThrowPhase::Finalized; }
 
     void resetThrowSequence() noexcept
     {
         retainedThrowStrength = 1.0f;
         hasRetainedThrowStrength = false;
         pendingThrowTime = 0.0f;
-        hasPendingThrowTime = false;
-        finalized = false;
+        phase = GrenadeThrowPhase::Observing;
         ++sequence;
     }
 
@@ -108,7 +116,6 @@ struct GrenadeThrowObservation {
     float retainedThrowStrength{1.0f};
     bool hasRetainedThrowStrength{};
     float pendingThrowTime{};
-    bool hasPendingThrowTime{};
-    bool finalized{};
+    GrenadeThrowPhase phase{GrenadeThrowPhase::Observing};
     std::uint32_t sequence{};
 };
