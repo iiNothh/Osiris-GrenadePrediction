@@ -21,6 +21,7 @@ struct C_CSPlayerPawn : C_BaseModelEntity {
     using m_flFlashBangTime = float;
     using sceneObjectUpdaterHandle = SceneObjectUpdaterHandle_t*;
     using m_bIsScoped = bool;
+    using m_angEyeAngles = Vector;
 };
 
 }

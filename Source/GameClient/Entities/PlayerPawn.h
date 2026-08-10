@@ -95,6 +95,11 @@ public:
         return baseEntity().absOrigin();
     }
 
+    [[nodiscard]] auto eyeAngles() const noexcept
+    {
+        return hookContext.patternSearchResults().template get<OffsetToEyeAngles>().of(playerPawn).toOptional();
+    }
+
     [[nodiscard]] bool isControlledByLocalPlayer() const noexcept
     {
         return playerController() == hookContext.localPlayerController();

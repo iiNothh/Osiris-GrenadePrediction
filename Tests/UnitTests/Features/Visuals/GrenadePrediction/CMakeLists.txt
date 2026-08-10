@@ -3,6 +3,7 @@ target_sources(UnitTests PRIVATE
   GrenadePredictionControllerTests.cpp
   GrenadePredictionLifecycleTests.cpp
   GrenadePredictionPrimitivesTests.cpp
+  ManualGrenadeLaunchTests.cpp
   GrenadeThrowObservationParityTests.cpp
   GrenadeSimulatorParityTests.cpp
 )

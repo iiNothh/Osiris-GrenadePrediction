@@ -25,6 +25,13 @@ namespace grenade_prediction_params
 
     constexpr int kMaxTicks = 1154;
     constexpr int kMaxBounces = 20;
+
+    constexpr float kBaseThrowVelocity = 750.0f;
+    constexpr float kPlayerVelocityScale = 1.25f;
+    constexpr float kDefaultEyeHeight = 64.06f;
+    constexpr float kSpawnTraceForward = 22.0f;
+    constexpr float kSpawnPullBack = 6.0f;
+    constexpr float kThrowZOffsetScale = 12.0f;
     constexpr float kClientTracerHorizonPadding = 0.125f;
     constexpr float kDetonateTimeHeFlash = 1.5f;
     constexpr float kDetonateTimeMolotov = 2.0f;
