@@ -31,6 +31,7 @@ TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecut
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
     static_cast<void>(state.throwObservation.observeWeapon(&weapon));
+    state.throwObservation.retainThrowStrength(0.5f);
     state.tagTempTrajectory(&weapon, state.throwObservation.pendingSequence());
     static_cast<void>(state.throwObservation.observeThrowTime(&weapon, 10.0f));
 

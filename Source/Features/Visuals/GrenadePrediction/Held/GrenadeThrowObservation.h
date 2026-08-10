@@ -39,6 +39,11 @@ struct GrenadeThrowObservation {
         }
     }
 
+    [[nodiscard]] bool canCommitRelease(bool releaseEdge) const noexcept
+    {
+        return releaseEdge && hasRetainedThrowStrength && !hasPendingThrowTime && !finalized;
+    }
+
     [[nodiscard]] bool observeThrowTime(const void* weapon, float throwTime) noexcept
     {
         if (weapon != observedWeapon)
@@ -69,9 +74,18 @@ struct GrenadeThrowObservation {
         return true;
     }
 
+    [[nodiscard]] bool consumeLegacyRelease(bool releaseEdge) noexcept
+    {
+        if (!releaseEdge || hasPendingThrowTime || finalized)
+            return false;
+        finalized = true;
+        return true;
+    }
+
     [[nodiscard]] bool hasPendingExecution() const noexcept { return hasPendingThrowTime; }
     [[nodiscard]] const void* pendingWeapon() const noexcept { return hasPendingThrowTime ? observedWeapon : nullptr; }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
+    [[nodiscard]] bool canCommitActualExecution() const noexcept { return hasRetainedThrowStrength; }
     [[nodiscard]] bool isStrengthLocked() const noexcept { return hasPendingThrowTime || finalized; }
     [[nodiscard]] bool isFinalized() const noexcept { return finalized; }
 
