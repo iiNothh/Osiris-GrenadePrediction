@@ -23,6 +23,7 @@
 #include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
 #include <MemoryPatterns/PatternTypes/WeaponPatternTypes.h>
 #include <Platform/GrenadePredictionCapabilities.h>
+#include <Utils/Math.h>
 
 template <typename HookContext>
 class GrenadePrediction {
@@ -31,18 +32,24 @@ public:
 
     void beginLiveGrenadeScan() noexcept
     {
+        auto& state = context().state();
+        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(state.playerCollisionCollectionScratch);
         if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.beginScan();
+            LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
     }
 
-    void endLiveGrenadeScan() noexcept
+    void endLiveGrenadeScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
+        auto& state = context().state();
         if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.endScan();
+            LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
+        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot, state.playerCollisionCollectionScratch,
+            static_cast<cs2::C_BaseEntity*>(localPawn));
     }
 
     void updateLiveGrenade(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
+        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.observe(context().state().playerCollisionCollectionScratch, identity);
         if constexpr (!GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
             return;
         else {
@@ -72,48 +79,78 @@ public:
         if (!playerPawn.isControlledByLocalPlayer())
             return;
         auto& state = context().state();
-        if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            state.liveGrenadeAuthority.observeLocalPawn(localPawnHandle);
-        if (!playerPawn.isAlive().value_or(false) || !enabled) { clearPrediction(); return; }
-        const auto curtime = hookContext.globalVars().curtime();
+        GrenadePredictionController::beginFrame(state);
+        const auto rawCurtime = hookContext.globalVars().curtime();
+        const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
         const bool hasCurtime = curtime.hasValue();
         const float time = curtime.valueOr(0.0f);
-        const auto frametime = hookContext.globalVars().frametime();
-        bool shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, false, frametime);
+        GrenadePredictionController::recordLiveCacheStatus(state);
+        GrenadePredictionController::recordCollisionSnapshotStatus(state);
         auto* const pawn = static_cast<cs2::C_CSPlayerPawn*>(static_cast<cs2::C_BaseEntity*>(playerPawn.baseEntity()));
-        if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction) {
-            if (acceptNewestLiveGrenade(pawn, hasCurtime, time))
+        const auto presentCachedTrajectory = [&]() noexcept { applyCachedTrajectoryPresentation(hasCurtime, time); };
+        if constexpr (!GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
+            clearPrediction();
+            presentCachedTrajectory();
+            return;
+        } else {
+            if (!playerPawn.isAlive().value_or(false) || !enabled) {
+                clearPrediction();
+                presentCachedTrajectory();
+                return;
+            }
+            if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction) {
+                if (GrenadePredictionController::acceptNewestLiveGrenade(state, localPawnHandle, curtime, [&](const auto& projectile) noexcept {
+                    auto simulator = hookContext.template make<GrenadeSimulator>();
+                    state.liveGrenadeTrajectoryScratch.clear();
+                    simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+                    simulator.simulate(state.liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, pawn,
+                        grenade_prediction::resolveServerGravity(hookContext.cvarSystem()));
+                    return state.liveGrenadeTrajectoryScratch.valid && state.liveGrenadeTrajectoryScratch.pointsCount;
+                }))
+                    hideLivePrediction();
+            }
+            static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
+            const auto rawFrametime = hookContext.globalVars().frametime();
+            const Optional<float> frametime = rawFrametime.hasValue() && Math::isFinite(rawFrametime.value()) ? rawFrametime : Optional<float>{};
+            bool shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, false, frametime);
+            const auto pendingWeapon = state.throwObservation.pendingWeapon();
+            if (GrenadePredictionController::completeHeldThrow(state, pendingWeapon, hasCurtime, time)) {
                 hideLivePrediction();
-        }
-        updateCacheForTime(hasCurtime, time);
+                presentCachedTrajectory();
+                return;
+            }
+            const auto kind = GrenadeKindMapper::from(activeWeapon.baseEntity().classify());
+            auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
+            if (!weapon || kind == cs2::GrenadeKind::None) {
+                state.throwObservation.reset();
+                state.invalidateTempTrajectory();
+                hideLivePrediction();
+                presentCachedTrajectory();
+                return;
+            }
 
-        const auto pendingWeapon = state.throwObservation.pendingWeapon();
-        if (GrenadePredictionController::completeHeldThrow(state, pendingWeapon, hasCurtime, time)) {
-            hideLivePrediction();
-            renderLastCommittedTrajectory(hasCurtime, time);
-            return;
-        }
-        const auto kind = GrenadeKindMapper::from(activeWeapon.baseEntity().classify());
-        auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
-        if (!weapon || kind == cs2::GrenadeKind::None) { state.throwObservation.reset(); state.invalidateTempTrajectory(); hideLivePrediction(); renderLastCommittedTrajectory(hasCurtime, time); return; }
-
-        const auto throwTime = hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional();
-        const bool releaseEdge = observeHeldThrow(weapon, throwTime);
-        const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weapon, throwTime.value());
-        if (GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), hasCurtime, time)) {
-            hideLivePrediction();
-            renderLastCommittedTrajectory(hasCurtime, time);
-            return;
-        }
-        if (!throwTime.hasValue() && GrenadePredictionController::completeLegacyHeldThrow(state, weapon, releaseEdge, hasCurtime, time)) {
-            hideLivePrediction();
-            renderLastCommittedTrajectory(hasCurtime, time);
-            return;
-        }
-        if (scheduledTransition)
-            shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, true, frametime);
-        auto simulator = hookContext.template make<GrenadeSimulator>();
-        const auto launch = prepareGrenadeLaunch(false, shouldUpdate, state.throwObservation.isFinalized(), state.throwObservation.hasRetainedThrowStrength,
+            const auto rawThrowTime = hookContext.patternSearchResults().template get<OffsetToThrowTime>().of(weapon).toOptional();
+            const Optional<float> throwTime = rawThrowTime.hasValue() && Math::isFinite(rawThrowTime.value()) ? rawThrowTime : Optional<float>{};
+            const bool releaseEdge = observeHeldThrow(weapon, throwTime);
+            const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weapon, throwTime.value());
+            if (GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), hasCurtime, time)
+                || (!throwTime.hasValue() && GrenadePredictionController::completeLegacyHeldThrow(state, weapon, releaseEdge, hasCurtime, time))) {
+                hideLivePrediction();
+                presentCachedTrajectory();
+                return;
+            }
+            if (scheduledTransition)
+                shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, true, frametime);
+            if (!shouldUpdate) {
+                if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.ownsTempTrajectory(weapon, state.throwObservation.sequence))
+                    drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
+                else if (state.liveGrenadeAuthority.blocksHeldPrediction())
+                    hideLivePrediction();
+                presentCachedTrajectory();
+                return;
+            }
+            auto simulator = hookContext.template make<GrenadeSimulator>();
+            const auto launch = prepareGrenadeLaunch(false, true, state.throwObservation.isFinalized(), state.throwObservation.hasRetainedThrowStrength,
             [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
             [&]() noexcept -> Optional<GrenadeLaunchState> {
                 const auto eyeAngles = playerPawn.eyeAngles();
@@ -132,28 +169,44 @@ public:
                     velocity = velocity + playerVelocity.value() * grenade_prediction_params::kPlayerVelocityScale;
                 return GrenadeLaunchState{spawn.value(), velocity};
             });
-        if (launch.status != GrenadeLaunchPreparationStatus::Ready) {
-            if (launch.status != GrenadeLaunchPreparationStatus::Unscheduled) {
+            if (launch.status != GrenadeLaunchPreparationStatus::Ready) {
                 hideLivePrediction(state.throwObservation.hasPendingExecution());
                 if (!state.throwObservation.hasPendingExecution())
                     state.invalidateTempTrajectory();
+                presentCachedTrajectory();
+                return;
             }
-            renderLastCommittedTrajectory(hasCurtime, time);
-            return;
-        }
 
-        const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
-        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, pawn);
-        simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-        simulator.simulate(state.tempTrajectory, launch.state.value(), kind, pawn, gravity);
-        if (!state.tempTrajectory.valid || !state.tempTrajectory.pointsCount) {
-            state.invalidateTempTrajectory();
-            hideLivePrediction(state.throwObservation.hasPendingExecution());
-        } else {
-            state.tagTempTrajectory(weapon, state.throwObservation.sequence);
-            drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
+            const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
+            const HeldGrenadeSimulationInput input{launch.state.value().origin, launch.state.value().velocity, kind, gravity, state.playerCollisionSnapshot.revision,
+                localPawnHandle, weapon, state.throwObservation.sequence};
+            if (GrenadePredictionController::isHeldSimulationNecessary(state, input, shouldUpdate)) {
+                simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+                simulator.simulate(state.tempTrajectory, launch.state.value(), kind, pawn, gravity);
+                const bool succeeded = state.tempTrajectory.valid && state.tempTrajectory.pointsCount;
+                GrenadePredictionController::recordHeldSimulationResult(state, input, succeeded);
+                if (!succeeded)
+                    hideLivePrediction(state.throwObservation.hasPendingExecution());
+            }
+            if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.ownsTempTrajectory(weapon, state.throwObservation.sequence))
+                drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
+            else if (state.liveGrenadeAuthority.blocksHeldPrediction())
+                hideLivePrediction();
+            presentCachedTrajectory();
         }
-        renderLastCommittedTrajectory(hasCurtime, time);
+    }
+
+    void handleNoLocalPawn() noexcept
+    {
+        auto& state = context().state();
+        GrenadePredictionController::beginFrame(state);
+        const auto rawCurtime = hookContext.globalVars().curtime();
+        const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
+        static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
+        GrenadePredictionController::recordLiveCacheStatus(state);
+        GrenadePredictionController::recordCollisionSnapshotStatus(state);
+        clearPrediction();
+        applyCachedTrajectoryPresentation(curtime.hasValue(), curtime.valueOr(0.0f));
     }
 
     void clearPrediction() noexcept
@@ -223,18 +276,15 @@ private:
         const auto bounceHue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::BounceHue)).toHueFloat();
         renderer().draw(trajectory, panel, presentation, hookContext.hud().getHudReticle(), hue, bounceHue);
     }
-    void updateCacheForTime(bool hasCurtime, float curtime) noexcept
+    void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept
     {
         auto& state = context().state();
-        GrenadePredictionController::updateCacheValidity(state, GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), hasCurtime, curtime,
-            acceptedProjectilePresent(state, hasCurtime, curtime), [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
-    }
-    void renderLastCommittedTrajectory(bool hasCurtime, float curtime) noexcept
-    {
-        auto& state = context().state();
-        GrenadePredictionController::renderLastCommittedTrajectory(state, GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), hasCurtime, curtime,
-            acceptedProjectilePresent(state, hasCurtime, curtime), [this, &state] { drawTrajectory(state.lastCommittedTrajectory, state.lastCacheContainerPanelHandle, state.lastCachePresentationState); },
-            [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
+        const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(state,
+            GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), hasCurtime, curtime,
+            acceptedProjectilePresent(state, hasCurtime, curtime));
+        GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision,
+            [this, &state] { drawTrajectory(state.lastCommittedTrajectory, state.lastCacheContainerPanelHandle, state.lastCachePresentationState); },
+            [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
     }
     [[nodiscard]] static bool acceptedProjectilePresent(const GrenadePredictionState& state, bool hasCurtime, float curtime) noexcept
     {
@@ -243,25 +293,6 @@ private:
                 && state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile());
         else
             return false;
-    }
-    [[nodiscard]] bool acceptNewestLiveGrenade(cs2::C_CSPlayerPawn* pawn, bool hasCurtime, float curtime) noexcept
-    {
-        auto& state = context().state();
-        const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
-        if (!projectile.hasValue() || !state.liveGrenadeAuthority.observeForSimulation(projectile.value()))
-            return false;
-        auto simulator = hookContext.template make<GrenadeSimulator>();
-        state.liveGrenadeTrajectoryScratch.clear();
-        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, pawn);
-        simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-        simulator.simulate(state.liveGrenadeTrajectoryScratch, {projectile.value().initialPosition, projectile.value().initialVelocity}, projectile.value().kind, pawn,
-            grenade_prediction::resolveServerGravity(hookContext.cvarSystem()));
-        if (!state.liveGrenadeTrajectoryScratch.valid || !state.liveGrenadeTrajectoryScratch.pointsCount)
-            return false;
-        state.commitLiveGrenadeTrajectory();
-        state.finalizeStagedTrajectory(true, hasCurtime, curtime);
-        state.liveGrenadeAuthority.accept(projectile.value(), hasCurtime ? Optional<float>{curtime} : Optional<float>{});
-        return true;
     }
     HookContext& hookContext;
 };

@@ -4,6 +4,8 @@
 #include <Utils/Math.h>
 
 struct TrajectoryLineSegment {
+    static constexpr float kNearW = 0.001f;
+
     float midpointX;
     float midpointY;
     float width;
@@ -11,7 +13,6 @@ struct TrajectoryLineSegment {
 
     [[nodiscard]] static bool fromClipSpace(ClipSpaceCoordinates first, ClipSpaceCoordinates second, float aspectRatio, TrajectoryLineSegment& result) noexcept
     {
-        constexpr float kNearW = 0.001f;
         if (!Math::isFinite(first.x) || !Math::isFinite(first.y) || !Math::isFinite(first.z) || !Math::isFinite(first.w)
             || !Math::isFinite(second.x) || !Math::isFinite(second.y) || !Math::isFinite(second.z) || !Math::isFinite(second.w)
             || !Math::isFinite(aspectRatio) || aspectRatio <= kNearW)

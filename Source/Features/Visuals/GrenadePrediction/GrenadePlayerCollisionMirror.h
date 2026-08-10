@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <CS2/Classes/Vector.h>
+#include <GameClient/Entities/TeamNumber.h>
 #include <Utils/Math.h>
 
 struct GrenadePlayerCollisionCandidate {
@@ -12,16 +13,54 @@ struct GrenadePlayerCollisionCandidate {
     bool relationshipEligible{};
 };
 
-struct GrenadePlayerCollisionSnapshot {
+enum class GrenadePlayerCollisionSnapshotStatus : std::uint8_t {
+    Unavailable,
+    Available
+};
+
+struct GrenadePlayerCollisionCollectedCandidate {
+    std::uint32_t rawHandle{};
+    cs2::Vector mins{};
+    cs2::Vector maxs{};
+    TeamNumber team{};
+};
+
+struct GrenadePlayerCollisionCollectionScratch {
     static constexpr int kCapacity = 48;
-    GrenadePlayerCollisionCandidate candidates[kCapacity]{};
+
+    GrenadePlayerCollisionCollectedCandidate candidates[kCapacity]{};
     int count{};
-    bool available{};
+    std::uint32_t malformedUnrelatedIdentityCount{};
+    bool playerDataInvalid{};
+    bool overflowed{};
 
     void reset() noexcept
     {
         count = 0;
-        available = false;
+        malformedUnrelatedIdentityCount = 0;
+        playerDataInvalid = false;
+        overflowed = false;
+    }
+};
+
+struct GrenadePlayerCollisionSnapshot {
+    static constexpr int kCapacity = GrenadePlayerCollisionCollectionScratch::kCapacity;
+    GrenadePlayerCollisionCandidate candidates[kCapacity]{};
+    int count{};
+    GrenadePlayerCollisionSnapshotStatus status{GrenadePlayerCollisionSnapshotStatus::Unavailable};
+    std::uint64_t revision{};
+    std::uint32_t malformedUnrelatedIdentityCount{};
+    // Retains compatibility with full builds until the owner supplies dedicated scratch.
+    GrenadePlayerCollisionCollectionScratch collectionScratch{};
+
+    void reset() noexcept
+    {
+        const bool changed = status != GrenadePlayerCollisionSnapshotStatus::Unavailable || count != 0;
+        count = 0;
+        status = GrenadePlayerCollisionSnapshotStatus::Unavailable;
+        malformedUnrelatedIdentityCount = 0;
+        if (changed)
+            ++revision;
     }
 
     [[nodiscard]] bool append(GrenadePlayerCollisionCandidate candidate) noexcept
@@ -68,7 +107,7 @@ namespace grenade_player_collision_mirror
 
     [[nodiscard]] inline const GrenadePlayerCollisionCandidate* select(const GrenadePlayerCollisionSnapshot& snapshot, cs2::Vector origin) noexcept
     {
-        if (!snapshot.available || snapshot.count < 0 || snapshot.count > GrenadePlayerCollisionSnapshot::kCapacity)
+        if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Available || snapshot.count < 0 || snapshot.count > GrenadePlayerCollisionSnapshot::kCapacity)
             return nullptr;
 
         const GrenadePlayerCollisionCandidate* selected{};
