@@ -100,18 +100,29 @@ TEST(GrenadeSimulationParityTest, DampsDynamicPaneAndExcludesItFromLaterTraces)
     EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
 }
 
-TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyToConfirmedWorld)
+TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyWhenWorldHandleIsRead)
 {
     GrenadeSimulatorTestHookContext context;
     Simulator simulator{context};
     cs2::Vector worldVelocity{100.0f, 0.0f, -1000.0f};
     cs2::Vector unknownVelocity = worldVelocity;
     static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
-        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, false, engine_trace::kWorldEntityHandle}, worldVelocity, cs2::GrenadeKind::HEGrenade));
+        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, true, engine_trace::kWorldEntityHandle, true}, worldVelocity, cs2::GrenadeKind::HEGrenade));
     static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
-        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}}, unknownVelocity, cs2::GrenadeKind::HEGrenade));
+        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, false, engine_trace::kWorldEntityHandle, false}, unknownVelocity, cs2::GrenadeKind::HEGrenade));
     EXPECT_NEAR(worldVelocity.z, 227.24025f, 0.001f);
     EXPECT_NEAR(unknownVelocity.z, 450.0140625f, 0.001f);
+}
+
+TEST(EngineTraceOutputValidationTest, RejectsRawHandleOffsetsOverlappingRequiredOutputs)
+{
+    constexpr auto endPositionOffset = 0x10;
+    constexpr auto normalOffset = 0x20;
+    constexpr auto fractionOffset = 0x30;
+
+    EXPECT_TRUE(engine_trace::isValidRawEntityHandleOffset(0xBC, endPositionOffset, normalOffset, fractionOffset));
+    EXPECT_FALSE(engine_trace::isValidRawEntityHandleOffset(0x18, endPositionOffset, normalOffset, fractionOffset));
+    EXPECT_FALSE(engine_trace::isValidRawEntityHandleOffset(fractionOffset, endPositionOffset, normalOffset, fractionOffset));
 }
 
 }
