@@ -5,7 +5,7 @@
 namespace
 {
 
-TEST(GrenadeThrowObservationParityTest, CommitsLegacyReleaseOnlyWithRetainedPinPulledStrength)
+TEST(GrenadeThrowObservationParityTest, FinalizesLegacyReleaseWithoutRetainedPinPulledStrength)
 {
     GrenadePredictionState state;
     const auto weapon = reinterpret_cast<const void*>(1);
@@ -13,17 +13,11 @@ TEST(GrenadeThrowObservationParityTest, CommitsLegacyReleaseOnlyWithRetainedPinP
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
     state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
-    EXPECT_FALSE(GrenadePredictionController::completeLegacyHeldThrow(state, weapon, state.throwObservation.observePinState(weapon, false), true, 10.0f));
-    EXPECT_FALSE(state.lastCommittedTrajectory.valid);
-
     EXPECT_FALSE(state.throwObservation.observePinState(weapon, true));
-    state.throwObservation.retainThrowStrength(0.5f);
-    state.tempTrajectory.valid = true;
-    state.tempTrajectory.pointsCount = 1;
-    state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
-    const bool releaseEdge = state.throwObservation.observePinState(weapon, false);
-    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, weapon, releaseEdge, true, 10.0f));
-    EXPECT_TRUE(state.lastCommittedTrajectory.valid);
+    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, weapon, state.throwObservation.observePinState(weapon, false), true, 10.0f));
+    EXPECT_TRUE(state.throwObservation.isFinalized());
+    EXPECT_FALSE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
 TEST(GrenadeThrowObservationParityTest, UnavailableThrowTimeDoesNotClearPendingExecution)
@@ -80,6 +74,7 @@ TEST(GrenadeThrowObservationParityTest, ActualExecutionWithoutRetainedStrengthDo
 
     EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, &weapon, true, 10.1f));
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
 TEST(GrenadeThrowObservationParityTest, CommitsExpiredThrowTimeInItsFirstObservation)
@@ -95,6 +90,7 @@ TEST(GrenadeThrowObservationParityTest, CommitsExpiredThrowTimeInItsFirstObserva
 
     EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
 TEST(GrenadeThrowObservationParityTest, CommitsUsingPendingWeaponAcrossWeaponSwitch)
