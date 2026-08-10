@@ -40,6 +40,11 @@ public:
         return {};
     }
 
+    [[nodiscard]] auto absVelocity() const noexcept
+    {
+        return hookContext.patternSearchResults().template get<OffsetToAbsVelocity>().of(entity).toOptional();
+    }
+
     [[nodiscard]] decltype(auto) entityIdentity() const noexcept
     {
         return hookContext.template make<EntityIdentity>(entity ? entity->identity : nullptr);
