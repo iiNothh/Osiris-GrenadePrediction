@@ -115,7 +115,15 @@ public:
                     velocity = velocity + playerVelocity.value() * grenade_prediction_params::kPlayerVelocityScale;
                 return GrenadeLaunchState{spawn.value(), velocity};
             });
-        if (launch.status != GrenadeLaunchPreparationStatus::Ready) { if (launch.status != GrenadeLaunchPreparationStatus::Unscheduled) hideLive(); renderCachedTrajectory(hasCurtime, time); return; }
+        if (launch.status != GrenadeLaunchPreparationStatus::Ready) {
+            if (launch.status != GrenadeLaunchPreparationStatus::Unscheduled) {
+                hideLive();
+                if (!state.throwObservation.hasPendingExecution())
+                    state.invalidateTempTrajectory();
+            }
+            renderCachedTrajectory(hasCurtime, time);
+            return;
+        }
 
         const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.build(state.playerCollisionSnapshot, pawn);

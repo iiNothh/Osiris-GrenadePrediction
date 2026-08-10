@@ -39,7 +39,23 @@ TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecut
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, &weapon, true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
-    EXPECT_TRUE(state.tempTrajectory.valid);
+    EXPECT_FALSE(state.tempTrajectory.valid);
+}
+
+TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStrength)
+{
+    GrenadePredictionState state;
+    const int weapon{};
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    static_cast<void>(state.throwObservation.observeWeapon(&weapon));
+    static_cast<void>(state.throwObservation.observePinState(&weapon, true));
+    state.tagTempTrajectory(&weapon, state.throwObservation.pendingSequence());
+
+    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, &weapon, true, true, 10.0f));
+    EXPECT_TRUE(state.throwObservation.isFinalized());
+    EXPECT_FALSE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
 TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)

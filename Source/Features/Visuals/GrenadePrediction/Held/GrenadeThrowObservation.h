@@ -39,11 +39,6 @@ struct GrenadeThrowObservation {
         }
     }
 
-    [[nodiscard]] bool canCommitRelease(bool releaseEdge) const noexcept
-    {
-        return releaseEdge && hasRetainedThrowStrength && !hasPendingThrowTime && !finalized;
-    }
-
     [[nodiscard]] bool observeThrowTime(const void* weapon, float throwTime) noexcept
     {
         if (weapon != observedWeapon)
