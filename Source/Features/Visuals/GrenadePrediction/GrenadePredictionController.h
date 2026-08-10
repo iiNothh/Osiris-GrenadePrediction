@@ -5,14 +5,24 @@
 
 class GrenadePredictionController {
 public:
+    static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled) noexcept
+    {
+        return observation.observePinState(weapon, pinPulled);
+    }
+
+    static void captureThrowStrength(GrenadeThrowObservation& observation, bool pinPulled, Optional<float> throwTime, auto&& readThrowStrength) noexcept
+    {
+        if (observation.isStrengthLocked() || (!pinPulled && !throwTime.greaterThan(0.0f).valueOr(false)))
+            return;
+        const auto throwStrength = readThrowStrength();
+        if (throwStrength.hasValue())
+            observation.retainThrowStrength(throwStrength.value());
+    }
+
     static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
     {
-        const bool releaseEdge = observation.observePinState(weapon, pinPulled);
-        if (pinPulled) {
-            const auto throwStrength = readThrowStrength();
-            if (throwStrength.hasValue())
-                observation.retainThrowStrength(throwStrength.value());
-        }
+        const bool releaseEdge = observeHeldThrow(observation, weapon, pinPulled);
+        captureThrowStrength(observation, pinPulled, {}, readThrowStrength);
         return releaseEdge;
     }
 
