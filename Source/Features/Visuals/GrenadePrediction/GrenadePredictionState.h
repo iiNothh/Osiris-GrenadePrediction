@@ -2,15 +2,16 @@
 
 #include <cstdint>
 
+#include <CS2/Panorama/PanelHandle.h>
+
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionDiagnostics.h>
+#include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
 #include <Features/Visuals/GrenadePrediction/HeldGrenadeSimulationInput.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
-#include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <Utils/Math.h>
 
@@ -32,7 +33,6 @@ struct GrenadePredictionState {
     LiveGrenadeAuthority liveGrenadeAuthority{};
     GrenadePlayerCollisionSnapshot playerCollisionSnapshot{};
     GrenadePlayerCollisionCollectionScratch playerCollisionCollectionScratch{};
-    GrenadePredictionDiagnostics diagnostics{};
 
     cs2::PanelHandle liveContainerPanelHandle{};
     cs2::PanelHandle lastCacheContainerPanelHandle{};

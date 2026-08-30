@@ -13,11 +13,6 @@ public:
         return hookContext.featuresStates().visualFeaturesStates.grenadePredictionState;
     }
 
-    [[nodiscard]] auto& config() const noexcept
-    {
-        return hookContext.config();
-    }
-
 private:
     HookContext& hookContext;
 };

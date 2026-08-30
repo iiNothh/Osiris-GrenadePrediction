@@ -13,7 +13,6 @@ struct TraceResult {
     float fraction{};
     cs2::Vector endPos{};
     cs2::Vector normal{};
-    bool floorDampingKnownEligible{};
     std::int32_t rawEntityHandle{};
     bool handleRead{};
 };
@@ -127,7 +126,7 @@ private:
             const bool handleRead = fraction < 1.0f && engine_trace::isValidRawEntityHandleOffset(
                 rawEntityHandleOffset, endPositionOffset, normalOffset, fractionOffset);
             const auto rawEntityHandle = handleRead ? readOutput<std::int32_t>(output, rawEntityHandleOffset) : std::int32_t{};
-            return TraceResult{fraction, endPosition, normal, handleRead && rawEntityHandle == engine_trace::kWorldEntityHandle, rawEntityHandle, handleRead};
+            return TraceResult{fraction, endPosition, normal, rawEntityHandle, handleRead};
         } else return TraceResult{fraction, endPosition, normal};
     }
 

@@ -6,7 +6,6 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/BaseModelEntity.h>
-#include <GameClient/EntitySystem/EntitySystem.h>
 
 template <typename HookContext>
 class GrenadePlayerCollisionSnapshotBuilder {
@@ -23,17 +22,12 @@ public:
 
     void observe(GrenadePlayerCollisionCollectionScratch& scratch, const cs2::CEntityIdentity& identity) const noexcept
     {
-        if (!identity.entityClass) {
-            ++scratch.malformedUnrelatedIdentityCount;
+        if (!identity.entityClass)
             return;
-        }
 
         const bool isPlayer = hookContext.entityClassifier().template entityIs<cs2::C_CSPlayerPawn>(identity.entityClass);
-        if (!isPlayer) {
-            if (!identity.entity || identity.handle.value == cs2::INVALID_EHANDLE_INDEX)
-                ++scratch.malformedUnrelatedIdentityCount;
+        if (!isPlayer)
             return;
-        }
 
         if (!identity.entity || identity.handle.value == cs2::INVALID_EHANDLE_INDEX) {
             scratch.playerDataInvalid = true;
@@ -69,19 +63,19 @@ public:
     {
         if (scratch.playerDataInvalid || scratch.overflowed || !localPawn || !localPawn->identity || localPawn->identity->entity != localPawn
             || !localPawn->identity->entityClass || localPawn->identity->handle.value == cs2::INVALID_EHANDLE_INDEX) {
-            commitUnavailable(snapshot, scratch.malformedUnrelatedIdentityCount);
+            commitUnavailable(snapshot);
             return;
         }
 
         if (!hookContext.entityClassifier().template entityIs<cs2::C_CSPlayerPawn>(localPawn->identity->entityClass)) {
-            commitUnavailable(snapshot, scratch.malformedUnrelatedIdentityCount);
+            commitUnavailable(snapshot);
             return;
         }
 
         const auto teammatesAreEnemies = hookContext.cvarSystem().template getConVarValue<cs2::mp_teammates_are_enemies>();
         const auto localTeam = hookContext.template make<BaseEntity>(localPawn).optionalTeamNumber();
         if (!teammatesAreEnemies.has_value() || !localTeam.hasValue()) {
-            commitUnavailable(snapshot, scratch.malformedUnrelatedIdentityCount);
+            commitUnavailable(snapshot);
             return;
         }
 
@@ -100,30 +94,16 @@ public:
             snapshot.status = GrenadePlayerCollisionSnapshotStatus::Available;
             ++snapshot.revision;
         }
-        snapshot.malformedUnrelatedIdentityCount = scratch.malformedUnrelatedIdentityCount;
-    }
-
-    void build(GrenadePlayerCollisionSnapshot& snapshot, cs2::C_BaseEntity* localPawn) const noexcept
-    {
-        begin(snapshot.collectionScratch);
-        auto entitySystem = hookContext.template make<EntitySystem>();
-        entitySystem.forEachNetworkableEntityIdentity([&](const auto& identity) noexcept {
-            if (identity.entity == localPawn)
-                return;
-            observe(snapshot.collectionScratch, identity);
-        });
-        finish(snapshot, snapshot.collectionScratch, localPawn);
     }
 
 private:
-    static void commitUnavailable(GrenadePlayerCollisionSnapshot& snapshot, std::uint32_t malformedUnrelatedIdentityCount) noexcept
+    static void commitUnavailable(GrenadePlayerCollisionSnapshot& snapshot) noexcept
     {
         if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Unavailable || snapshot.count != 0) {
             snapshot.count = 0;
             snapshot.status = GrenadePlayerCollisionSnapshotStatus::Unavailable;
             ++snapshot.revision;
         }
-        snapshot.malformedUnrelatedIdentityCount = malformedUnrelatedIdentityCount;
     }
 
     [[nodiscard]] static bool candidatesEqual(const GrenadePlayerCollisionCandidate& candidate, const GrenadePlayerCollisionCollectedCandidate& collected,

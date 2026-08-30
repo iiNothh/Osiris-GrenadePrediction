@@ -76,9 +76,10 @@ TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewes
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
     state.tagTempTrajectory(reinterpret_cast<const void*>(1), 1);
+    state.liveGrenadeCache.endScan();
 
     cs2::CEntityHandle simulatedProjectile{};
-    EXPECT_TRUE(GrenadePredictionController::completeLiveGrenadeScan(state, localPawn, 10.0f, [&](const auto& projectile) noexcept {
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [&](const auto& projectile) noexcept {
         simulatedProjectile = projectile.projectileHandle;
         return true;
     }));
@@ -95,8 +96,9 @@ TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProj
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
     state.liveGrenadeTrajectoryScratch.valid = true;
     state.liveGrenadeTrajectoryScratch.pointsCount = 1;
+    state.liveGrenadeCache.endScan();
 
-    EXPECT_TRUE(GrenadePredictionController::completeLiveGrenadeScan(state, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
     EXPECT_FALSE(state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(100.0f));
 }
 
@@ -165,9 +167,10 @@ TEST(GrenadePredictionControllerTest, RendersTheCachedTrajectoryOnceAfterValidit
     int drawn{};
     int hidden{};
 
-    GrenadePredictionController::updateCacheValidity(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false, [] {}, [] {});
-    GrenadePredictionController::renderLastCommittedTrajectory(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false,
-        [&] { ++drawn; }, [&] { ++hidden; });
+    const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
+        state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false);
+    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [] {}, [] {}, [] {});
+    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [&] { ++drawn; }, [] {}, [&] { ++hidden; });
 
     EXPECT_EQ(drawn, 1);
     EXPECT_EQ(hidden, 0);

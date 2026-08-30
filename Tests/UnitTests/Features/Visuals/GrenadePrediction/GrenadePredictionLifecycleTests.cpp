@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
+
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 
 namespace
@@ -26,12 +28,14 @@ TEST(GrenadePredictionLifecycleTest, PositiveHEExplodeEffectTickInvalidatesAccep
     GrenadePredictionState state;
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(state.liveGrenadeCache.upsert({projectileHandle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, cs2::GrenadeKind::HEGrenade}));
-    EXPECT_TRUE(GrenadePredictionController::completeLiveGrenadeScan(state, localPawn, 10.0f, [](const auto&) noexcept { return true; }));
+    state.liveGrenadeCache.endScan();
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [](const auto&) noexcept { return true; }));
     ASSERT_TRUE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(GrenadePredictionController::updateHELiveGrenade(state.liveGrenadeCache, HEProjectile{}, projectileHandle));
-    EXPECT_FALSE(GrenadePredictionController::completeLiveGrenadeScan(state, localPawn, 10.1f, [](const auto&) noexcept { return true; }));
+    state.liveGrenadeCache.endScan();
+    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.1f, [](const auto&) noexcept { return true; }));
     EXPECT_FALSE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 }
 

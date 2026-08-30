@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
+
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>

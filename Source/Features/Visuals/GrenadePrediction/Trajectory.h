@@ -1,17 +1,9 @@
 #pragma once
 
-#include <cstdint>
-
 #include <CS2/Classes/Vector.h>
-
-enum class TrajectoryMarkerKind : std::uint8_t {
-    WorldContact,
-    PlayerResponse
-};
 
 struct TrajectoryMarker {
     int pointIndex{};
-    TrajectoryMarkerKind kind{};
 };
 
 struct Trajectory {
@@ -48,7 +40,7 @@ struct Trajectory {
 
     [[nodiscard]] bool appendWorldContactMarker() noexcept
     {
-        if (worldContactMarkersCount == kWorldContactMarkersCapacity || !appendMarker(TrajectoryMarkerKind::WorldContact))
+        if (worldContactMarkersCount == kWorldContactMarkersCapacity || !appendMarker())
             return false;
         ++worldContactMarkersCount;
         return true;
@@ -56,15 +48,15 @@ struct Trajectory {
 
     [[nodiscard]] bool appendPlayerResponseMarker() noexcept
     {
-        return appendMarker(TrajectoryMarkerKind::PlayerResponse);
+        return appendMarker();
     }
 
 private:
-    [[nodiscard]] bool appendMarker(TrajectoryMarkerKind kind) noexcept
+    [[nodiscard]] bool appendMarker() noexcept
     {
         if (!pointsCount || markersCount == kMarkersCapacity)
             return false;
-        markers[markersCount++] = {pointsCount - 1, kind};
+        markers[markersCount++] = {pointsCount - 1};
         return true;
     }
 };

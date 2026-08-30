@@ -12,21 +12,8 @@
 
 #include <Features/Visuals/GrenadePrediction/Rendering/TrajectoryLineSegment.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/TrajectoryRenderPlan.h>
+#include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
-
-struct GrenadeTrajectoryPanelStyleState {
-    int pointsCount{};
-    int markersCount{};
-    bool validLanding{};
-    float trajectoryHue{};
-    float bounceHue{};
-    bool initialized{};
-};
-
-struct GrenadeTrajectoryPresentationState {
-    int activePanelCount{};
-    GrenadeTrajectoryPanelStyleState panelStyle{};
-};
 
 template <typename HookContext>
 class GrenadeTrajectoryRenderer {
@@ -53,8 +40,10 @@ public:
         }
 
         auto&& containerPanel = getContainerPanel(containerPanelHandle, parentPanel);
-        if (!containerPanel)
+        if (!containerPanel) {
+            hide(containerPanelHandle);
             return;
+        }
         containerPanel.setVisible(true);
 
         auto childrenProxy = containerPanel.children();
@@ -71,6 +60,10 @@ public:
         bool panelsCreated = false;
         while (childCount < neededPanels) {
             auto&& panel = hookContext.panelFactory().createPanel(containerPanel).uiPanel();
+            if (!panel) {
+                containerPanel.setVisible(false);
+                return;
+            }
             panel.setTransformOrigin(cs2::CUILength::percent(50.0f), cs2::CUILength::percent(50.0f));
             panel.setVisible(false);
             ++childCount;
@@ -78,6 +71,11 @@ public:
         }
 
         auto children = containerPanel.children();
+        if (!hasChildren(children, neededPanels)) {
+            containerPanel.setVisible(false);
+            return;
+        }
+        childCount = children.vector->size;
         auto converter = hookContext.template make<WorldToClipSpaceConverter>();
         const float aspectRatio = hookContext.template make<ViewToProjectionMatrix<HookContext>>().getAspectRatio();
         if (!Math::isFinite(aspectRatio) || aspectRatio <= kNearW) {
@@ -88,7 +86,7 @@ public:
         const float trajectoryHueValue = static_cast<float>(trajectoryHue);
         const float bounceHueValue = static_cast<float>(bounceHue);
         const bool updateStyles = panelsCreated || !presentationState.panelStyle.initialized
-            || presentationState.panelStyle.pointsCount != segmentCount
+            || presentationState.panelStyle.lineSegmentCount != segmentCount
             || presentationState.panelStyle.markersCount != trajectory.markersCount
             || presentationState.panelStyle.validLanding != trajectory.validLanding
             || presentationState.panelStyle.trajectoryHue != trajectoryHueValue
@@ -170,6 +168,11 @@ private:
     static constexpr float kBounceDotSize = 8.0f;
     static constexpr float kEndMarkerSize = 10.0f;
 
+    [[nodiscard]] static bool hasChildren(const auto& children, int neededPanels) noexcept
+    {
+        return children.vector && children.vector->memory && children.vector->size >= neededPanels && children.vector->size <= kMaxPanels;
+    }
+
     void setMarkerVisibility(auto&& panel, ClipSpaceCoordinates clipSpace) noexcept
     {
         if (!Math::isFinite(clipSpace.x) || !Math::isFinite(clipSpace.y) || !Math::isFinite(clipSpace.z) || !Math::isFinite(clipSpace.w)
@@ -195,7 +198,8 @@ private:
     {
         return hookContext.template make<PanelHandle>(containerPanelHandle).getOrInit([&]() -> decltype(auto) {
             auto&& panel = hookContext.panelFactory().createPanel(parentPanel).uiPanel();
-            panel.fitParent();
+            if (panel)
+                panel.fitParent();
             return utils::lvalue<decltype(panel)>(panel);
         });
     }

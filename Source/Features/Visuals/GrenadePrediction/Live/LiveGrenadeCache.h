@@ -122,11 +122,6 @@ public:
         return false;
     }
 
-    [[nodiscard]] LiveGrenadeCacheScanStatus status() const noexcept
-    {
-        return scanStatus;
-    }
-
     [[nodiscard]] bool isScanComplete() const noexcept
     {
         return scanComplete;
@@ -142,6 +137,7 @@ public:
         return scanComplete && !hasOverflowed();
     }
 
+private:
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
     {
         return isValidHandle(grenade.projectileHandle) && isValidHandle(grenade.throwerHandle) && grenade.kind != cs2::GrenadeKind::None
@@ -149,7 +145,6 @@ public:
             && Math::isFinite(grenade.initialVelocity.x) && Math::isFinite(grenade.initialVelocity.y) && Math::isFinite(grenade.initialVelocity.z);
     }
 
-private:
     [[nodiscard]] static bool isValidHandle(cs2::CEntityHandle handle) noexcept
     {
         return handle.value != cs2::INVALID_EHANDLE_INDEX;

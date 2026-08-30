@@ -12,6 +12,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionContext.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
+#include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <GameClient/Entities/GrenadeProjectile.h>
@@ -84,8 +85,6 @@ public:
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
         const bool hasCurtime = curtime.hasValue();
         const float time = curtime.valueOr(0.0f);
-        GrenadePredictionController::recordLiveCacheStatus(state);
-        GrenadePredictionController::recordCollisionSnapshotStatus(state);
         auto* const pawn = static_cast<cs2::C_CSPlayerPawn*>(static_cast<cs2::C_BaseEntity*>(playerPawn.baseEntity()));
         const auto presentCachedTrajectory = [&]() noexcept { applyCachedTrajectoryPresentation(hasCurtime, time); };
         if constexpr (!GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
@@ -150,7 +149,7 @@ public:
                 return;
             }
             auto simulator = hookContext.template make<GrenadeSimulator>();
-            const auto launch = prepareGrenadeLaunch(false, true, state.throwObservation.isFinalized(), state.throwObservation.hasRetainedThrowStrength,
+            const auto launch = prepareGrenadeLaunch(state.throwObservation.isFinalized(), state.throwObservation.hasRetainedThrowStrength,
             [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
             [&]() noexcept -> Optional<GrenadeLaunchState> {
                 const auto eyeAngles = playerPawn.eyeAngles();
@@ -203,8 +202,6 @@ public:
         const auto rawCurtime = hookContext.globalVars().curtime();
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
         static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
-        GrenadePredictionController::recordLiveCacheStatus(state);
-        GrenadePredictionController::recordCollisionSnapshotStatus(state);
         clearPrediction();
         applyCachedTrajectoryPresentation(curtime.hasValue(), curtime.valueOr(0.0f));
     }
