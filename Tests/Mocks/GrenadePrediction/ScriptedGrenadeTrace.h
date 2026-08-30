@@ -14,6 +14,11 @@ struct ScriptedGrenadeTrace {
     Optional<TraceResult> fallback{};
     void* lastExcludedFirst{};
     void* lastExcludedSecond{};
+    std::uint64_t lastMask{};
+    std::uint8_t lastCollisionGroup{};
+    std::uint8_t lastQueryByte{};
+    cs2::Vector lastStart{};
+    cs2::Vector lastEnd{};
 
     void push(Optional<TraceResult> result) noexcept
     {
@@ -21,14 +26,19 @@ struct ScriptedGrenadeTrace {
             results[resultCount++] = result;
     }
     void clearAfterScript() noexcept { fallback = TraceResult{1.0f, {}, {}}; }
-    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector, cs2::Vector, void*) noexcept
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void*) noexcept
     {
+        lastStart = start;
+        lastEnd = end;
         const auto index = calls++;
         return index < resultCount ? results[index] : fallback;
     }
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity,
-        std::uint64_t, std::uint8_t, std::uint8_t) noexcept
+        std::uint64_t mask, std::uint8_t group, std::uint8_t query) noexcept
     {
+        lastMask = mask;
+        lastCollisionGroup = group;
+        lastQueryByte = query;
         return traceGrenadeHull(start, end, skipEntity);
     }
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end,
@@ -105,5 +115,15 @@ struct GrenadeSimulatorTestAccess {
     [[nodiscard]] static auto applyContactResponse(Simulator& simulator, const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept
     {
         return simulator.applyContactResponse(trace, velocity, kind);
+    }
+    [[nodiscard]] static StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind,
+        void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
+    {
+        typename Simulator::SimulationScratch scratch{nullptr, nullptr};
+        StepResult result;
+        const auto collision = simulator.movementSubstep(scratch, position, velocity, kind, skipEntity, result, gravity);
+        result.traceSucceeded = collision.traceSucceeded;
+        result.impactDetonate = collision.impactDetonate;
+        return result;
     }
 };
