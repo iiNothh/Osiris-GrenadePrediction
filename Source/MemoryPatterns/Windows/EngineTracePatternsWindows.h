@@ -7,7 +7,6 @@ struct EngineTracePatterns {
     [[nodiscard]] static consteval auto addClientPatterns(auto clientPatterns) noexcept
     {
         return clientPatterns
-            .template addPattern<ShapeBuilderFunctionPointer, CodePattern{"F3 0F 10 42 0C 0F 2E 02 7A 36 75 34 F3 0F 10 42 10 0F 2E 42 04 7A 29 75 27"}>()
             .template addPattern<TraceShapeFunctionPointer, CodePattern{"0F 97 45 ? E8 ? ? ? ? 48 8D 55"}.add(5).abs()>()
             .template addPattern<GameTraceManagerStoragePointer, CodePattern{"48 8B 0D ? ? ? ? 4C 8D 4B ? 4C 8D 43"}.add(3).abs()>()
             .template addPattern<InitFilterFunctionPointer, CodePattern{"48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 0F B6 41 ? 33 FF 24 C9"}>()

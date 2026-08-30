@@ -3,10 +3,13 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <type_traits>
 
 #include <CS2/Classes/Vector.h>
 
 namespace engine_trace {
+
+static_assert(std::endian::native == std::endian::little);
 
 constexpr std::size_t kDescriptorCapacity{0x30};
 constexpr std::size_t kFilterCapacity{72};
@@ -18,13 +21,12 @@ struct TraceFilterExcludedEntities {
     void* second{};
 };
 
-struct Bounds6f {
-    cs2::Vector mins;
-    cs2::Vector maxs;
-};
-
-struct alignas(8) DescriptorStorage {
-    std::byte storage[kDescriptorCapacity]{};
+struct alignas(8) FixedGrenadeHullTraceDescriptor {
+    cs2::Vector mins{-2.0f, -2.0f, -2.0f};
+    cs2::Vector maxs{2.0f, 2.0f, 2.0f};
+    std::byte zeroesBeforeType[0x10]{};
+    std::uint32_t type{2};
+    std::byte trailingZeroes[0x4]{};
 };
 
 struct alignas(8) FilterStorage {
@@ -35,10 +37,21 @@ struct alignas(16) OutputStorage {
     std::byte storage[kOutputCapacity]{};
 };
 
-static_assert(sizeof(Bounds6f) == 24);
-static_assert(offsetof(Bounds6f, mins) == 0);
-static_assert(offsetof(Bounds6f, maxs) == sizeof(cs2::Vector));
-static_assert(sizeof(DescriptorStorage) == kDescriptorCapacity && alignof(DescriptorStorage) == 8);
+static_assert(sizeof(cs2::Vector) == 0xC);
+static_assert(alignof(cs2::Vector) == alignof(float));
+static_assert(std::is_standard_layout_v<cs2::Vector>);
+static_assert(offsetof(cs2::Vector, x) == 0x0);
+static_assert(offsetof(cs2::Vector, y) == 0x4);
+static_assert(offsetof(cs2::Vector, z) == 0x8);
+static_assert(std::is_standard_layout_v<FixedGrenadeHullTraceDescriptor>);
+static_assert(std::is_trivially_copyable_v<FixedGrenadeHullTraceDescriptor>);
+static_assert(sizeof(FixedGrenadeHullTraceDescriptor) == kDescriptorCapacity);
+static_assert(alignof(FixedGrenadeHullTraceDescriptor) == 8);
+static_assert(offsetof(FixedGrenadeHullTraceDescriptor, mins) == 0x0);
+static_assert(offsetof(FixedGrenadeHullTraceDescriptor, maxs) == 0xC);
+static_assert(offsetof(FixedGrenadeHullTraceDescriptor, zeroesBeforeType) == 0x18);
+static_assert(offsetof(FixedGrenadeHullTraceDescriptor, type) == 0x28);
+static_assert(offsetof(FixedGrenadeHullTraceDescriptor, trailingZeroes) == 0x2C);
 static_assert(sizeof(FilterStorage) == kFilterCapacity && alignof(FilterStorage) == 8);
 static_assert(sizeof(OutputStorage) == kOutputCapacity && alignof(OutputStorage) == 16);
 
