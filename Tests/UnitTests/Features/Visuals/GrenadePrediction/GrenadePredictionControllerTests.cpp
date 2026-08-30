@@ -8,6 +8,36 @@
 namespace
 {
 
+TEST(GrenadePredictionControllerTest, ClearsCachedAndTemporaryTrajectoriesWhenInFlightTracingIsUnavailable)
+{
+    GrenadePredictionState state;
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    state.lastCommittedTrajectory.valid = true;
+    state.lastCommittedTrajectory.pointsCount = 1;
+    state.liveGrenadeTrajectoryScratch.valid = true;
+    state.liveGrenadeTrajectoryScratch.pointsCount = 1;
+    state.hasCommitCurtime = true;
+    state.hasLastValidCurtime = true;
+    state.rollbackDetected = true;
+    bool hidLive{};
+    bool hidCached{};
+
+    GrenadePredictionController::clearUnavailableInFlightTrace(state, [&] { hidLive = true; }, [&] { hidCached = true; });
+
+    EXPECT_FALSE(state.tempTrajectory.valid);
+    EXPECT_FALSE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.liveGrenadeTrajectoryScratch.valid);
+    EXPECT_EQ(state.tempTrajectory.pointsCount, 0);
+    EXPECT_EQ(state.lastCommittedTrajectory.pointsCount, 0);
+    EXPECT_EQ(state.liveGrenadeTrajectoryScratch.pointsCount, 0);
+    EXPECT_FALSE(state.hasCommitCurtime);
+    EXPECT_FALSE(state.hasLastValidCurtime);
+    EXPECT_FALSE(state.rollbackDetected);
+    EXPECT_TRUE(hidLive);
+    EXPECT_TRUE(hidCached);
+}
+
 constexpr cs2::CEntityHandle localPawn{1};
 constexpr cs2::CEntityHandle firstProjectile{2};
 constexpr cs2::CEntityHandle secondProjectile{3};

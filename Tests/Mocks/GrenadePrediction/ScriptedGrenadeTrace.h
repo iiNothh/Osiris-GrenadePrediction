@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <type_traits>
 
@@ -12,13 +11,13 @@ struct ScriptedGrenadeTrace {
     Optional<TraceResult> results[kCapacity]{};
     int resultCount{};
     int calls{};
+    int genericCalls{};
+    int inFlightCalls{};
+    bool inFlightTraceAvailable{true};
     Optional<TraceResult> fallback{};
     void* lastExcludedFirst{};
     void* lastExcludedSecond{};
     void* lastSkipEntity{};
-    std::uint64_t lastMask{};
-    std::uint8_t lastCollisionGroup{};
-    std::uint8_t lastQueryByte{};
     cs2::Vector lastStart{};
     cs2::Vector lastEnd{};
 
@@ -33,23 +32,25 @@ struct ScriptedGrenadeTrace {
         lastStart = start;
         lastEnd = end;
         lastSkipEntity = skipEntity;
-        const auto index = calls++;
-        return index < resultCount ? results[index] : fallback;
+        ++genericCalls;
+        return nextResult();
     }
-    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity,
-        std::uint64_t mask, std::uint8_t group, std::uint8_t query) noexcept
+    [[nodiscard]] bool isInFlightGrenadeTraceAvailable() const noexcept { return inFlightTraceAvailable; }
+    [[nodiscard]] Optional<TraceResult> traceInFlightGrenadeHull(cs2::Vector start, cs2::Vector end,
+        engine_trace::TraceFilterExcludedEntities excludedEntities) noexcept
     {
-        lastMask = mask;
-        lastCollisionGroup = group;
-        lastQueryByte = query;
-        return traceGrenadeHull(start, end, skipEntity);
-    }
-    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end,
-        engine_trace::TraceFilterExcludedEntities excludedEntities, std::uint64_t mask, std::uint8_t group, std::uint8_t query) noexcept
-    {
+        lastStart = start;
+        lastEnd = end;
         lastExcludedFirst = excludedEntities.first;
         lastExcludedSecond = excludedEntities.second;
-        return traceGrenadeHull(start, end, excludedEntities.first, mask, group, query);
+        ++inFlightCalls;
+        return inFlightTraceAvailable ? nextResult() : Optional<TraceResult>{};
+    }
+private:
+    [[nodiscard]] Optional<TraceResult> nextResult() noexcept
+    {
+        const auto index = calls++;
+        return index < resultCount ? results[index] : fallback;
     }
 };
 

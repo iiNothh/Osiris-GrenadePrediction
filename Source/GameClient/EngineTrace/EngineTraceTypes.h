@@ -1,20 +1,28 @@
 #pragma once
 
+#include <array>
 #include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
 #include <CS2/Classes/Vector.h>
+#include <Utils/MemorySection.h>
 
 namespace engine_trace {
 
 static_assert(std::endian::native == std::endian::little);
 
 constexpr std::size_t kDescriptorCapacity{0x30};
-constexpr std::size_t kFilterCapacity{72};
+constexpr std::size_t kFilterCapacity{0x48};
 constexpr std::size_t kOutputCapacity{0xC0};
 constexpr std::int32_t kWorldEntityHandle{0x8000};
+
+constexpr std::uint64_t kNativePipFirstInteraction{0x0000000200003001ULL};
+constexpr std::uint64_t kNativePipFilterInteractionMask{0x0000000000040200ULL};
+constexpr std::uint64_t kNativePipFilterObjectMask{0x0000008000020001ULL};
+constexpr std::uint8_t kNativePipCollisionGroup{0x10};
+constexpr std::uint8_t kNativePipQueryByte{0x0F};
 
 struct TraceFilterExcludedEntities {
     void* first{};
@@ -53,7 +61,96 @@ static_assert(offsetof(FixedGrenadeHullTraceDescriptor, zeroesBeforeType) == 0x1
 static_assert(offsetof(FixedGrenadeHullTraceDescriptor, type) == 0x28);
 static_assert(offsetof(FixedGrenadeHullTraceDescriptor, trailingZeroes) == 0x2C);
 static_assert(sizeof(FilterStorage) == kFilterCapacity && alignof(FilterStorage) == 8);
+static_assert(sizeof(FilterStorage) == 0x48);
+static_assert(alignof(FilterStorage) == alignof(void*));
 static_assert(sizeof(OutputStorage) == kOutputCapacity && alignof(OutputStorage) == 16);
+
+[[nodiscard]] constexpr bool isNativePipFilterOverlayOffset(std::size_t offset) noexcept
+{
+    return (offset >= 0x08 && offset <= 0x1F) || (offset >= 0x34 && offset <= 0x40);
+}
+
+static_assert(!isNativePipFilterOverlayOffset(0x00));
+static_assert(isNativePipFilterOverlayOffset(0x08));
+static_assert(isNativePipFilterOverlayOffset(0x1F));
+static_assert(!isNativePipFilterOverlayOffset(0x20));
+static_assert(!isNativePipFilterOverlayOffset(0x33));
+static_assert(isNativePipFilterOverlayOffset(0x34));
+static_assert(isNativePipFilterOverlayOffset(0x40));
+static_assert(!isNativePipFilterOverlayOffset(0x41));
+
+template <typename T>
+[[nodiscard]] T readFilterValue(const FilterStorage& filter, std::size_t offset) noexcept
+{
+    std::array<std::byte, sizeof(T)> bytes{};
+    for (std::size_t i = 0; i < sizeof(T); ++i)
+        bytes[i] = filter.storage[offset + i];
+    return std::bit_cast<T>(bytes);
+}
+
+template <typename T>
+void writeFilterValue(FilterStorage& filter, std::size_t offset, T value) noexcept
+{
+    const auto bytes = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
+    for (std::size_t i = 0; i < sizeof(T); ++i)
+        filter.storage[offset + i] = bytes[i];
+}
+
+[[nodiscard]] inline const std::byte* nativePipBaseFilterCallback(void** baseVtable) noexcept
+{
+    if (baseVtable == nullptr || baseVtable[1] == nullptr)
+        return nullptr;
+
+    return static_cast<const std::byte*>(baseVtable[1]);
+}
+
+[[nodiscard]] inline bool hasExpectedNativePipBaseFilterCallback(const MemorySection& clientCodeSection, const std::byte* callback) noexcept
+{
+    if (callback == nullptr || !clientCodeSection.contains(reinterpret_cast<std::uintptr_t>(callback), 3))
+        return false;
+
+    return callback[0] == std::byte{0xB0} && callback[1] == std::byte{0x01} && callback[2] == std::byte{0xC3};
+}
+
+[[nodiscard]] constexpr bool hasNativePipProfileMarkers(void** baseVtable, const std::byte* pipFilterBody,
+    const std::byte* pushFilterConstructor, const std::byte* primaryTraceShapeCandidate,
+    const std::byte* secondaryTraceShapeCandidate, const std::byte* primaryToSecondaryCallsite,
+    const std::byte* secondaryCandidateEnumerationFunction) noexcept
+{
+    return baseVtable != nullptr && pipFilterBody != nullptr && pushFilterConstructor != nullptr
+        && primaryTraceShapeCandidate != nullptr && secondaryTraceShapeCandidate != nullptr
+        && primaryToSecondaryCallsite != nullptr && secondaryCandidateEnumerationFunction != nullptr;
+}
+
+[[nodiscard]] constexpr bool hasCurrentNativePipProfileStructure(std::uintptr_t primaryTraceShapeCandidate,
+    std::uintptr_t secondaryTraceShapeCandidate, std::uintptr_t primaryToSecondaryCallsite,
+    std::uintptr_t secondaryCandidateEnumerationFunction) noexcept
+{
+    return primaryToSecondaryCallsite >= primaryTraceShapeCandidate
+        && secondaryTraceShapeCandidate >= secondaryCandidateEnumerationFunction
+        && primaryToSecondaryCallsite - primaryTraceShapeCandidate == 0x210
+        && secondaryTraceShapeCandidate - secondaryCandidateEnumerationFunction == 0x5C3;
+}
+
+[[nodiscard]] inline bool hasExpectedNativePipFilterInitialization(const FilterStorage& filter, void** baseVtable) noexcept
+{
+    return readFilterValue<void*>(filter, 0x00) == baseVtable
+        && filter.storage[0x40] == std::byte{}
+        && (std::to_integer<unsigned char>(filter.storage[0x39]) & 0x80) == 0;
+}
+
+inline void applyNativePipFilterOverlay(FilterStorage& filter) noexcept
+{
+    writeFilterValue(filter, 0x08, kNativePipFirstInteraction);
+    writeFilterValue(filter, 0x10, kNativePipFilterInteractionMask);
+    writeFilterValue(filter, 0x18, kNativePipFilterObjectMask);
+    writeFilterValue(filter, 0x34, std::uint16_t{0xFFFF});
+    filter.storage[0x36] = std::byte{};
+    filter.storage[0x37] = std::byte{kNativePipQueryByte};
+    filter.storage[0x38] = std::byte{kNativePipCollisionGroup};
+    filter.storage[0x39] = std::byte{0x4B};
+    filter.storage[0x40] = std::byte{0x01};
+}
 
 [[nodiscard]] constexpr bool isValidOutputOffset(std::int32_t offset, std::size_t fieldSize) noexcept
 {

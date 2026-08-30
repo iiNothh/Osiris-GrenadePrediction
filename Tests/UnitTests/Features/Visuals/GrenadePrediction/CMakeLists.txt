@@ -1,4 +1,5 @@
 target_sources(UnitTests PRIVATE
+  EngineTraceProfileTests.cpp
   GrenadePredictionAuthorityParityTests.cpp
   GrenadePredictionControllerTests.cpp
   GrenadePredictionLifecycleTests.cpp

@@ -35,6 +35,7 @@
 #include <OutlineGlow/GlowSceneObjectsState.h>
 #include <Platform/DynamicLibrary.h>
 #include <Platform/VmtFinder.h>
+#include <Utils/MemorySection.h>
 #include <Vmt/VmtLengthCalculator.h>
 
 #include "OsirisDirectoryPath.h"
@@ -43,7 +44,8 @@
 
 struct FullGlobalContext {
     FullGlobalContext(PeepEventsHook peepEventsHook, DynamicLibrary clientDLL, DynamicLibrary panoramaDLL, const MemoryPatterns& memoryPatterns, Tier0Dll tier0Dll) noexcept
-        : patternSearchResults{memoryPatterns}
+        : clientCodeSection{clientDLL.getCodeSection()}
+        , patternSearchResults{memoryPatterns}
         , fileNameSymbolTableState{tier0Dll}
         , memAllocState{tier0Dll}
         , stylePropertySymbolsAndVMTs{StylePropertySymbolMap{patternSearchResults.get<PointerToStylePropertySymbols>()}, VmtFinder{panoramaDLL.getVmtFinderParams()}}
@@ -56,6 +58,7 @@ struct FullGlobalContext {
 
     OsirisDirectoryPath osirisDirectoryPath;
     ConfigState configState;
+    MemorySection clientCodeSection;
     AllMemoryPatternSearchResults patternSearchResults;
     FileNameSymbolTableState fileNameSymbolTableState;
     GlowSceneObjectState glowSceneObjectState;
