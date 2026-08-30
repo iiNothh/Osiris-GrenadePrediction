@@ -9,10 +9,10 @@ constexpr cs2::CEntityHandle localPawn{1};
 constexpr cs2::CEntityHandle projectileHandle{2};
 
 struct HEProjectile {
-    Optional<cs2::Vector> initialPosition() const noexcept { return cs2::Vector{1.0f, 2.0f, 3.0f}; }
-    Optional<cs2::Vector> initialVelocity() const noexcept { return cs2::Vector{4.0f, 5.0f, 6.0f}; }
-    Optional<cs2::CEntityHandle> thrower() const noexcept { return localPawn; }
-    Optional<std::int32_t> explodeEffectTickBegin() const noexcept { return 1; }
+    [[nodiscard]] Optional<cs2::Vector> initialPosition() const noexcept { return cs2::Vector{1.0f, 2.0f, 3.0f}; }
+    [[nodiscard]] Optional<cs2::Vector> initialVelocity() const noexcept { return cs2::Vector{4.0f, 5.0f, 6.0f}; }
+    [[nodiscard]] Optional<cs2::CEntityHandle> thrower() const noexcept { return localPawn; }
+    [[nodiscard]] Optional<std::int32_t> explodeEffectTickBegin() const noexcept { return 1; }
 };
 
 TEST(GrenadePredictionLifecycleTest, KeepsHEGrenadeWhenExplodeEffectTickIsUnavailableOrZero)

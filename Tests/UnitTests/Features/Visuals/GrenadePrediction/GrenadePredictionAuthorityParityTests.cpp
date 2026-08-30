@@ -12,7 +12,7 @@ namespace
 
 constexpr cs2::CEntityHandle localPawn{7};
 
-LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, std::uint32_t sequence, cs2::GrenadeKind kind = cs2::GrenadeKind::HEGrenade) noexcept
+[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, std::uint32_t sequence, cs2::GrenadeKind kind = cs2::GrenadeKind::HEGrenade) noexcept
 {
     return {projectile, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, kind, sequence};
 }

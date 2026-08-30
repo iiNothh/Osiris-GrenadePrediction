@@ -28,20 +28,7 @@ public:
 
     void setPlayerCollisionSnapshot(const GrenadePlayerCollisionSnapshot* snapshot) noexcept { configuredPlayerCollisionSnapshot = snapshot; }
 
-    static float normalizeThrowStrength(float strength) noexcept
-    {
-        return strength > 0.4f && strength < 0.6f ? 0.5f : strength;
-    }
-
-    static cs2::Vector forwardFromAngles(float pitch, float yaw) noexcept
-    {
-        float sinePitch, cosinePitch, sineYaw, cosineYaw;
-        Math::sincos(pitch * 3.14159265f / 180.0f, sinePitch, cosinePitch);
-        Math::sincos(yaw * 3.14159265f / 180.0f, sineYaw, cosineYaw);
-        return {cosinePitch * cosineYaw, cosinePitch * sineYaw, -sinePitch};
-    }
-
-    static cs2::Vector computeInitialVelocity(cs2::Vector viewAngles, float baseVelocity, float throwStrength) noexcept
+    [[nodiscard]] static cs2::Vector computeInitialVelocity(cs2::Vector viewAngles, float baseVelocity, float throwStrength) noexcept
     {
         const float strength = normalizeThrowStrength(throwStrength);
         const float pitch = viewAngles.x - (90.0f - Math::abs(viewAngles.x)) * 10.0f / 90.0f;
@@ -115,6 +102,17 @@ public:
     }
 
 private:
+    [[nodiscard]] static float normalizeThrowStrength(float strength) noexcept
+    {
+        return strength > 0.4f && strength < 0.6f ? 0.5f : strength;
+    }
+    [[nodiscard]] static cs2::Vector forwardFromAngles(float pitch, float yaw) noexcept
+    {
+        float sinePitch, cosinePitch, sineYaw, cosineYaw;
+        Math::sincos(pitch * 3.14159265f / 180.0f, sinePitch, cosinePitch);
+        Math::sincos(yaw * 3.14159265f / 180.0f, sineYaw, cosineYaw);
+        return {cosinePitch * cosineYaw, cosinePitch * sineYaw, -sinePitch};
+    }
     struct CollisionResult {
         bool traceSucceeded{true};
         bool impactDetonate{};

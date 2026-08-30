@@ -106,14 +106,15 @@ TEST(ManualGrenadeLaunchTest, ComputesReferenceSpawnAndInitialVelocity)
 
     const auto spawn = simulator.computeSpawnPosition({10.0f, 20.0f, 64.0f}, {}, 1.0f, nullptr);
     ASSERT_TRUE(spawn.hasValue());
-    const auto forward = Simulator::forwardFromAngles(-10.0f, 0.0f);
-    EXPECT_NEAR(spawn.value().x, 10.0f + forward.x * 16.0f, 0.001f);
-    EXPECT_NEAR(spawn.value().y, 20.0f + forward.y * 16.0f, 0.001f);
-    EXPECT_NEAR(spawn.value().z, 64.0f + forward.z * 16.0f, 0.001f);
+    constexpr float expectedForwardX{0.98480775f};
+    constexpr float expectedForwardZ{0.17364818f};
+    EXPECT_NEAR(spawn.value().x, 10.0f + expectedForwardX * 16.0f, 0.001f);
+    EXPECT_NEAR(spawn.value().y, 20.0f, 0.001f);
+    EXPECT_NEAR(spawn.value().z, 64.0f + expectedForwardZ * 16.0f, 0.001f);
 
     const auto velocity = Simulator::computeInitialVelocity({}, grenade_prediction_params::kBaseThrowVelocity, 1.0f);
-    EXPECT_NEAR(velocity.x, 675.0f * forward.x, 0.001f);
-    EXPECT_NEAR(velocity.z, 675.0f * forward.z, 0.001f);
+    EXPECT_NEAR(velocity.x, 675.0f * expectedForwardX, 0.001f);
+    EXPECT_NEAR(velocity.z, 675.0f * expectedForwardZ, 0.001f);
 }
 
 }

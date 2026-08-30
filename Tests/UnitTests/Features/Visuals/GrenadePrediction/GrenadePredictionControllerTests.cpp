@@ -13,16 +13,16 @@ constexpr cs2::CEntityHandle firstProjectile{2};
 constexpr cs2::CEntityHandle secondProjectile{3};
 
 struct Projectile {
-    Optional<cs2::Vector> initialPosition() const noexcept { return cs2::Vector{1.0f, 2.0f, 3.0f}; }
-    Optional<cs2::Vector> initialVelocity() const noexcept { return cs2::Vector{4.0f, 5.0f, 6.0f}; }
-    Optional<cs2::CEntityHandle> thrower() const noexcept { return localPawn; }
+    [[nodiscard]] Optional<cs2::Vector> initialPosition() const noexcept { return cs2::Vector{1.0f, 2.0f, 3.0f}; }
+    [[nodiscard]] Optional<cs2::Vector> initialVelocity() const noexcept { return cs2::Vector{4.0f, 5.0f, 6.0f}; }
+    [[nodiscard]] Optional<cs2::CEntityHandle> thrower() const noexcept { return localPawn; }
 };
 
 struct Decoy {
     [[nodiscard]] int decoyShotTick() const noexcept { return 1; }
 };
 
-LiveGrenadeSnapshot snapshot(cs2::CEntityHandle handle) noexcept
+[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle handle) noexcept
 {
     return {handle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, cs2::GrenadeKind::Flashbang};
 }
