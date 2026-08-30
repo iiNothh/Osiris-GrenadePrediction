@@ -19,10 +19,6 @@ namespace grenade_prediction_params
     constexpr float kSteepFloorDampingDirectionDot = 0.5f;
     constexpr float kSteepFloorDampingScaleBase = 1.5f;
 
-    constexpr std::uint64_t kInFlightTraceMask = 0x200003001ULL;
-    constexpr std::uint8_t kInFlightTraceCollisionGroup = 16;
-    constexpr std::uint8_t kInFlightTraceQueryByte = 0x0F;
-
     constexpr int kMaxTicks = 1154;
     constexpr int kMaxBounces = 20;
 

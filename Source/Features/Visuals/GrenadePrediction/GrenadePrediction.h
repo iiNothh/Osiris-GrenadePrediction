@@ -92,6 +92,10 @@ public:
             presentCachedTrajectory();
             return;
         } else {
+            if (!hookContext.template make<EngineTrace>().isInFlightGrenadeTraceAvailable()) {
+                clearPrediction();
+                return;
+            }
             if (!playerPawn.isAlive().value_or(false) || !enabled) {
                 clearPrediction();
                 presentCachedTrajectory();
@@ -199,6 +203,12 @@ public:
     {
         auto& state = context().state();
         GrenadePredictionController::beginFrame(state);
+        if constexpr (GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
+            if (!hookContext.template make<EngineTrace>().isInFlightGrenadeTraceAvailable()) {
+                clearPrediction();
+                return;
+            }
+        }
         const auto rawCurtime = hookContext.globalVars().curtime();
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
         static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
@@ -209,19 +219,8 @@ public:
     void clearPrediction() noexcept
     {
         auto& state = context().state();
-        state.throwObservation.reset();
-        state.updateScheduler.reset();
-        state.liveGrenadeAuthority.reset();
-        state.lastCommitCurtime = 0.0f;
-        state.lastValidCurtime = 0.0f;
-        state.hasCommitCurtime = false;
-        state.hasLastValidCurtime = false;
-        state.rollbackDetected = false;
-        state.invalidateTempTrajectory();
-        state.invalidateCommittedTrajectory();
-        state.liveGrenadeTrajectoryScratch.clear();
-        hideLivePrediction();
-        renderer().hide(state.lastCacheContainerPanelHandle);
+        GrenadePredictionController::clearUnavailableInFlightTrace(state,
+            [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
     }
 
     void onUnload() noexcept

@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <span>
 
 #include <gtest/gtest.h>
 
@@ -107,7 +108,7 @@ TEST(GrenadeSimulationParityTest, DampsDynamicPaneAndExcludesItFromLaterTraces)
     EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
 }
 
-TEST(GrenadeSimulationParityTest, UsesTheBaselineGenericInFlightTraceConfiguration)
+TEST(GrenadeSimulationParityTest, UsesNativeProfileInFlightTraceWithoutGenericFallback)
 {
     GrenadeSimulatorTestHookContext context;
     context.trace.clearAfterScript();
@@ -116,9 +117,25 @@ TEST(GrenadeSimulationParityTest, UsesTheBaselineGenericInFlightTraceConfigurati
     cs2::Vector velocity{100.0f, 0.0f, 0.0f};
 
     EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade).traceSucceeded);
-    EXPECT_EQ(context.trace.lastMask, grenade_prediction_params::kInFlightTraceMask);
-    EXPECT_EQ(context.trace.lastCollisionGroup, grenade_prediction_params::kInFlightTraceCollisionGroup);
-    EXPECT_EQ(context.trace.lastQueryByte, grenade_prediction_params::kInFlightTraceQueryByte);
+    EXPECT_EQ(context.trace.genericCalls, 0);
+    EXPECT_EQ(context.trace.inFlightCalls, 2);
+    EXPECT_EQ(context.trace.lastExcludedFirst, nullptr);
+    EXPECT_EQ(context.trace.lastExcludedSecond, nullptr);
+}
+
+TEST(GrenadeSimulationParityTest, FailsWhenTheNativeProfileIsUnavailableWithoutUsingGenericTrace)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.inFlightTraceAvailable = false;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    EXPECT_FALSE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade).traceSucceeded);
+    EXPECT_EQ(context.trace.genericCalls, 0);
+    EXPECT_EQ(context.trace.inFlightCalls, 1);
+    EXPECT_EQ(context.trace.calls, 0);
 }
 
 TEST(GrenadeSimulationParityTest, RejectsAnInFlightHitWithoutARawEntityHandle)
@@ -233,6 +250,67 @@ TEST(EngineTraceDescriptorTest, UsesFixedGrenadeHullLayout)
     };
 
     EXPECT_EQ(bytes, expected);
+}
+
+TEST(EngineTraceNativePipFilterTest, OverlayWritesOnlyTheApprovedBytes)
+{
+    engine_trace::FilterStorage filter;
+    for (auto& byte : filter.storage)
+        byte = std::byte{0xA5};
+    std::array<std::byte, engine_trace::kFilterCapacity> before{};
+    for (std::size_t i{}; i < engine_trace::kFilterCapacity; ++i)
+        before[i] = filter.storage[i];
+
+    engine_trace::applyNativePipFilterOverlay(filter);
+
+    for (std::size_t i{}; i < engine_trace::kFilterCapacity; ++i) {
+        if (!engine_trace::isNativePipFilterOverlayOffset(i))
+            EXPECT_EQ(filter.storage[i], before[i]);
+    }
+    EXPECT_EQ(engine_trace::readFilterValue<std::uint64_t>(filter, 0x08), engine_trace::kNativePipFirstInteraction);
+    EXPECT_EQ(engine_trace::readFilterValue<std::uint64_t>(filter, 0x10), engine_trace::kNativePipFilterInteractionMask);
+    EXPECT_EQ(engine_trace::readFilterValue<std::uint64_t>(filter, 0x18), engine_trace::kNativePipFilterObjectMask);
+    EXPECT_EQ(engine_trace::readFilterValue<std::uint16_t>(filter, 0x34), 0xFFFF);
+    EXPECT_EQ(filter.storage[0x36], std::byte{});
+    EXPECT_EQ(filter.storage[0x37], std::byte{0x0F});
+    EXPECT_EQ(filter.storage[0x38], std::byte{0x10});
+    EXPECT_EQ(filter.storage[0x39], std::byte{0x4B});
+    EXPECT_EQ(filter.storage[0x40], std::byte{0x01});
+}
+
+TEST(EngineTraceNativePipFilterTest, RequiresTheExpectedBaseFilterCallback)
+{
+    std::array<std::byte, 3> callback{std::byte{0xB0}, std::byte{0x01}, std::byte{0xC3}};
+    void* vtable[2]{nullptr, callback.data()};
+    const MemorySection callbackCode{std::span{callback}};
+
+    EXPECT_TRUE(engine_trace::hasExpectedNativePipBaseFilterCallback(callbackCode, engine_trace::nativePipBaseFilterCallback(vtable)));
+    callback[1] = std::byte{};
+    EXPECT_FALSE(engine_trace::hasExpectedNativePipBaseFilterCallback(callbackCode, engine_trace::nativePipBaseFilterCallback(vtable)));
+    EXPECT_FALSE(engine_trace::hasExpectedNativePipBaseFilterCallback(callbackCode, engine_trace::nativePipBaseFilterCallback(nullptr)));
+}
+
+TEST(EngineTraceNativePipFilterTest, RequiresEveryResolvedProfileMarker)
+{
+    std::byte marker{};
+    void* vtable[2]{};
+
+    EXPECT_TRUE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, &marker, &marker, &marker, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(nullptr, &marker, &marker, &marker, &marker, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, nullptr, &marker, &marker, &marker, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, nullptr, &marker, &marker, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, &marker, nullptr, &marker, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, &marker, &marker, nullptr, &marker, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, &marker, &marker, &marker, nullptr, &marker));
+    EXPECT_FALSE(engine_trace::hasNativePipProfileMarkers(vtable, &marker, &marker, &marker, &marker, &marker, nullptr));
+}
+
+TEST(EngineTraceNativePipFilterTest, RejectsUnexpectedProfileStructuralDeltas)
+{
+    EXPECT_TRUE(engine_trace::hasCurrentNativePipProfileStructure(0x1000, 0x25C3, 0x1210, 0x2000));
+    EXPECT_FALSE(engine_trace::hasCurrentNativePipProfileStructure(0x1000, 0x25C3, 0x120F, 0x2000));
+    EXPECT_FALSE(engine_trace::hasCurrentNativePipProfileStructure(0x1000, 0x25C2, 0x1210, 0x2000));
+    EXPECT_FALSE(engine_trace::hasCurrentNativePipProfileStructure(0x1210, 0x25C3, 0x1000, 0x2000));
 }
 
 }

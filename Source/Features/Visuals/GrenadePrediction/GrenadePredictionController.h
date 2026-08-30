@@ -11,6 +11,29 @@ public:
         state.beginFrame();
     }
 
+    static void clearPredictionState(GrenadePredictionState& state) noexcept
+    {
+        state.throwObservation.reset();
+        state.updateScheduler.reset();
+        state.liveGrenadeAuthority.reset();
+        state.lastCommitCurtime = 0.0f;
+        state.lastValidCurtime = 0.0f;
+        state.hasCommitCurtime = false;
+        state.hasLastValidCurtime = false;
+        state.rollbackDetected = false;
+        state.invalidateTempTrajectory();
+        state.invalidateCommittedTrajectory();
+        state.liveGrenadeTrajectoryScratch.clear();
+    }
+
+    template <typename HideLive, typename HideCached>
+    static void clearUnavailableInFlightTrace(GrenadePredictionState& state, HideLive&& hideLive, HideCached&& hideCached) noexcept
+    {
+        clearPredictionState(state);
+        hideLive();
+        hideCached();
+    }
+
     [[nodiscard]] static bool observeCurrentTime(GrenadePredictionState& state, Optional<float> currentTime) noexcept
     {
         const bool hasCurrentTime = currentTime.hasValue() && Math::isFinite(currentTime.value());

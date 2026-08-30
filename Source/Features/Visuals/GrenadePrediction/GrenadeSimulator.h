@@ -145,13 +145,11 @@ private:
     [[nodiscard]] Optional<TraceResult> traceInFlight(const SimulationScratch& scratch, cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
         if (auto* const passedPane = resolvePassedPane(scratch)) {
-            return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
-                engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}, grenade_prediction_params::kInFlightTraceMask,
-                grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte));
+            return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceInFlightGrenadeHull(start, end,
+                engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}));
         }
-        return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity,
-            grenade_prediction_params::kInFlightTraceMask, grenade_prediction_params::kInFlightTraceCollisionGroup,
-            grenade_prediction_params::kInFlightTraceQueryByte));
+        return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceInFlightGrenadeHull(start, end,
+            engine_trace::TraceFilterExcludedEntities{skipEntity, nullptr}));
     }
     [[nodiscard]] static Optional<TraceResult> validateInFlightTrace(const SimulationScratch& scratch, Optional<TraceResult> trace) noexcept
     {

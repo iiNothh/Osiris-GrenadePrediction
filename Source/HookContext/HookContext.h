@@ -19,6 +19,7 @@
 #include <GameClient/Panorama/PanelFactory.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/Panorama/PanoramaTransformFactory.h>
+#include <Utils/MemorySection.h>
 
 struct BombStatusPanelState;
 struct FeaturesStates;
@@ -196,6 +197,11 @@ struct HookContext {
     [[nodiscard]] const auto& patternSearchResults() noexcept
     {
         return fullGlobalContext.patternSearchResults;
+    }
+
+    [[nodiscard]] const MemorySection& clientCodeSection() const noexcept
+    {
+        return fullGlobalContext.clientCodeSection;
     }
 
     [[nodiscard]] auto& hudState() noexcept
