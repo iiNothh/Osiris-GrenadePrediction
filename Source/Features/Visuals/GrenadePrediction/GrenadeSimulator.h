@@ -152,13 +152,21 @@ private:
                 grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
         }) {
             if (auto* const passedPane = resolvePassedPane(scratch)) {
-                return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
+                return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
                     engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}, grenade_prediction_params::kInFlightTraceMask,
-                    grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
+                    grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte));
             }
         }
-        return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity, grenade_prediction_params::kInFlightTraceMask,
-            grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
+        return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity,
+            grenade_prediction_params::kInFlightTraceMask, grenade_prediction_params::kInFlightTraceCollisionGroup,
+            grenade_prediction_params::kInFlightTraceQueryByte));
+    }
+    [[nodiscard]] static Optional<TraceResult> validateInFlightTrace(const SimulationScratch& scratch, Optional<TraceResult> trace) noexcept
+    {
+        if (trace.hasValue() && trace.value().fraction < 1.0f
+            && (!trace.value().handleRead || (scratch.hasPassedPane && trace.value().rawEntityHandle == static_cast<std::int32_t>(scratch.passedPaneHandle.value))))
+            return {};
+        return trace;
     }
     [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
@@ -209,8 +217,10 @@ private:
             position = trace.value().endPos;
             velocity = velocity * 0.4f;
             result.hit = true;
-            return {};
+            return continueAfterDynamicProp(scratch, position, velocity, movement, trace.value().fraction, kind, skipEntity, result);
         }
+        if (isUnresolvedNonWorldEntity(trace.value()))
+            return {.traceSucceeded = false};
         position = trace.value().endPos;
         result.hit = true;
         ++result.contactsCount;
@@ -222,8 +232,27 @@ private:
         const auto continuation = traceInFlight(scratch, position, position + velocity * remainingTime, skipEntity);
         if (!validTrace(continuation))
             return {.traceSucceeded = false};
+        if (isUnresolvedNonWorldEntity(continuation.value()))
+            return {.traceSucceeded = false};
         position = continuation.value().fraction >= 1.0f ? position + velocity * remainingTime : continuation.value().endPos;
         return {};
+    }
+    [[nodiscard]] CollisionResult continueAfterDynamicProp(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity,
+        cs2::Vector movement, float impactFraction, cs2::GrenadeKind kind, void* skipEntity, StepResult& result) noexcept
+    {
+        const auto continuationMovement = movement * ((1.0f - impactFraction) * 0.4f);
+        const auto continuation = traceInFlight(scratch, position, position + continuationMovement, skipEntity);
+        if (!validTrace(continuation) || isUnresolvedNonWorldEntity(continuation.value()))
+            return {.traceSucceeded = false};
+        if (continuation.value().fraction >= 1.0f) {
+            position = position + continuationMovement;
+            return {};
+        }
+        position = continuation.value().endPos;
+        result.hit = true;
+        ++result.contactsCount;
+        appendWorldContactPoint(scratch, position);
+        return applyContactResponse(continuation.value(), velocity, kind);
     }
     [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept
     {
@@ -283,6 +312,19 @@ private:
                 return false;
             dynamicPropHandle = handle;
             return true;
+        }
+    }
+    [[nodiscard]] bool isUnresolvedNonWorldEntity(const TraceResult& traceResult) const noexcept
+    {
+        if (traceResult.fraction >= 1.0f || !traceResult.handleRead || traceResult.rawEntityHandle == engine_trace::kWorldEntityHandle)
+            return false;
+        if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) { context.template make<EntitySystem>().getEntityFromHandle(handle); })
+            return true;
+        else {
+            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle)};
+            const auto entitySystem = hookContext.template make<EntitySystem>();
+            const auto* const entity = entitySystem.getEntityFromHandle(handle);
+            return !entity || !entity->identity || entity->identity->entity != entity || entity->identity->handle != handle || !entity->identity->entityClass;
         }
     }
     [[nodiscard]] void* resolvePassedPane(const SimulationScratch& scratch) const noexcept

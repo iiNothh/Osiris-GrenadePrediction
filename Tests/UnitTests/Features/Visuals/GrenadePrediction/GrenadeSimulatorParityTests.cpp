@@ -40,7 +40,7 @@ TEST(GrenadeSimulationParityTest, RecordsContactsUntilReferenceMarkerCapacity)
 {
     GrenadeSimulatorTestHookContext context;
     for (int i{}; i <= 20; ++i) {
-        context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}});
+        context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, true, engine_trace::kWorldEntityHandle, true});
         context.trace.push(TraceResult{1.0f, {}, {}});
     }
     context.trace.clearAfterScript();
@@ -77,7 +77,7 @@ TEST(GrenadeSimulationParityTest, UsesReferenceDecoyAndSmokeTimeoutTicks)
 TEST(GrenadeSimulationParityTest, ContinuesTraceForTheUnusedCollisionSubstep)
 {
     GrenadeSimulatorTestHookContext context;
-    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}});
+    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, true, engine_trace::kWorldEntityHandle, true});
     context.trace.clearAfterScript();
     Simulator simulator{context};
     cs2::Vector position{};
@@ -99,8 +99,93 @@ TEST(GrenadeSimulationParityTest, DampsDynamicPaneAndExcludesItFromLaterTraces)
     void* const owner = &context;
     EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade, owner).traceSucceeded);
     EXPECT_EQ(velocity, (cs2::Vector{40.0f, 2.0f, -1.5f}));
+    EXPECT_EQ(position, (cs2::Vector{4.46875f, 0.0234375f, 0.00390625f}));
+    EXPECT_EQ(context.trace.calls, 3);
     EXPECT_EQ(context.trace.lastExcludedFirst, owner);
     EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
+}
+
+TEST(GrenadeSimulationParityTest, UsesTheBaselineGenericInFlightTraceConfiguration)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    EXPECT_TRUE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade).traceSucceeded);
+    EXPECT_EQ(context.trace.lastMask, grenade_prediction_params::kInFlightTraceMask);
+    EXPECT_EQ(context.trace.lastCollisionGroup, grenade_prediction_params::kInFlightTraceCollisionGroup);
+    EXPECT_EQ(context.trace.lastQueryByte, grenade_prediction_params::kInFlightTraceQueryByte);
+}
+
+TEST(GrenadeSimulationParityTest, RejectsAnInFlightHitWithoutARawEntityHandle)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}});
+    Simulator simulator{context};
+    Trajectory trajectory;
+
+    simulator.simulate(trajectory, {{}, {100.0f, 0.0f, 0.0f}}, cs2::GrenadeKind::HEGrenade, nullptr, 800.0f);
+
+    EXPECT_FALSE(trajectory.valid);
+    EXPECT_EQ(trajectory.endPos, cs2::Vector{});
+}
+
+TEST(GrenadeSimulationParityTest, RejectsTheSamePaneReturnedAfterItWasExcluded)
+{
+    GrenadeSimulatorTestHookContext context;
+    const cs2::CEntityHandle pane{42u};
+    context.entitySystem.setDynamicProp(pane);
+    context.trace.push(TraceResult{0.5f, {4.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, false, static_cast<std::int32_t>(pane.value), true});
+    context.trace.push(TraceResult{0.5f, {4.1f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, false, static_cast<std::int32_t>(pane.value), true});
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    EXPECT_FALSE(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade).traceSucceeded);
+}
+
+TEST(GrenadeSimulationParityTest, AppliesAnOrdinaryResponseWhenPaneContinuationReachesWorld)
+{
+    GrenadeSimulatorTestHookContext context;
+    const cs2::CEntityHandle pane{42u};
+    context.entitySystem.setDynamicProp(pane);
+    context.trace.push(TraceResult{0.5f, {4.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, false, static_cast<std::int32_t>(pane.value), true});
+    context.trace.push(TraceResult{0.5f, {4.1f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, true, engine_trace::kWorldEntityHandle, true});
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{200.0f, 0.0f, 0.0f};
+
+    const auto result = GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::movementSubstep(simulator, position, velocity, cs2::GrenadeKind::HEGrenade);
+
+    EXPECT_TRUE(result.traceSucceeded);
+    EXPECT_EQ(result.contactsCount, 1);
+    EXPECT_EQ(context.trace.calls, 2);
+    EXPECT_EQ(context.trace.lastStart, (cs2::Vector{4.0f, 0.0f, 0.0f}));
+    EXPECT_EQ(context.trace.lastEnd, (cs2::Vector{4.3125f, 0.0f, -0.001953125f}));
+    EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
+    EXPECT_NEAR(velocity.x, -36.0140625f, 0.001f);
+    EXPECT_NEAR(velocity.z, -0.45f, 0.001f);
+}
+
+TEST(GrenadeSimulationParityTest, AppliesAnOrdinaryResponseToAResolvedNonDynamicEntity)
+{
+    GrenadeSimulatorTestHookContext context;
+    const cs2::CEntityHandle entity{43u};
+    context.entitySystem.setNonDynamicProp(entity);
+    context.trace.push(TraceResult{0.5f, {4.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, false, static_cast<std::int32_t>(entity.value), true});
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    const auto result = GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, cs2::GrenadeKind::HEGrenade);
+
+    EXPECT_TRUE(result.traceSucceeded);
+    EXPECT_EQ(result.contactsCount, 1);
+    EXPECT_LT(velocity.x, 0.0f);
 }
 
 TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyWhenWorldHandleIsRead)
