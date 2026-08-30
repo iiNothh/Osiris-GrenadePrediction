@@ -1,8 +1,11 @@
+#include <array>
+#include <bit>
 #include <limits>
 
 #include <gtest/gtest.h>
 
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
+#include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <Mocks/GrenadePrediction/ScriptedGrenadeTrace.h>
 
 namespace
@@ -123,6 +126,26 @@ TEST(EngineTraceOutputValidationTest, RejectsRawHandleOffsetsOverlappingRequired
     EXPECT_TRUE(engine_trace::isValidRawEntityHandleOffset(0xBC, endPositionOffset, normalOffset, fractionOffset));
     EXPECT_FALSE(engine_trace::isValidRawEntityHandleOffset(0x18, endPositionOffset, normalOffset, fractionOffset));
     EXPECT_FALSE(engine_trace::isValidRawEntityHandleOffset(fractionOffset, endPositionOffset, normalOffset, fractionOffset));
+}
+
+TEST(EngineTraceDescriptorTest, UsesFixedGrenadeHullLayout)
+{
+    const engine_trace::FixedGrenadeHullTraceDescriptor descriptor{};
+    const auto bytes = std::bit_cast<std::array<std::byte, sizeof(descriptor)>>(descriptor);
+    constexpr std::array<std::byte, sizeof(descriptor)> expected{
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0xC0},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0xC0},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0xC0},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x40},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x40},
+        std::byte{0x00}, std::byte{0x00}, std::byte{0x00}, std::byte{0x40},
+        std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{},
+        std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{}, std::byte{},
+        std::byte{0x02}, std::byte{}, std::byte{}, std::byte{},
+        std::byte{}, std::byte{}, std::byte{}, std::byte{}
+    };
+
+    EXPECT_EQ(bytes, expected);
 }
 
 }

@@ -54,15 +54,13 @@ public:
         std::uint64_t mask, std::uint8_t collisionGroup, std::uint8_t queryByte) const noexcept
     {
         using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
-        if constexpr (PatternSearchResults::template supports<ShapeBuilderFunctionPointer>()
-            && PatternSearchResults::template supports<TraceShapeFunctionPointer>()
+        if constexpr (PatternSearchResults::template supports<TraceShapeFunctionPointer>()
             && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
             && PatternSearchResults::template supports<InitFilterFunctionPointer>()
             && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
             && PatternSearchResults::template supports<CGameTraceNormalOffset>()
             && PatternSearchResults::template supports<CGameTraceFractionOffset>()) {
             const auto& results = hookContext.patternSearchResults();
-            const auto shapeBuilder = results.template get<ShapeBuilderFunctionPointer>();
             const auto traceShape = results.template get<TraceShapeFunctionPointer>();
             const auto managerStorage = results.template get<GameTraceManagerStoragePointer>();
             const auto initFilter = results.template get<InitFilterFunctionPointer>();
@@ -70,7 +68,7 @@ public:
             const auto normalOffset = results.template get<CGameTraceNormalOffset>();
             const auto fractionOffset = results.template get<CGameTraceFractionOffset>();
 
-            if (shapeBuilder == nullptr || traceShape == nullptr || managerStorage == nullptr || initFilter == nullptr
+            if (traceShape == nullptr || managerStorage == nullptr || initFilter == nullptr
                 || !engine_trace::areValidOutputOffsets(endPositionOffset, normalOffset, fractionOffset))
                 return {};
 
@@ -83,29 +81,27 @@ public:
                     const auto addSecondExcludedEntity = results.template get<AddSecondExcludedEntityToFilterFunctionPointer>();
                     if (addSecondExcludedEntity == nullptr)
                         return {};
-                    return trace(start, end, excludedEntities, mask, collisionGroup, queryByte, managerHolder, shapeBuilder, traceShape, initFilter, addSecondExcludedEntity);
+                    return trace(start, end, excludedEntities, mask, collisionGroup, queryByte, managerHolder, traceShape, initFilter, addSecondExcludedEntity);
                 } else {
                     return {};
                 }
             }
-            return trace(start, end, excludedEntities, mask, collisionGroup, queryByte, managerHolder, shapeBuilder, traceShape, initFilter, nullptr);
+            return trace(start, end, excludedEntities, mask, collisionGroup, queryByte, managerHolder, traceShape, initFilter, nullptr);
         } else return {};
     }
 
 private:
-    template <typename ShapeBuilder, typename TraceShape, typename InitFilter>
     [[nodiscard]] Optional<TraceResult> trace(
         cs2::Vector start, cs2::Vector end, engine_trace::TraceFilterExcludedEntities excludedEntities,
         std::uint64_t mask, std::uint8_t collisionGroup, std::uint8_t queryByte, void* managerHolder,
-        ShapeBuilder shapeBuilder, TraceShape traceShape, InitFilter initFilter,
-        void(*addSecondExcludedEntity)(void*, void*, void*) noexcept) const noexcept
+        UnpackStrongTypeAliasT<TraceShapeFunctionPointer> traceShape,
+        UnpackStrongTypeAliasT<InitFilterFunctionPointer> initFilter,
+        UnpackStrongTypeAliasT<AddSecondExcludedEntityToFilterFunctionPointer> addSecondExcludedEntity) const noexcept
     {
-        engine_trace::DescriptorStorage descriptor{};
+        engine_trace::FixedGrenadeHullTraceDescriptor descriptor{};
         engine_trace::FilterStorage filter{};
         engine_trace::OutputStorage output{};
-        const engine_trace::Bounds6f bounds{{-2.0f, -2.0f, -2.0f}, {2.0f, 2.0f, 2.0f}};
 
-        shapeBuilder(&descriptor, &bounds);
         initFilter(&filter, excludedEntities.first, mask, collisionGroup, queryByte);
         if (excludedEntities.second != nullptr)
             addSecondExcludedEntity(&filter, excludedEntities.first, excludedEntities.second);
