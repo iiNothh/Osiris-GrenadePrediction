@@ -34,7 +34,7 @@ public:
             state.diagnostics.record(GrenadePredictionDiagnosticKind::MalformedUnrelatedIdentitySkipped, state.frame);
     }
 
-    static bool advanceScheduler(GrenadePredictionUpdateScheduler& scheduler, bool force, Optional<float> frametime) noexcept
+    [[nodiscard]] static bool advanceScheduler(GrenadePredictionUpdateScheduler& scheduler, bool force, Optional<float> frametime) noexcept
     {
         const bool hasFrametime = frametime.hasValue() && Math::isFinite(frametime.value());
         return scheduler.shouldUpdate(force, hasFrametime, hasFrametime ? frametime.value() : 0.0f);
@@ -101,7 +101,7 @@ public:
         state.lastCachePresentationState = {};
     }
 
-    static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled) noexcept
+    [[nodiscard]] static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled) noexcept
     {
         return observation.observePinState(weapon, pinPulled);
     }
@@ -116,14 +116,14 @@ public:
             observation.retainThrowStrength(throwStrength.value());
     }
 
-    static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
+    [[nodiscard]] static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
     {
         const bool releaseEdge = observeHeldThrow(observation, weapon, pinPulled);
         captureThrowStrength(observation, pinPulled, {}, readThrowStrength);
         return releaseEdge;
     }
 
-    static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
+    [[nodiscard]] static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeActualExecution(hasCurtime, curtime))
             return false;
@@ -135,7 +135,7 @@ public:
         return true;
     }
 
-    static bool completeLegacyHeldThrow(GrenadePredictionState& state, const void* weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
+    [[nodiscard]] static bool completeLegacyHeldThrow(GrenadePredictionState& state, const void* weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeLegacyRelease(releaseEdge))
             return false;
@@ -148,7 +148,7 @@ public:
     }
 
     template <typename Simulate>
-    static bool acceptNewestLiveGrenade(GrenadePredictionState& state, cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
+    [[nodiscard]] static bool acceptNewestLiveGrenade(GrenadePredictionState& state, cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
     {
         if (currentTime.hasValue() && !Math::isFinite(currentTime.value()))
             currentTime = {};
@@ -187,13 +187,13 @@ public:
     }
 
     template <typename Projectile, typename Decoy>
-    static bool updateDecoyLiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle, const Decoy& decoy) noexcept
+    [[nodiscard]] static bool updateDecoyLiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle, const Decoy& decoy) noexcept
     {
         return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::Decoy, {.decoyShotTick = decoy.decoyShotTick()});
     }
 
     template <typename Projectile>
-    static bool updateHELiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
+    [[nodiscard]] static bool updateHELiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
     {
         return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::HEGrenade,
             {.heExplodeEffectTickBegin = projectile.explodeEffectTickBegin()});

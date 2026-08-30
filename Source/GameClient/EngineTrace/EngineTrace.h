@@ -10,24 +10,27 @@
 #include <Utils/Optional.h>
 
 struct TraceResult {
-    float fraction;
-    cs2::Vector endPos;
-    cs2::Vector normal;
+    float fraction{};
+    cs2::Vector endPos{};
+    cs2::Vector normal{};
     bool floorDampingKnownEligible{};
     std::int32_t rawEntityHandle{};
     bool handleRead{};
 };
 
-constexpr std::uint64_t CONTENTS_SOLID = 0x1;
-constexpr std::uint64_t CONTENTS_HITBOXES = 0x2;
-constexpr std::uint64_t CONTENTS_SKY = 0x8;
-constexpr std::uint64_t CONTENTS_WINDOW = 0x1000;
-constexpr std::uint64_t CONTENTS_PASSBULLETS = 0x2000;
-constexpr std::uint64_t CONTENTS_PLAYER = 0x40000;
-constexpr std::uint64_t CONTENTS_NPC = 0x80000;
-constexpr std::uint64_t CONTENTS_DEBRIS = 0x100000;
-constexpr std::uint64_t MASK_SHOT = CONTENTS_SOLID | CONTENTS_HITBOXES | CONTENTS_WINDOW | CONTENTS_PASSBULLETS | CONTENTS_PLAYER | CONTENTS_NPC | CONTENTS_DEBRIS;
-constexpr std::uint64_t MASK_GRENADE = (MASK_SHOT & ~CONTENTS_WINDOW) | CONTENTS_SKY;
+namespace engine_trace
+{
+    constexpr std::uint64_t kContentsSolid = 0x1;
+    constexpr std::uint64_t kContentsHitboxes = 0x2;
+    constexpr std::uint64_t kContentsSky = 0x8;
+    constexpr std::uint64_t kContentsWindow = 0x1000;
+    constexpr std::uint64_t kContentsPassBullets = 0x2000;
+    constexpr std::uint64_t kContentsPlayer = 0x40000;
+    constexpr std::uint64_t kContentsNpc = 0x80000;
+    constexpr std::uint64_t kContentsDebris = 0x100000;
+    constexpr std::uint64_t kMaskShot = kContentsSolid | kContentsHitboxes | kContentsWindow | kContentsPassBullets | kContentsPlayer | kContentsNpc | kContentsDebris;
+    constexpr std::uint64_t kMaskGrenade = (kMaskShot & ~kContentsWindow) | kContentsSky;
+}
 
 template <typename HookContext>
 class EngineTrace {
@@ -39,7 +42,7 @@ public:
 
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) const noexcept
     {
-        return traceGrenadeHull(start, end, engine_trace::TraceFilterExcludedEntities{skipEntity, nullptr}, MASK_GRENADE, 4, 7);
+        return traceGrenadeHull(start, end, engine_trace::TraceFilterExcludedEntities{skipEntity, nullptr}, engine_trace::kMaskGrenade, 4, 7);
     }
 
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(
