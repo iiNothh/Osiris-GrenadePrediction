@@ -1993,9 +1993,6 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionController.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionDiagnostics.h">
-      <Filter>Features\Visuals</Filter>
-    </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
@@ -2033,6 +2030,9 @@
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\Rendering\TrajectoryRenderPlan.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\Trajectory.h">

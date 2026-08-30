@@ -15,7 +15,7 @@ TEST(ManualGrenadeLaunchTest, PrefersNativeLaunchWithoutCallingManualProvider)
     int manualCalls{};
     const GrenadeLaunchState native{{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
 
-    const auto prepared = prepareGrenadeLaunch(false, true, false, true,
+    const auto prepared = prepareGrenadeLaunch(false, true,
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return native; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
 
@@ -31,7 +31,7 @@ TEST(ManualGrenadeLaunchTest, FallsBackToManualLaunchWhenNativeIsUnavailable)
 {
     const GrenadeLaunchState manual{{7.0f, 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}};
 
-    const auto prepared = prepareGrenadeLaunch(false, true, false, true,
+    const auto prepared = prepareGrenadeLaunch(false, true,
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { return manual; });
 
@@ -64,7 +64,7 @@ TEST(ManualGrenadeLaunchTest, SkipsAvailableNativeLaunchUntilRealStrengthIsCaptu
     int manualCalls{};
     static_cast<void>(observation.observeWeapon(&weapon));
 
-    const auto manual = prepareGrenadeLaunch(false, true, false, observation.hasRetainedThrowStrength,
+    const auto manual = prepareGrenadeLaunch(false, observation.hasRetainedThrowStrength,
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return GrenadeLaunchState{{1.0f, 0.0f, 0.0f}, {observation.retainedThrowStrength, 0.0f, 0.0f}}; });
 
@@ -75,7 +75,7 @@ TEST(ManualGrenadeLaunchTest, SkipsAvailableNativeLaunchUntilRealStrengthIsCaptu
     EXPECT_FLOAT_EQ(manual.state.value().velocity.x, 1.0f);
 
     observation.retainThrowStrength(0.5f);
-    const auto native = prepareGrenadeLaunch(false, true, false, observation.hasRetainedThrowStrength,
+    const auto native = prepareGrenadeLaunch(false, observation.hasRetainedThrowStrength,
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{{2.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
 

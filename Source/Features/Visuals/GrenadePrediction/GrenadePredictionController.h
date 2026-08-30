@@ -17,23 +17,6 @@ public:
         return state.observeTime(hasCurrentTime, hasCurrentTime ? currentTime.value() : 0.0f);
     }
 
-    static void recordLiveCacheStatus(GrenadePredictionState& state) noexcept
-    {
-        if (state.liveGrenadeCache.hasOverflowed())
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::LiveCacheOverflow, state.frame);
-    }
-
-    static void recordCollisionSnapshotStatus(GrenadePredictionState& state) noexcept
-    {
-        const auto& scratch = state.playerCollisionCollectionScratch;
-        if (scratch.overflowed)
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::CollisionOverflow, state.frame);
-        if (scratch.playerDataInvalid || state.playerCollisionSnapshot.status == GrenadePlayerCollisionSnapshotStatus::Unavailable)
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::RelevantPlayerInvalid, state.frame);
-        if (scratch.malformedUnrelatedIdentityCount || state.playerCollisionSnapshot.malformedUnrelatedIdentityCount)
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::MalformedUnrelatedIdentitySkipped, state.frame);
-    }
-
     [[nodiscard]] static bool advanceScheduler(GrenadePredictionUpdateScheduler& scheduler, bool force, Optional<float> frametime) noexcept
     {
         const bool hasFrametime = frametime.hasValue() && Math::isFinite(frametime.value());
@@ -78,23 +61,6 @@ public:
         hideCached();
     }
 
-    // Compatibility wrappers for callers not yet migrated to one shared presentation decision.
-    template <typename HideLive, typename HideCached>
-    static void updateCacheValidity(GrenadePredictionState& state, grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime,
-        float curtime, bool projectilePresent, HideLive&& hideLive, HideCached&& hideCached) noexcept
-    {
-        const auto decision = makeCachedTrajectoryPresentationDecision(state, mode, duration, hasCurtime, curtime, projectilePresent);
-        applyCachedTrajectoryPresentationDecision(state, decision, []() noexcept {}, static_cast<HideLive&&>(hideLive), static_cast<HideCached&&>(hideCached));
-    }
-
-    template <typename Draw, typename Hide>
-    static void renderLastCommittedTrajectory(GrenadePredictionState& state, grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime,
-        float curtime, bool projectilePresent, Draw&& draw, Hide&& hide) noexcept
-    {
-        const auto decision = makeCachedTrajectoryPresentationDecision(state, mode, duration, hasCurtime, curtime, projectilePresent);
-        applyCachedTrajectoryPresentationDecision(state, decision, static_cast<Draw&&>(draw), []() noexcept {}, static_cast<Hide&&>(hide));
-    }
-
     static void resetPresentationState(GrenadePredictionState& state) noexcept
     {
         state.livePresentationState = {};
@@ -114,13 +80,6 @@ public:
         const auto throwStrength = readThrowStrength();
         if (throwStrength.hasValue())
             observation.retainThrowStrength(throwStrength.value());
-    }
-
-    [[nodiscard]] static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled, auto&& readThrowStrength) noexcept
-    {
-        const bool releaseEdge = observeHeldThrow(observation, weapon, pinPulled);
-        captureThrowStrength(observation, pinPulled, {}, readThrowStrength);
-        return releaseEdge;
     }
 
     [[nodiscard]] static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
@@ -155,7 +114,6 @@ public:
         state.liveGrenadeAuthority.observeLocalPawn(localPawnHandle);
         state.liveGrenadeAuthority.update(state.liveGrenadeCache);
         if (!state.liveGrenadeCache.hasAuthoritativeScan()) {
-            recordLiveCacheStatus(state);
             return false;
         }
 
@@ -163,12 +121,10 @@ public:
         if (!projectile.hasValue() || !state.liveGrenadeAuthority.observeForSimulation(projectile.value()))
             return false;
         if (!state.liveGrenadeAuthority.isSimulationRetryDue(projectile.value(), state.frame)) {
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::LiveSimulationBackoff, state.frame);
             return false;
         }
         if (!simulate(projectile.value())) {
             state.liveGrenadeAuthority.recordSimulationFailure(projectile.value(), state.frame);
-            state.diagnostics.record(GrenadePredictionDiagnosticKind::LiveSimulationFailure, state.frame);
             return false;
         }
 
@@ -177,13 +133,6 @@ public:
         state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
         state.invalidateTempTrajectory();
         return true;
-    }
-
-    template <typename Simulate>
-    static bool completeLiveGrenadeScan(GrenadePredictionState& state, cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
-    {
-        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
-        return acceptNewestLiveGrenade(state, localPawnHandle, currentTime, static_cast<Simulate&&>(simulate));
     }
 
     template <typename Projectile, typename Decoy>

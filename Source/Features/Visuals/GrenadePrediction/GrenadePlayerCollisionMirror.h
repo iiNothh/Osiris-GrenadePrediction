@@ -30,14 +30,12 @@ struct GrenadePlayerCollisionCollectionScratch {
 
     GrenadePlayerCollisionCollectedCandidate candidates[kCapacity]{};
     int count{};
-    std::uint32_t malformedUnrelatedIdentityCount{};
     bool playerDataInvalid{};
     bool overflowed{};
 
     void reset() noexcept
     {
         count = 0;
-        malformedUnrelatedIdentityCount = 0;
         playerDataInvalid = false;
         overflowed = false;
     }
@@ -49,27 +47,6 @@ struct GrenadePlayerCollisionSnapshot {
     int count{};
     GrenadePlayerCollisionSnapshotStatus status{GrenadePlayerCollisionSnapshotStatus::Unavailable};
     std::uint64_t revision{};
-    std::uint32_t malformedUnrelatedIdentityCount{};
-    // Retains compatibility with full builds until the owner supplies dedicated scratch.
-    GrenadePlayerCollisionCollectionScratch collectionScratch{};
-
-    void reset() noexcept
-    {
-        const bool changed = status != GrenadePlayerCollisionSnapshotStatus::Unavailable || count != 0;
-        count = 0;
-        status = GrenadePlayerCollisionSnapshotStatus::Unavailable;
-        malformedUnrelatedIdentityCount = 0;
-        if (changed)
-            ++revision;
-    }
-
-    [[nodiscard]] bool append(GrenadePlayerCollisionCandidate candidate) noexcept
-    {
-        if (count == kCapacity)
-            return false;
-        candidates[count++] = candidate;
-        return true;
-    }
 };
 
 namespace grenade_player_collision_mirror

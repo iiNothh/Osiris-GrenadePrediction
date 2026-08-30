@@ -201,10 +201,10 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionConfigVariables.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionContext.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionController.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionDiagnostics.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeSimulator.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadePredictionUpdateScheduler.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeThrowObservation.h" />

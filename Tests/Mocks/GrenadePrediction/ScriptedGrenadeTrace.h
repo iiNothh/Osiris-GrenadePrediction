@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <optional>
 #include <type_traits>
 
@@ -14,6 +15,7 @@ struct ScriptedGrenadeTrace {
     Optional<TraceResult> fallback{};
     void* lastExcludedFirst{};
     void* lastExcludedSecond{};
+    void* lastSkipEntity{};
     std::uint64_t lastMask{};
     std::uint8_t lastCollisionGroup{};
     std::uint8_t lastQueryByte{};
@@ -26,10 +28,11 @@ struct ScriptedGrenadeTrace {
             results[resultCount++] = result;
     }
     void clearAfterScript() noexcept { fallback = TraceResult{1.0f, {}, {}}; }
-    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void*) noexcept
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
         lastStart = start;
         lastEnd = end;
+        lastSkipEntity = skipEntity;
         const auto index = calls++;
         return index < resultCount ? results[index] : fallback;
     }
@@ -98,8 +101,10 @@ struct GrenadeSimulatorTestHookContext {
     {
         if constexpr (std::is_same_v<T<GrenadeSimulatorTestHookContext>, EngineTrace<GrenadeSimulatorTestHookContext>>)
             return (trace);
-        else
+        else {
+            static_assert(std::is_same_v<T<GrenadeSimulatorTestHookContext>, EntitySystem<GrenadeSimulatorTestHookContext>>);
             return (entitySystem);
+        }
     }
 };
 
@@ -109,7 +114,8 @@ struct GrenadeSimulatorTestAccess {
     [[nodiscard]] static StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind,
         void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
     {
-        return simulator.step(position, velocity, kind, skipEntity, gravity);
+        typename Simulator::SimulationScratch scratch{nullptr, simulator.configuredPlayerCollisionSnapshot};
+        return simulator.step(scratch, position, velocity, kind, skipEntity, gravity);
     }
     [[nodiscard]] static bool shouldDetonate(cs2::GrenadeKind kind, int tick) noexcept { return Simulator::shouldDetonate(kind, tick); }
     [[nodiscard]] static auto applyContactResponse(Simulator& simulator, const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept

@@ -4,8 +4,6 @@
 
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
 
-enum class GrenadeTrajectoryAuthority { HeldPrediction, LiveProjectile };
-
 class LiveGrenadeAuthority {
 public:
     static constexpr float flashHorizon{1.5f + 0.125f};
@@ -30,7 +28,6 @@ public:
         accepted = false;
         hasHighestObserved = false;
         hasAcceptedTime = false;
-        source = GrenadeTrajectoryAuthority::HeldPrediction;
         resetSimulationRetryBackoff();
     }
 
@@ -49,7 +46,6 @@ public:
             hasHighestObserved = true;
             accepted = false;
             hasAcceptedTime = false;
-            source = GrenadeTrajectoryAuthority::HeldPrediction;
             resetSimulationRetryBackoff();
             return true;
         }
@@ -68,7 +64,6 @@ public:
             hasAcceptedTime = false;
         }
         accepted = true;
-        source = GrenadeTrajectoryAuthority::LiveProjectile;
         resetSimulationRetryBackoff();
     }
 
@@ -101,13 +96,6 @@ public:
             nextSimulationRetryDelayFrames *= 2;
     }
 
-    void resetSimulationRetryBackoff() noexcept
-    {
-        nextSimulationRetryDelayFrames = 1;
-        hasRetryObservationSequence = false;
-        hasScheduledRetry = false;
-    }
-
     void update(const LiveGrenadeCache& cache) noexcept
     {
         if (!cache.isScanComplete())
@@ -119,14 +107,6 @@ public:
         }
 
     }
-
-    [[nodiscard]] GrenadeTrajectoryAuthority trajectoryAuthority() const noexcept
-    {
-        return source;
-    }
-
-private:
-public:
     [[nodiscard]] bool isFlashbangInEarlyHideWindow(Optional<float> currentTime) const noexcept
     {
         return acceptedSnapshot.kind == cs2::GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
@@ -136,6 +116,13 @@ public:
     [[nodiscard]] bool blocksHeldPrediction() const noexcept { return hasHighestObserved && !accepted; }
 
 private:
+    void resetSimulationRetryBackoff() noexcept
+    {
+        nextSimulationRetryDelayFrames = 1;
+        hasRetryObservationSequence = false;
+        hasScheduledRetry = false;
+    }
+
     cs2::CEntityHandle localPawnHandle{};
     LiveGrenadeSnapshot acceptedSnapshot{};
     LiveGrenadeSnapshot newestObservedSnapshot{};
@@ -150,5 +137,4 @@ private:
     std::uint32_t retryObservationSequence{};
     std::uint32_t nextSimulationRetryFrame{};
     std::uint32_t nextSimulationRetryDelayFrames{1};
-    GrenadeTrajectoryAuthority source{GrenadeTrajectoryAuthority::HeldPrediction};
 };

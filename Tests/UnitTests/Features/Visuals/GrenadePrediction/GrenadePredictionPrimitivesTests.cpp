@@ -80,11 +80,13 @@ TEST(GrenadePredictionControllerTest, CapturesRealStrengthAfterObservingPinPull)
     const int weapon{};
     static_cast<void>(observation.observeWeapon(&weapon));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &weapon, false, []() noexcept { return Optional<float>{0.25f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &weapon, false));
+    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &weapon, true, []() noexcept { return Optional<float>{0.25f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &weapon, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
@@ -95,11 +97,13 @@ TEST(GrenadePredictionControllerTest, ResetsCompletedPartialFlashThrowWhenReacqu
     const FlashbangWeapon thrownFlashbang;
     const FlashbangWeapon reacquiredFlashbang;
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &thrownFlashbang, true, []() noexcept { return Optional<float>{0.5f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &thrownFlashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(&thrownFlashbang, 10.0f));
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &reacquiredFlashbang, false, []() noexcept { return Optional<float>{0.0f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &reacquiredFlashbang, false));
+    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
@@ -112,10 +116,12 @@ TEST(GrenadePredictionControllerTest, ResetsPartialFlashThrowWhenObservingAnothe
     const FlashbangWeapon flashbang;
     const HEGrenadeWeapon heGrenade;
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.5f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(&flashbang, 10.0f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &heGrenade, false, []() noexcept { return Optional<float>{0.0f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &heGrenade, false));
+    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
@@ -128,10 +134,12 @@ TEST(GrenadePredictionControllerTest, ResetsPendingStrengthForANewObservationOfT
     const FlashbangWeapon firstFlashbang;
     const FlashbangWeapon secondFlashbang;
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &firstFlashbang, true, []() noexcept { return Optional<float>{0.5f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &firstFlashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(&firstFlashbang, 10.0f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &secondFlashbang, false, []() noexcept { return Optional<float>{0.0f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &secondFlashbang, false));
+    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
@@ -143,9 +151,11 @@ TEST(GrenadePredictionControllerTest, RetainsPinnedZeroStrengthForTheCurrentThro
     GrenadeThrowObservation observation;
     const FlashbangWeapon flashbang;
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.0f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.0f}; });
     ASSERT_TRUE(observation.observeThrowTime(&flashbang, 10.0f));
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, []() noexcept { return Optional<float>{0.5f}; }));
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
@@ -157,10 +167,11 @@ TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForAnUnpinnedFlashb
     const FlashbangWeapon flashbang;
     bool readThrowStrength{};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, false, [&]() noexcept {
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, false));
+    GrenadePredictionController::captureThrowStrength(observation, false, {}, [&]() noexcept {
         readThrowStrength = true;
         return Optional<float>{0.0f};
-    }));
+    });
 
     EXPECT_FALSE(readThrowStrength);
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
@@ -179,10 +190,11 @@ TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForUnpinnedGenericG
 
     for (const auto* weapon : weapons) {
         bool readThrowStrength{};
-        static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, weapon, false, [&]() noexcept {
+        static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, weapon, false));
+        GrenadePredictionController::captureThrowStrength(observation, false, {}, [&]() noexcept {
             readThrowStrength = true;
             return Optional<float>{0.0f};
-        }));
+        });
         EXPECT_FALSE(readThrowStrength);
         EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
         EXPECT_FALSE(observation.hasRetainedThrowStrength);
@@ -195,10 +207,11 @@ TEST(GrenadePredictionControllerTest, ReadsAndRetainsPinnedZeroStrengthForCurren
     const FlashbangWeapon flashbang;
     bool readThrowStrength{};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true, [&]() noexcept {
+    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, &flashbang, true));
+    GrenadePredictionController::captureThrowStrength(observation, true, {}, [&]() noexcept {
         readThrowStrength = true;
         return Optional<float>{0.0f};
-    }));
+    });
 
     EXPECT_TRUE(readThrowStrength);
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
@@ -207,7 +220,7 @@ TEST(GrenadePredictionControllerTest, ReadsAndRetainsPinnedZeroStrengthForCurren
 
 TEST(GrenadePredictionLaunchTest, RejectsUnavailableNativeLaunch)
 {
-    const auto unavailable = prepareGrenadeLaunch(false, true, false, false,
+    const auto unavailable = prepareGrenadeLaunch(false, false,
         []() noexcept { return Optional<GrenadeLaunchState>{}; },
         []() noexcept { return Optional<GrenadeLaunchState>{}; });
     EXPECT_EQ(unavailable.status, GrenadeLaunchPreparationStatus::Unavailable);

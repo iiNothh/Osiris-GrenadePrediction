@@ -144,16 +144,10 @@ private:
     }
     [[nodiscard]] Optional<TraceResult> traceInFlight(const SimulationScratch& scratch, cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
-        if constexpr (requires(HookContext& context, cs2::Vector traceStart, cs2::Vector traceEnd, void* first, void* second) {
-            context.template make<EngineTrace>().traceGrenadeHull(traceStart, traceEnd,
-                engine_trace::TraceFilterExcludedEntities{first, second}, grenade_prediction_params::kInFlightTraceMask,
-                grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte);
-        }) {
-            if (auto* const passedPane = resolvePassedPane(scratch)) {
-                return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
-                    engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}, grenade_prediction_params::kInFlightTraceMask,
-                    grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte));
-            }
+        if (auto* const passedPane = resolvePassedPane(scratch)) {
+            return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end,
+                engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}, grenade_prediction_params::kInFlightTraceMask,
+                grenade_prediction_params::kInFlightTraceCollisionGroup, grenade_prediction_params::kInFlightTraceQueryByte));
         }
         return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity,
             grenade_prediction_params::kInFlightTraceMask, grenade_prediction_params::kInFlightTraceCollisionGroup,
@@ -186,11 +180,6 @@ private:
             }
         }
         return result;
-    }
-    [[nodiscard]] StepResult step(cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
-    {
-        SimulationScratch scratch{nullptr, configuredPlayerCollisionSnapshot};
-        return step(scratch, position, velocity, kind, skipEntity, serverGravity);
     }
     [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity,
         StepResult& result, float serverGravity) noexcept
@@ -258,7 +247,7 @@ private:
         const float speedSq = bounce.squareLength();
         if (!finite(bounce) || !Math::isFinite(speedSq))
             return {.traceSucceeded = false};
-        if (trace.floorDampingKnownEligible && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
+        if (trace.handleRead && trace.rawEntityHandle == engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
             && speedSq > grenade_prediction_params::kSteepFloorDampingSpeedSq) {
             const float directionDot = (bounce * (1.0f / Math::sqrt(speedSq))).dot(trace.normal);
             if (directionDot > grenade_prediction_params::kSteepFloorDampingDirectionDot)
