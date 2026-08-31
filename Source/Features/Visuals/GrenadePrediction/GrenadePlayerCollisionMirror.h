@@ -82,17 +82,100 @@ namespace grenade_player_collision_mirror
         return x * x + y * y + z * z <= kRadius * kRadius;
     }
 
+    [[nodiscard]] inline float pointToAabbDistanceSquared(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
+    {
+        const float x = origin.x < candidate.mins.x ? candidate.mins.x - origin.x
+            : origin.x > candidate.maxs.x ? origin.x - candidate.maxs.x
+            : 0.0f;
+        const float y = origin.y < candidate.mins.y ? candidate.mins.y - origin.y
+            : origin.y > candidate.maxs.y ? origin.y - candidate.maxs.y
+            : 0.0f;
+        const float z = origin.z < candidate.mins.z ? candidate.mins.z - origin.z
+            : origin.z > candidate.maxs.z ? origin.z - candidate.maxs.z
+            : 0.0f;
+        return x * x + y * y + z * z;
+    }
+
+    struct ScaledSquaredDistance {
+        float scale{};
+        float normalizedSquared{};
+        bool valid{};
+    };
+
+    [[nodiscard]] inline ScaledSquaredDistance centerDistanceSquared(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
+    {
+        const auto center = candidate.mins * 0.5f + candidate.maxs * 0.5f;
+        const auto halfDifference = origin * 0.5f - center * 0.5f;
+        if (!finite(center) || !finite(halfDifference))
+            return {};
+        const auto absolute = [](float value) noexcept { return value < 0.0f ? -value : value; };
+        float scale = absolute(halfDifference.x);
+        if (const float y = absolute(halfDifference.y); y > scale)
+            scale = y;
+        if (const float z = absolute(halfDifference.z); z > scale)
+            scale = z;
+        if (scale == 0.0f)
+            return {0.0f, 0.0f, true};
+
+        const float inverseScale = 1.0f / scale;
+        const auto normalized = halfDifference * inverseScale;
+        const float normalizedSquared = normalized.squareLength();
+        return Math::isFinite(scale) && finite(normalized) && Math::isFinite(normalizedSquared)
+            ? ScaledSquaredDistance{scale, normalizedSquared, true}
+            : ScaledSquaredDistance{};
+    }
+
+    [[nodiscard]] inline int compare(const ScaledSquaredDistance& first, const ScaledSquaredDistance& second) noexcept
+    {
+        if (first.scale == 0.0f)
+            return second.scale == 0.0f ? 0 : -1;
+        if (second.scale == 0.0f)
+            return 1;
+        if (first.scale <= second.scale) {
+            const float scaleRatio = first.scale / second.scale;
+            const float firstScaledDistance = first.normalizedSquared * scaleRatio * scaleRatio;
+            if (firstScaledDistance < second.normalizedSquared)
+                return -1;
+            if (firstScaledDistance > second.normalizedSquared)
+                return 1;
+            return 0;
+        }
+        const float scaleRatio = second.scale / first.scale;
+        const float secondScaledDistance = second.normalizedSquared * scaleRatio * scaleRatio;
+        if (first.normalizedSquared < secondScaledDistance)
+            return -1;
+        if (first.normalizedSquared > secondScaledDistance)
+            return 1;
+        return 0;
+    }
+
     [[nodiscard]] inline const GrenadePlayerCollisionCandidate* select(const GrenadePlayerCollisionSnapshot& snapshot, cs2::Vector origin) noexcept
     {
-        if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Available || snapshot.count < 0 || snapshot.count > GrenadePlayerCollisionSnapshot::kCapacity)
+        if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Available || snapshot.count < 0 || snapshot.count > GrenadePlayerCollisionSnapshot::kCapacity
+            || !finite(origin))
             return nullptr;
 
         const GrenadePlayerCollisionCandidate* selected{};
+        float selectedPointDistanceSquared{};
+        ScaledSquaredDistance selectedCenterDistanceSquared{};
         for (int i = 0; i < snapshot.count; ++i) {
             const auto& candidate = snapshot.candidates[i];
-            if (candidate.relationshipEligible && intersectsSphere(origin, candidate)
-                && (!selected || candidate.rawHandle < selected->rawHandle))
+            if (!candidate.relationshipEligible || !intersectsSphere(origin, candidate))
+                continue;
+
+            const float pointDistanceSquared = pointToAabbDistanceSquared(origin, candidate);
+            const auto centerDistance = centerDistanceSquared(origin, candidate);
+            if (!Math::isFinite(pointDistanceSquared) || !centerDistance.valid)
+                continue;
+            const bool closerToBounds = !selected || pointDistanceSquared < selectedPointDistanceSquared;
+            const bool equallyCloseToBounds = selected && pointDistanceSquared == selectedPointDistanceSquared;
+            const int centerDistanceComparison = equallyCloseToBounds ? compare(centerDistance, selectedCenterDistanceSquared) : 0;
+            if (closerToBounds || (equallyCloseToBounds && (centerDistanceComparison < 0
+                || (centerDistanceComparison == 0 && candidate.rawHandle < selected->rawHandle)))) {
                 selected = &candidate;
+                selectedPointDistanceSquared = pointDistanceSquared;
+                selectedCenterDistanceSquared = centerDistance;
+            }
         }
         return selected;
     }
