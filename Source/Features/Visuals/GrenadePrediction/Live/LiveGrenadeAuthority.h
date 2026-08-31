@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
 
 class LiveGrenadeAuthority {
@@ -109,7 +110,7 @@ public:
     }
     [[nodiscard]] bool isFlashbangInEarlyHideWindow(Optional<float> currentTime) const noexcept
     {
-        return acceptedSnapshot.kind == cs2::GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
+        return acceptedSnapshot.kind == GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
             && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
     }
     [[nodiscard]] bool hasObservedLiveProjectile() const noexcept { return hasHighestObserved; }

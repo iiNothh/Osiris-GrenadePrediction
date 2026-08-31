@@ -2,9 +2,6 @@
 
 #include <cstdint>
 
-namespace cs2
-{
-
 enum class GrenadeKind : std::uint8_t {
     None,
     Flashbang,
@@ -14,5 +11,3 @@ enum class GrenadeKind : std::uint8_t {
     Decoy,
     Incendiary
 };
-
-}

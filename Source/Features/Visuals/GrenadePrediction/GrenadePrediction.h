@@ -5,7 +5,8 @@
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Entities/WeaponEntities.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeKindMapper.h>
+#include <GameClient/Entities/GrenadeKind.h>
+#include <GameClient/Entities/GrenadeKindMapper.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionSnapshotBuilder.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
@@ -21,6 +22,7 @@
 #include <GameClient/Entities/SmokeGrenadeProjectile.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
+#include <HookContext/HookContextMacros.h>
 #include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
 #include <MemoryPatterns/PatternTypes/WeaponPatternTypes.h>
 #include <Platform/GrenadePredictionCapabilities.h>
@@ -55,20 +57,20 @@ public:
             return;
         else {
             const auto kind = GrenadeKindMapper::fromProjectile(type);
-            if (kind == cs2::GrenadeKind::None || !identity.entity)
+            if (kind == GrenadeKind::None || !identity.entity)
                 return;
             const auto grenade = GrenadeProjectile{hookContext, static_cast<cs2::C_BaseCSGrenadeProjectile*>(identity.entity)};
             LiveGrenadeLifecycleState lifecycleState;
-            if (kind == cs2::GrenadeKind::SmokeGrenade) {
+            if (kind == GrenadeKind::SmokeGrenade) {
                 lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
                 if (!lifecycleState.smokeEffectStarted.hasValue() || lifecycleState.smokeEffectStarted.value()) {
                     context().state().liveGrenadeCache.invalidate(identity.handle);
                     return;
                 }
             }
-            else if (kind == cs2::GrenadeKind::HEGrenade)
+            else if (kind == GrenadeKind::HEGrenade)
                 return static_cast<void>(GrenadePredictionController::updateHELiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle));
-            else if (kind == cs2::GrenadeKind::Decoy)
+            else if (kind == GrenadeKind::Decoy)
                 return static_cast<void>(GrenadePredictionController::updateDecoyLiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle,
                     DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
             static_cast<void>(LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
@@ -124,7 +126,7 @@ public:
             }
             const auto kind = GrenadeKindMapper::from(activeWeapon.baseEntity().classify());
             auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
-            if (!weapon || kind == cs2::GrenadeKind::None) {
+            if (!weapon || kind == GrenadeKind::None) {
                 state.throwObservation.reset();
                 state.invalidateTempTrajectory();
                 hideLivePrediction();
@@ -219,7 +221,7 @@ public:
     void clearPrediction() noexcept
     {
         auto& state = context().state();
-        GrenadePredictionController::clearUnavailableInFlightTrace(state,
+        GrenadePredictionController::clearPredictionAndHidePanels(state,
             [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
     }
 

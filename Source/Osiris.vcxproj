@@ -192,8 +192,6 @@
     <ClInclude Include="Features\Sound\WeaponReloadVisualizer.h" />
     <ClInclude Include="Features\Sound\WeaponScopeVisualizer.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeGravity.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeKind.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeKindMapper.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeLaunchSelection.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionMirror.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionSnapshotBuilder.h" />
@@ -302,6 +300,8 @@
     <ClInclude Include="GameClient\Entities\CollisionProperty.h" />
     <ClInclude Include="GameClient\Entities\DecoyProjectile.h" />
     <ClInclude Include="GameClient\Entities\EntityClassifier.h" />
+    <ClInclude Include="GameClient\Entities\GrenadeKind.h" />
+    <ClInclude Include="GameClient\Entities\GrenadeKindMapper.h" />
     <ClInclude Include="GameClient\Entities\GameRules.h" />
     <ClInclude Include="GameClient\Entities\GrenadeProjectile.h" />
     <ClInclude Include="GameClient\Entities\GlowProperty.h" />

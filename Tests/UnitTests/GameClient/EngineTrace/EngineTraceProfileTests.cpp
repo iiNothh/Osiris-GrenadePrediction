@@ -36,6 +36,27 @@ struct NativePipTraceRecorder {
 
 NativePipTraceRecorder* activeRecorder{};
 
+class ActiveRecorderGuard {
+public:
+    explicit ActiveRecorderGuard(NativePipTraceRecorder& recorder) noexcept
+        : recorder{recorder}
+    {
+        activeRecorder = &recorder;
+    }
+
+    ~ActiveRecorderGuard()
+    {
+        if (activeRecorder == &recorder)
+            activeRecorder = nullptr;
+    }
+
+    ActiveRecorderGuard(const ActiveRecorderGuard&) = delete;
+    ActiveRecorderGuard& operator=(const ActiveRecorderGuard&) = delete;
+
+private:
+    NativePipTraceRecorder& recorder;
+};
+
 template <typename T>
 void writeOutput(engine_trace::OutputStorage& output, std::size_t offset, T value) noexcept
 {
@@ -169,12 +190,14 @@ struct NativePipEngineTraceContext {
 
     NativePipEngineTraceContext() noexcept
         : clientCodeSectionStorage{std::span{callbackBytes}}
+        , clientVmtSectionStorage{std::span{reinterpret_cast<const std::byte*>(baseVtable), sizeof(baseVtable)}}
         , results{*this}
     {
     }
 
     [[nodiscard]] const PatternSearchResults& patternSearchResults() const noexcept { return results; }
     [[nodiscard]] const MemorySection& clientCodeSection() const noexcept { return clientCodeSectionStorage; }
+    [[nodiscard]] const MemorySection& clientVmtSection() const noexcept { return clientVmtSectionStorage; }
 
     void setDependencyAvailable(NativePipDependency dependency, bool available) noexcept
     {
@@ -199,6 +222,7 @@ struct NativePipEngineTraceContext {
     void* managerHolder{&managerObject};
     std::array<std::byte, 0xA00> markerStorage{};
     MemorySection clientCodeSectionStorage;
+    MemorySection clientVmtSectionStorage;
     PatternSearchResults results;
     bool traceShapeAvailable{true};
     bool managerStorageAvailable{true};
@@ -221,6 +245,20 @@ struct NativePipEngineTraceContext {
 
 using NativePipEngineTrace = EngineTrace<NativePipEngineTraceContext>;
 
+struct ReducedNativePipEngineTraceContext {
+    struct PatternSearchResults {
+        template <typename>
+        [[nodiscard]] static consteval bool supports() noexcept
+        {
+            return false;
+        }
+    };
+
+    [[nodiscard]] const PatternSearchResults& patternSearchResults() const noexcept { return results; }
+
+    PatternSearchResults results;
+};
+
 TEST(EngineTraceNativePipProfileTest, RequiresEveryResolvedProfileDependency)
 {
     constexpr std::array dependencies{
@@ -240,7 +278,7 @@ TEST(EngineTraceNativePipProfileTest, RequiresEveryResolvedProfileDependency)
     for (const auto dependency : dependencies) {
         NativePipEngineTraceContext context;
         NativePipTraceRecorder recorder{context.baseVtable};
-        activeRecorder = &recorder;
+        ActiveRecorderGuard activeRecorderGuard{recorder};
         context.setDependencyAvailable(dependency, false);
         NativePipEngineTrace trace{context};
 
@@ -248,14 +286,46 @@ TEST(EngineTraceNativePipProfileTest, RequiresEveryResolvedProfileDependency)
         EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
         EXPECT_EQ(recorder.traceShapeCalls, 0);
     }
-    activeRecorder = nullptr;
+}
+
+TEST(EngineTraceNativePipProfileTest, ReducedPatternResultsAreUnavailableWithoutNativeCalls)
+{
+    ReducedNativePipEngineTraceContext context;
+    EngineTrace trace{context};
+
+    EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
+    EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
+}
+
+TEST(EngineTraceNativePipProfileTest, RejectsNonFiniteInFlightInputsBeforeNativeCalls)
+{
+    constexpr auto nan = std::bit_cast<float>(std::uint32_t{0x7FC00000});
+    constexpr auto infinity = std::bit_cast<float>(std::uint32_t{0x7F800000});
+    constexpr std::array invalidVectors{
+        cs2::Vector{nan, 0.0f, 0.0f},
+        cs2::Vector{infinity, 0.0f, 0.0f}
+    };
+
+    NativePipEngineTraceContext context;
+    NativePipTraceRecorder recorder{context.baseVtable};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    NativePipEngineTrace trace{context};
+
+    for (const auto invalid : invalidVectors) {
+        EXPECT_FALSE(trace.traceInFlightGrenadeHull(invalid, {}, {}).hasValue());
+        EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, invalid, {}).hasValue());
+    }
+
+    EXPECT_EQ(recorder.initCalls, 0);
+    EXPECT_EQ(recorder.secondExclusionCalls, 0);
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
 TEST(EngineTraceNativePipProfileTest, RequiresValidOutputAndManagerDependencies)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
 
     context.endPositionOffset = 0;
@@ -274,63 +344,84 @@ TEST(EngineTraceNativePipProfileTest, RequiresValidOutputAndManagerDependencies)
     EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
     EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
     EXPECT_EQ(recorder.traceShapeCalls, 0);
-    activeRecorder = nullptr;
 }
 
 TEST(EngineTraceNativePipProfileTest, RejectsOutOfRangeCallbackBeforeReadingItsBytes)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     context.clientCodeSectionStorage = MemorySection{};
     NativePipEngineTrace trace{context};
 
     EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
     EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
     EXPECT_EQ(recorder.traceShapeCalls, 0);
-    activeRecorder = nullptr;
+}
+
+TEST(EngineTraceNativePipProfileTest, RejectsBaseVtableOutsideTheClientVmtSection)
+{
+    NativePipEngineTraceContext context;
+    NativePipTraceRecorder recorder{context.baseVtable};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    context.clientVmtSectionStorage = {};
+    NativePipEngineTrace trace{context};
+
+    EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
+    EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
+}
+
+TEST(EngineTraceNativePipProfileTest, RejectsBaseVtableWithoutTwoReadableEntries)
+{
+    NativePipEngineTraceContext context;
+    NativePipTraceRecorder recorder{context.baseVtable};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    context.clientVmtSectionStorage = MemorySection{std::span{reinterpret_cast<const std::byte*>(context.baseVtable), sizeof(void*)}};
+    NativePipEngineTrace trace{context};
+
+    EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
+    EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
 TEST(EngineTraceNativePipProfileTest, RejectsUnexpectedCallbackBytesWithoutTracing)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     context.callbackBytes[1] = std::byte{};
     NativePipEngineTrace trace{context};
 
     EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
     EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
     EXPECT_EQ(recorder.traceShapeCalls, 0);
-    activeRecorder = nullptr;
 }
 
 TEST(EngineTraceNativePipProfileTest, RejectsUnexpectedPrimaryStructuralDeltaWithoutTracing)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     context.primaryToSecondaryCallsiteOffset = 0x20F;
     NativePipEngineTrace trace{context};
 
     EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
     EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
     EXPECT_EQ(recorder.traceShapeCalls, 0);
-    activeRecorder = nullptr;
 }
 
 TEST(EngineTraceNativePipProfileTest, RejectsWrongProfileCalleeWithoutTracing)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     context.secondaryCandidateEnumerationFunctionOffset = 0x401;
     NativePipEngineTrace trace{context};
 
     EXPECT_FALSE(trace.isInFlightGrenadeTraceAvailable());
     EXPECT_FALSE(trace.traceInFlightGrenadeHull({}, {}, {}).hasValue());
     EXPECT_EQ(recorder.traceShapeCalls, 0);
-    activeRecorder = nullptr;
 }
 
 TEST(EngineTraceNativePipProfileTest, RejectsInvalidFilterInitializationBeforeTracing)
@@ -345,7 +436,7 @@ TEST(EngineTraceNativePipProfileTest, RejectsInvalidFilterInitializationBeforeTr
     for (const auto outcome : outcomes) {
         NativePipEngineTraceContext context;
         NativePipTraceRecorder recorder{context.baseVtable, outcome};
-        activeRecorder = &recorder;
+        ActiveRecorderGuard activeRecorderGuard{recorder};
         NativePipEngineTrace trace{context};
 
         EXPECT_TRUE(trace.isInFlightGrenadeTraceAvailable());
@@ -354,14 +445,13 @@ TEST(EngineTraceNativePipProfileTest, RejectsInvalidFilterInitializationBeforeTr
         EXPECT_EQ(recorder.secondExclusionCalls, 0);
         EXPECT_EQ(recorder.traceShapeCalls, 0);
     }
-    activeRecorder = nullptr;
 }
 
 TEST(EngineTraceNativePipProfileTest, AppliesOverlayThenSecondExclusionBeforeTracing)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{context.baseVtable};
-    activeRecorder = &recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
     std::byte firstExcluded{};
     std::byte secondExcluded{};
@@ -375,7 +465,6 @@ TEST(EngineTraceNativePipProfileTest, AppliesOverlayThenSecondExclusionBeforeTra
     EXPECT_EQ(recorder.traceShapeCalls, 1);
     EXPECT_TRUE(recorder.overlayAppliedBeforeSecondExclusion);
     EXPECT_TRUE(recorder.traceShapeCalledAfterSecondExclusion);
-    activeRecorder = nullptr;
 }
 
 }

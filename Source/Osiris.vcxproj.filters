@@ -1444,6 +1444,12 @@
     <ClInclude Include="GameClient\Entities\EntityClassifier.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="GameClient\Entities\GrenadeKind.h">
+      <Filter>GameClient\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\Entities\GrenadeKindMapper.h">
+      <Filter>GameClient\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="GameClient\Entities\GameRules.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
@@ -1964,12 +1970,6 @@
       <Filter>CS2\Classes\Entities</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeGravity.h">
-      <Filter>Features\Visuals</Filter>
-    </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeKind.h">
-      <Filter>Features\Visuals</Filter>
-    </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeKindMapper.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeLaunchSelection.h">

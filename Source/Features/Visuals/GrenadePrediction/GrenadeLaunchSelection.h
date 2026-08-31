@@ -3,7 +3,7 @@
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
 #include <Utils/Optional.h>
 
-enum class GrenadeLaunchPreparationStatus { Finalized, Unavailable, Ready };
+enum class GrenadeLaunchPreparationStatus { Unavailable, Ready };
 
 struct GrenadeLaunchPreparation {
     GrenadeLaunchPreparationStatus status;
@@ -15,7 +15,7 @@ template <typename NativeProvider, typename ManualProvider>
 [[nodiscard]] GrenadeLaunchPreparation prepareGrenadeLaunch(bool finalized, bool nativeLaunchEligible, NativeProvider&& nativeProvider, ManualProvider&& manualProvider) noexcept
 {
     if (finalized)
-        return {GrenadeLaunchPreparationStatus::Finalized, {}};
+        return {GrenadeLaunchPreparationStatus::Unavailable, {}};
     if (nativeLaunchEligible) {
         auto nativeState = nativeProvider();
         if (nativeState.hasValue())
