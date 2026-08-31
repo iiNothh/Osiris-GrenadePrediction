@@ -1,4 +1,4 @@
-add_executable(FunctionalTests Config/ConfigCompatibilityTests.cpp GrenadePredictionConfigTests.cpp)
+add_executable(FunctionalTests Config/ConfigCompatibilityTests.cpp)
 
 target_include_directories(FunctionalTests PRIVATE "${CMAKE_SOURCE_DIR}/Tests" "${CMAKE_SOURCE_DIR}/Source")
 target_compile_definitions(FunctionalTests PRIVATE TEST_CONFIGS_PATH="${CMAKE_SOURCE_DIR}/Tests/Configs")

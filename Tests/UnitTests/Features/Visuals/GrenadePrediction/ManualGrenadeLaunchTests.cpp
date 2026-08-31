@@ -41,6 +41,21 @@ TEST(ManualGrenadeLaunchTest, FallsBackToManualLaunchWhenNativeIsUnavailable)
     EXPECT_EQ(prepared.state.value().velocity, manual.velocity);
 }
 
+TEST(ManualGrenadeLaunchTest, FinalizedLaunchDoesNotInvokeProviders)
+{
+    int nativeCalls{};
+    int manualCalls{};
+
+    const auto prepared = prepareGrenadeLaunch(true, true,
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
+
+    EXPECT_EQ(prepared.status, GrenadeLaunchPreparationStatus::Unavailable);
+    EXPECT_FALSE(prepared.state.hasValue());
+    EXPECT_EQ(nativeCalls, 0);
+    EXPECT_EQ(manualCalls, 0);
+}
+
 TEST(ManualGrenadeLaunchTest, UsesFullStrengthUntilPinnedStrengthIsCaptured)
 {
     GrenadeThrowObservation observation;

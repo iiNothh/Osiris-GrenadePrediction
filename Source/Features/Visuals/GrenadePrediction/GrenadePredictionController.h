@@ -1,5 +1,6 @@
 #pragma once
 
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <Utils/Math.h>
@@ -27,7 +28,7 @@ public:
     }
 
     template <typename HideLive, typename HideCached>
-    static void clearUnavailableInFlightTrace(GrenadePredictionState& state, HideLive&& hideLive, HideCached&& hideCached) noexcept
+    static void clearPredictionAndHidePanels(GrenadePredictionState& state, HideLive&& hideLive, HideCached&& hideCached) noexcept
     {
         clearPredictionState(state);
         hideLive();
@@ -161,13 +162,13 @@ public:
     template <typename Projectile, typename Decoy>
     [[nodiscard]] static bool updateDecoyLiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle, const Decoy& decoy) noexcept
     {
-        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::Decoy, {.decoyShotTick = decoy.decoyShotTick()});
+        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, GrenadeKind::Decoy, {.decoyShotTick = decoy.decoyShotTick()});
     }
 
     template <typename Projectile>
     [[nodiscard]] static bool updateHELiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
     {
-        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, cs2::GrenadeKind::HEGrenade,
+        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, GrenadeKind::HEGrenade,
             {.heExplodeEffectTickBegin = projectile.explodeEffectTickBegin()});
     }
 };

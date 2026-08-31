@@ -203,6 +203,11 @@ struct HookContext {
         return fullGlobalContext.clientCodeSection;
     }
 
+    [[nodiscard]] const MemorySection& clientVmtSection() const noexcept
+    {
+        return fullGlobalContext.clientVmtSection;
+    }
+
     [[nodiscard]] auto& hudState() noexcept
     {
         return fullGlobalContext.hudState;

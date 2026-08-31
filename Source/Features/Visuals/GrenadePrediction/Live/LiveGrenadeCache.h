@@ -7,7 +7,7 @@
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
 #include <CS2/Classes/Vector.h>
 #include <CS2/Constants/EntityHandle.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeKind.h>
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Utils/Math.h>
 #include <Utils/Optional.h>
 
@@ -16,7 +16,7 @@ struct LiveGrenadeSnapshot {
     cs2::CEntityHandle throwerHandle{};
     cs2::Vector initialPosition{};
     cs2::Vector initialVelocity{};
-    cs2::GrenadeKind kind{cs2::GrenadeKind::None};
+    GrenadeKind kind{GrenadeKind::None};
     std::uint32_t observationSequence{};
     bool seen{};
     bool lifecycleEnded{};
@@ -140,7 +140,7 @@ public:
 private:
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
     {
-        return isValidHandle(grenade.projectileHandle) && isValidHandle(grenade.throwerHandle) && grenade.kind != cs2::GrenadeKind::None
+        return isValidHandle(grenade.projectileHandle) && isValidHandle(grenade.throwerHandle) && grenade.kind != GrenadeKind::None
             && Math::isFinite(grenade.initialPosition.x) && Math::isFinite(grenade.initialPosition.y) && Math::isFinite(grenade.initialPosition.z)
             && Math::isFinite(grenade.initialVelocity.x) && Math::isFinite(grenade.initialVelocity.y) && Math::isFinite(grenade.initialVelocity.z);
     }

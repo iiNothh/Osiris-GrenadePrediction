@@ -1,7 +1,7 @@
 #pragma once
 
 #include <CS2/Classes/Vector.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeKind.h>
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
@@ -57,13 +57,13 @@ public:
         return finite(spawnPos) ? Optional<cs2::Vector>{spawnPos} : Optional<cs2::Vector>{};
     }
 
-    void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
+    void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         trajectory.clear();
         trajectory.endPos = launch.origin;
         SimulationScratch scratch{&trajectory, configuredPlayerCollisionSnapshot};
 
-        if (kind == cs2::GrenadeKind::None || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f)
+        if (kind == GrenadeKind::None || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f)
             return;
 
         auto position = launch.origin;
@@ -83,12 +83,12 @@ public:
 
             bounceCount += result.contactsCount;
             landedOnSurface = landedOnSurface || result.impactDetonate;
-            const bool stopped = (kind == cs2::GrenadeKind::SmokeGrenade || kind == cs2::GrenadeKind::Decoy)
+            const bool stopped = (kind == GrenadeKind::SmokeGrenade || kind == GrenadeKind::Decoy)
                 && (position - previousPosition).squareLength() < grenade_prediction_params::kStopDisplacementSq;
             if (result.impactDetonate || stopped || bounceCount > grenade_prediction_params::kMaxBounces || shouldDetonate(kind, tick)) {
                 trajectory.endPos = position;
                 trajectory.valid = true;
-                if (kind == cs2::GrenadeKind::Molotov || kind == cs2::GrenadeKind::Incendiary)
+                if (kind == GrenadeKind::Molotov || kind == GrenadeKind::Incendiary)
                     trajectory.validLanding = landedOnSurface;
                 break;
             }
@@ -158,7 +158,7 @@ private:
             return {};
         return trace;
     }
-    [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
+    [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         StepResult result;
         if (!scratch.playerResponseUsed && scratch.playerCollisionSnapshot) {
@@ -179,7 +179,7 @@ private:
         }
         return result;
     }
-    [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind, void* skipEntity,
+    [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
         StepResult& result, float serverGravity) noexcept
     {
         const float oldZ = velocity.z;
@@ -223,7 +223,7 @@ private:
         return {};
     }
     [[nodiscard]] CollisionResult continueAfterDynamicProp(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity,
-        cs2::Vector movement, float impactFraction, cs2::GrenadeKind kind, void* skipEntity, StepResult& result) noexcept
+        cs2::Vector movement, float impactFraction, GrenadeKind kind, void* skipEntity, StepResult& result) noexcept
     {
         const auto continuationMovement = movement * ((1.0f - impactFraction) * 0.4f);
         const auto continuation = traceInFlight(scratch, position, position + continuationMovement, skipEntity);
@@ -239,7 +239,7 @@ private:
         appendWorldContactPoint(scratch, position);
         return applyContactResponse(continuation.value(), velocity, kind);
     }
-    [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept
+    [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, GrenadeKind kind) noexcept
     {
         auto bounce = clipVelocity(velocity, trace.normal, 2.0f) * grenade_prediction_params::kElasticity;
         const float speedSq = bounce.squareLength();
@@ -251,7 +251,7 @@ private:
             if (directionDot > grenade_prediction_params::kSteepFloorDampingDirectionDot)
                 bounce = bounce * (grenade_prediction_params::kSteepFloorDampingScaleBase - directionDot);
         }
-        if ((kind == cs2::GrenadeKind::Molotov || kind == cs2::GrenadeKind::Incendiary)
+        if ((kind == GrenadeKind::Molotov || kind == GrenadeKind::Incendiary)
             && (trace.normal.z >= grenade_prediction_params::kMolotovSlope || speedSq < grenade_prediction_params::kStopSpeedSq)) {
             velocity = {};
             return {.impactDetonate = true, .stopped = true};
@@ -324,19 +324,19 @@ private:
             return entity && entity->identity && entity->identity->entity == entity && entity->identity->handle == scratch.passedPaneHandle ? entity : nullptr;
         }
     }
-    [[nodiscard]] static bool shouldDetonate(cs2::GrenadeKind kind, int tick) noexcept
+    [[nodiscard]] static bool shouldDetonate(GrenadeKind kind, int tick) noexcept
     {
         const float elapsed = static_cast<float>(tick + 1) * grenade_prediction_params::kSimDt;
         switch (kind) {
-        case cs2::GrenadeKind::Flashbang:
-        case cs2::GrenadeKind::HEGrenade:
+        case GrenadeKind::Flashbang:
+        case GrenadeKind::HEGrenade:
             return elapsed > grenade_prediction_params::kDetonateTimeHeFlash + grenade_prediction_params::kClientTracerHorizonPadding;
-        case cs2::GrenadeKind::Molotov:
-        case cs2::GrenadeKind::Incendiary:
+        case GrenadeKind::Molotov:
+        case GrenadeKind::Incendiary:
             return elapsed > grenade_prediction_params::kDetonateTimeMolotov + grenade_prediction_params::kClientTracerHorizonPadding;
-        case cs2::GrenadeKind::Decoy:
+        case GrenadeKind::Decoy:
             return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeDecoy;
-        case cs2::GrenadeKind::SmokeGrenade:
+        case GrenadeKind::SmokeGrenade:
             return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeSmokeCap;
         default:
             return false;

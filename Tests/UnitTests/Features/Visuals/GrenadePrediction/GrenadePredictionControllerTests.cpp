@@ -2,13 +2,14 @@
 
 #include <limits>
 
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Platform/GrenadePredictionCapabilities.h>
 
 namespace
 {
 
-TEST(GrenadePredictionControllerTest, ClearsCachedAndTemporaryTrajectoriesWhenInFlightTracingIsUnavailable)
+TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
 {
     GrenadePredictionState state;
     state.tempTrajectory.valid = true;
@@ -23,7 +24,7 @@ TEST(GrenadePredictionControllerTest, ClearsCachedAndTemporaryTrajectoriesWhenIn
     bool hidLive{};
     bool hidCached{};
 
-    GrenadePredictionController::clearUnavailableInFlightTrace(state, [&] { hidLive = true; }, [&] { hidCached = true; });
+    GrenadePredictionController::clearPredictionAndHidePanels(state, [&] { hidLive = true; }, [&] { hidCached = true; });
 
     EXPECT_FALSE(state.tempTrajectory.valid);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
@@ -54,7 +55,7 @@ struct Decoy {
 
 [[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle handle) noexcept
 {
-    return {handle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, cs2::GrenadeKind::Flashbang};
+    return {handle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, GrenadeKind::Flashbang};
 }
 
 TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecution)

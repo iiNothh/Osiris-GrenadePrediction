@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include <CS2/Classes/ConVarTypes.h>
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
 
 struct ScriptedGrenadeTrace {
@@ -112,18 +113,18 @@ struct GrenadeSimulatorTestHookContext {
 template <typename HookContext>
 struct GrenadeSimulatorTestAccess {
     using Simulator = GrenadeSimulator<HookContext>;
-    [[nodiscard]] static StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind,
+    [[nodiscard]] static StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
         void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
     {
         typename Simulator::SimulationScratch scratch{nullptr, simulator.configuredPlayerCollisionSnapshot};
         return simulator.step(scratch, position, velocity, kind, skipEntity, gravity);
     }
-    [[nodiscard]] static bool shouldDetonate(cs2::GrenadeKind kind, int tick) noexcept { return Simulator::shouldDetonate(kind, tick); }
-    [[nodiscard]] static auto applyContactResponse(Simulator& simulator, const TraceResult& trace, cs2::Vector& velocity, cs2::GrenadeKind kind) noexcept
+    [[nodiscard]] static bool shouldDetonate(GrenadeKind kind, int tick) noexcept { return Simulator::shouldDetonate(kind, tick); }
+    [[nodiscard]] static auto applyContactResponse(Simulator& simulator, const TraceResult& trace, cs2::Vector& velocity, GrenadeKind kind) noexcept
     {
         return simulator.applyContactResponse(trace, velocity, kind);
     }
-    [[nodiscard]] static StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, cs2::GrenadeKind kind,
+    [[nodiscard]] static StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
         void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
     {
         typename Simulator::SimulationScratch scratch{nullptr, nullptr};

@@ -4,12 +4,12 @@
 
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
 #include <CS2/Classes/Vector.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeKind.h>
+#include <GameClient/Entities/GrenadeKind.h>
 
 struct HeldGrenadeSimulationInput {
     cs2::Vector launchOrigin{};
     cs2::Vector launchVelocity{};
-    cs2::GrenadeKind kind{cs2::GrenadeKind::None};
+    GrenadeKind kind{GrenadeKind::None};
     float gravity{};
     std::uint64_t collisionSnapshotRevision{};
     cs2::CEntityHandle localPawnHandle{};

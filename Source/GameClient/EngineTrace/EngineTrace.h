@@ -30,6 +30,25 @@ namespace engine_trace
     constexpr std::uint64_t kContentsDebris = 0x100000;
     constexpr std::uint64_t kMaskShot = kContentsSolid | kContentsHitboxes | kContentsWindow | kContentsPassBullets | kContentsPlayer | kContentsNpc | kContentsDebris;
     constexpr std::uint64_t kMaskGrenade = (kMaskShot & ~kContentsWindow) | kContentsSky;
+
+#if IS_WIN64()
+    template <typename PatternSearchResults>
+    inline constexpr bool hasNativePipTracePatternSupport = PatternSearchResults::template supports<TraceShapeFunctionPointer>()
+        && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
+        && PatternSearchResults::template supports<InitFilterFunctionPointer>()
+        && PatternSearchResults::template supports<AddSecondExcludedEntityToFilterFunctionPointer>()
+        && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
+        && PatternSearchResults::template supports<CGameTraceNormalOffset>()
+        && PatternSearchResults::template supports<CGameTraceFractionOffset>()
+        && PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>()
+        && PatternSearchResults::template supports<CTraceFilterBaseVtablePointer>()
+        && PatternSearchResults::template supports<NativePipTraceFilterBodyProfilePointer>()
+        && PatternSearchResults::template supports<NativePipPushFilterConstructorPointer>()
+        && PatternSearchResults::template supports<PrimaryTraceShapeCandidateProfileMarker>()
+        && PatternSearchResults::template supports<SecondaryTraceShapeCandidateProfileMarker>()
+        && PatternSearchResults::template supports<PrimaryToSecondaryEnumerationCallsiteMarker>()
+        && PatternSearchResults::template supports<SecondaryCandidateEnumerationFunctionPointer>();
+#endif
 }
 
 template <typename HookContext>
@@ -56,6 +75,9 @@ public:
         cs2::Vector start, cs2::Vector end, engine_trace::TraceFilterExcludedEntities excludedEntities,
         std::uint64_t mask, std::uint8_t collisionGroup, std::uint8_t queryByte) const noexcept
     {
+        if (!engine_trace::isFinite(start) || !engine_trace::isFinite(end))
+            return {};
+
         using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
         if constexpr (PatternSearchResults::template supports<TraceShapeFunctionPointer>()
             && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
@@ -97,21 +119,7 @@ public:
     {
 #if IS_WIN64()
         using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
-        if constexpr (PatternSearchResults::template supports<TraceShapeFunctionPointer>()
-            && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
-            && PatternSearchResults::template supports<InitFilterFunctionPointer>()
-            && PatternSearchResults::template supports<AddSecondExcludedEntityToFilterFunctionPointer>()
-            && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
-            && PatternSearchResults::template supports<CGameTraceNormalOffset>()
-            && PatternSearchResults::template supports<CGameTraceFractionOffset>()
-            && PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>()
-            && PatternSearchResults::template supports<CTraceFilterBaseVtablePointer>()
-            && PatternSearchResults::template supports<NativePipTraceFilterBodyProfilePointer>()
-            && PatternSearchResults::template supports<NativePipPushFilterConstructorPointer>()
-            && PatternSearchResults::template supports<PrimaryTraceShapeCandidateProfileMarker>()
-            && PatternSearchResults::template supports<SecondaryTraceShapeCandidateProfileMarker>()
-            && PatternSearchResults::template supports<PrimaryToSecondaryEnumerationCallsiteMarker>()
-            && PatternSearchResults::template supports<SecondaryCandidateEnumerationFunctionPointer>()) {
+        if constexpr (engine_trace::hasNativePipTracePatternSupport<PatternSearchResults>) {
             const auto& results = hookContext.patternSearchResults();
             const auto traceShape = results.template get<TraceShapeFunctionPointer>();
             const auto managerStorage = results.template get<GameTraceManagerStoragePointer>();
@@ -137,7 +145,7 @@ public:
                 return false;
 
             void* const managerHolder = *managerStorage;
-            const auto* const callback = engine_trace::nativePipBaseFilterCallback(baseVtable);
+            const auto* const callback = engine_trace::nativePipBaseFilterCallback(hookContext.clientVmtSection(), baseVtable);
             if (managerHolder == nullptr || !engine_trace::hasExpectedNativePipBaseFilterCallback(hookContext.clientCodeSection(), callback))
                 return false;
 
@@ -154,45 +162,53 @@ public:
         cs2::Vector start, cs2::Vector end, engine_trace::TraceFilterExcludedEntities excludedEntities) const noexcept
     {
 #if IS_WIN64()
-        if (!isInFlightGrenadeTraceAvailable())
+        if (!engine_trace::isFinite(start) || !engine_trace::isFinite(end))
             return {};
 
-        const auto& results = hookContext.patternSearchResults();
-        const auto traceShape = results.template get<TraceShapeFunctionPointer>();
-        const auto managerStorage = results.template get<GameTraceManagerStoragePointer>();
-        const auto initFilter = results.template get<InitFilterFunctionPointer>();
-        const auto addSecondExcludedEntity = results.template get<AddSecondExcludedEntityToFilterFunctionPointer>();
-        const auto endPositionOffset = results.template get<CGameTraceEndPositionOffset>();
-        const auto normalOffset = results.template get<CGameTraceNormalOffset>();
-        const auto fractionOffset = results.template get<CGameTraceFractionOffset>();
-        const auto rawEntityHandleOffset = results.template get<CGameTraceRawEntityHandleOffset>();
-        const auto baseVtable = results.template get<CTraceFilterBaseVtablePointer>();
-        void* const managerHolder = *managerStorage;
-
-        engine_trace::FixedGrenadeHullTraceDescriptor descriptor{};
-        engine_trace::FilterStorage filter{};
-        engine_trace::OutputStorage output{};
-        if (initFilter(&filter, excludedEntities.first, engine_trace::kNativePipFirstInteraction,
-                engine_trace::kNativePipCollisionGroup, engine_trace::kNativePipQueryByte) != static_cast<void*>(&filter)
-            || !engine_trace::hasExpectedNativePipFilterInitialization(filter, baseVtable))
+        using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
+        if constexpr (!engine_trace::hasNativePipTracePatternSupport<PatternSearchResults>) {
             return {};
+        } else {
+            if (!isInFlightGrenadeTraceAvailable())
+                return {};
 
-        engine_trace::applyNativePipFilterOverlay(filter);
-        if (excludedEntities.second != nullptr)
-            addSecondExcludedEntity(&filter, excludedEntities.first, excludedEntities.second);
-        traceShape(managerHolder, &descriptor, &start, &end, &filter, &output);
+            const auto& results = hookContext.patternSearchResults();
+            const auto traceShape = results.template get<TraceShapeFunctionPointer>();
+            const auto managerStorage = results.template get<GameTraceManagerStoragePointer>();
+            const auto initFilter = results.template get<InitFilterFunctionPointer>();
+            const auto addSecondExcludedEntity = results.template get<AddSecondExcludedEntityToFilterFunctionPointer>();
+            const auto endPositionOffset = results.template get<CGameTraceEndPositionOffset>();
+            const auto normalOffset = results.template get<CGameTraceNormalOffset>();
+            const auto fractionOffset = results.template get<CGameTraceFractionOffset>();
+            const auto rawEntityHandleOffset = results.template get<CGameTraceRawEntityHandleOffset>();
+            const auto baseVtable = results.template get<CTraceFilterBaseVtablePointer>();
+            void* const managerHolder = *managerStorage;
 
-        const auto fraction = readOutput<float>(output, fractionOffset);
-        const auto endPosition = readOutput<cs2::Vector>(output, endPositionOffset);
-        const auto normal = readOutput<cs2::Vector>(output, normalOffset);
-        if (!engine_trace::isFinite(fraction) || fraction < 0.0f || fraction > 1.0f
-            || !engine_trace::isFinite(endPosition) || !engine_trace::isFinite(normal)
-            || (fraction < 1.0f && !engine_trace::hasUsableNormal(normal)))
-            return {};
+            engine_trace::FixedGrenadeHullTraceDescriptor descriptor{};
+            engine_trace::FilterStorage filter{};
+            engine_trace::OutputStorage output{};
+            if (initFilter(&filter, excludedEntities.first, engine_trace::kNativePipFirstInteraction,
+                    engine_trace::kNativePipCollisionGroup, engine_trace::kNativePipQueryByte) != static_cast<void*>(&filter)
+                || !engine_trace::hasExpectedNativePipFilterInitialization(filter, baseVtable))
+                return {};
 
-        const bool handleRead = fraction < 1.0f;
-        const auto rawEntityHandle = handleRead ? readOutput<std::int32_t>(output, rawEntityHandleOffset) : std::int32_t{};
-        return TraceResult{fraction, endPosition, normal, rawEntityHandle, handleRead};
+            engine_trace::applyNativePipFilterOverlay(filter);
+            if (excludedEntities.second != nullptr)
+                addSecondExcludedEntity(&filter, excludedEntities.first, excludedEntities.second);
+            traceShape(managerHolder, &descriptor, &start, &end, &filter, &output);
+
+            const auto fraction = readOutput<float>(output, fractionOffset);
+            const auto endPosition = readOutput<cs2::Vector>(output, endPositionOffset);
+            const auto normal = readOutput<cs2::Vector>(output, normalOffset);
+            if (!engine_trace::isFinite(fraction) || fraction < 0.0f || fraction > 1.0f
+                || !engine_trace::isFinite(endPosition) || !engine_trace::isFinite(normal)
+                || (fraction < 1.0f && !engine_trace::hasUsableNormal(normal)))
+                return {};
+
+            const bool handleRead = fraction < 1.0f;
+            const auto rawEntityHandle = handleRead ? readOutput<std::int32_t>(output, rawEntityHandleOffset) : std::int32_t{};
+            return TraceResult{fraction, endPosition, normal, rawEntityHandle, handleRead};
+        }
 #else
         static_cast<void>(start);
         static_cast<void>(end);

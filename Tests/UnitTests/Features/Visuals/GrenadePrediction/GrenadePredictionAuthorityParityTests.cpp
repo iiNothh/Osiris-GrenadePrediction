@@ -2,6 +2,7 @@
 
 #include <cstdint>
 
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
@@ -14,7 +15,7 @@ namespace
 
 constexpr cs2::CEntityHandle localPawn{7};
 
-[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, std::uint32_t sequence, cs2::GrenadeKind kind = cs2::GrenadeKind::HEGrenade) noexcept
+[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, std::uint32_t sequence, GrenadeKind kind = GrenadeKind::HEGrenade) noexcept
 {
     return {projectile, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, kind, sequence};
 }
@@ -86,7 +87,7 @@ TEST(GrenadePredictionAuthorityParityTest, RollbackAndMissingCustomTimeFollowRef
 
 TEST(GrenadePredictionAuthorityParityTest, SmokeAndExplodeVisibilityInvalidateAuthoritatively)
 {
-    EXPECT_EQ(getLiveGrenadeLifecycle(cs2::GrenadeKind::SmokeGrenade, {.smokeEffectStarted = true}), LiveGrenadeLifecycle::Remove);
+    EXPECT_EQ(getLiveGrenadeLifecycle(GrenadeKind::SmokeGrenade, {.smokeEffectStarted = true}), LiveGrenadeLifecycle::Remove);
     GrenadePredictionState state;
     state.lastCommittedTrajectory.valid = true;
     state.lastCommittedTrajectory.pointsCount = 1;

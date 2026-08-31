@@ -2,6 +2,7 @@
 
 #include <limits>
 
+#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
@@ -16,7 +17,7 @@ constexpr cs2::CEntityHandle localPawn{1};
 constexpr cs2::CEntityHandle firstProjectile{2};
 constexpr cs2::CEntityHandle secondProjectile{3};
 
-[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, cs2::GrenadeKind kind = cs2::GrenadeKind::Flashbang) noexcept
+[[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle projectile, GrenadeKind kind = GrenadeKind::Flashbang) noexcept
 {
     return {projectile, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, kind};
 }
@@ -245,8 +246,8 @@ TEST(GrenadePredictionLiveCacheTest, RemovesSmokeAndDecoyWhenLifecycleEnds)
     LiveGrenadeCache cache;
     LiveGrenadeCacheUpdater updater{cache};
     Projectile projectile{cs2::Vector{1.0f, 2.0f, 3.0f}, cs2::Vector{4.0f, 5.0f, 6.0f}, localPawn};
-    EXPECT_TRUE(updater.update(projectile, firstProjectile, cs2::GrenadeKind::SmokeGrenade, {.smokeEffectStarted = true}));
-    EXPECT_TRUE(updater.update(projectile, secondProjectile, cs2::GrenadeKind::Decoy, {.decoyShotTick = 1}));
+    EXPECT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::SmokeGrenade, {.smokeEffectStarted = true}));
+    EXPECT_TRUE(updater.update(projectile, secondProjectile, GrenadeKind::Decoy, {.decoyShotTick = 1}));
     cache.endScan();
     EXPECT_FALSE(cache.newestForThrower(localPawn).hasValue());
 }

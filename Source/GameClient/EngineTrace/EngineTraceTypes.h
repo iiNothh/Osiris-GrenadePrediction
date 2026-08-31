@@ -65,19 +65,22 @@ static_assert(sizeof(FilterStorage) == 0x48);
 static_assert(alignof(FilterStorage) == alignof(void*));
 static_assert(sizeof(OutputStorage) == kOutputCapacity && alignof(OutputStorage) == 16);
 
-[[nodiscard]] constexpr bool isNativePipFilterOverlayOffset(std::size_t offset) noexcept
+[[nodiscard]] constexpr bool isNativePipFilterWriteWhitelistedOffset(std::size_t offset) noexcept
 {
-    return (offset >= 0x08 && offset <= 0x1F) || (offset >= 0x34 && offset <= 0x40);
+    return (offset >= 0x08 && offset <= 0x1F) || (offset >= 0x34 && offset <= 0x39) || offset == 0x40;
 }
 
-static_assert(!isNativePipFilterOverlayOffset(0x00));
-static_assert(isNativePipFilterOverlayOffset(0x08));
-static_assert(isNativePipFilterOverlayOffset(0x1F));
-static_assert(!isNativePipFilterOverlayOffset(0x20));
-static_assert(!isNativePipFilterOverlayOffset(0x33));
-static_assert(isNativePipFilterOverlayOffset(0x34));
-static_assert(isNativePipFilterOverlayOffset(0x40));
-static_assert(!isNativePipFilterOverlayOffset(0x41));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x00));
+static_assert(isNativePipFilterWriteWhitelistedOffset(0x08));
+static_assert(isNativePipFilterWriteWhitelistedOffset(0x1F));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x20));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x33));
+static_assert(isNativePipFilterWriteWhitelistedOffset(0x34));
+static_assert(isNativePipFilterWriteWhitelistedOffset(0x39));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x3A));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x3F));
+static_assert(isNativePipFilterWriteWhitelistedOffset(0x40));
+static_assert(!isNativePipFilterWriteWhitelistedOffset(0x41));
 
 template <typename T>
 [[nodiscard]] T readFilterValue(const FilterStorage& filter, std::size_t offset) noexcept
@@ -96,9 +99,12 @@ void writeFilterValue(FilterStorage& filter, std::size_t offset, T value) noexce
         filter.storage[offset + i] = bytes[i];
 }
 
-[[nodiscard]] inline const std::byte* nativePipBaseFilterCallback(void** baseVtable) noexcept
+[[nodiscard]] inline const std::byte* nativePipBaseFilterCallback(const MemorySection& clientVmtSection, void** baseVtable) noexcept
 {
-    if (baseVtable == nullptr || baseVtable[1] == nullptr)
+    if (baseVtable == nullptr || !clientVmtSection.contains(reinterpret_cast<std::uintptr_t>(baseVtable), sizeof(void*) * 2))
+        return nullptr;
+
+    if (baseVtable[1] == nullptr)
         return nullptr;
 
     return static_cast<const std::byte*>(baseVtable[1]);

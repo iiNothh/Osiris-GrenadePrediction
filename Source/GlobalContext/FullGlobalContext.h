@@ -45,6 +45,7 @@
 struct FullGlobalContext {
     FullGlobalContext(PeepEventsHook peepEventsHook, DynamicLibrary clientDLL, DynamicLibrary panoramaDLL, const MemoryPatterns& memoryPatterns, Tier0Dll tier0Dll) noexcept
         : clientCodeSection{clientDLL.getCodeSection()}
+        , clientVmtSection{clientDLL.getVmtSection()}
         , patternSearchResults{memoryPatterns}
         , fileNameSymbolTableState{tier0Dll}
         , memAllocState{tier0Dll}
@@ -59,6 +60,7 @@ struct FullGlobalContext {
     OsirisDirectoryPath osirisDirectoryPath;
     ConfigState configState;
     MemorySection clientCodeSection;
+    MemorySection clientVmtSection;
     AllMemoryPatternSearchResults patternSearchResults;
     FileNameSymbolTableState fileNameSymbolTableState;
     GlowSceneObjectState glowSceneObjectState;
