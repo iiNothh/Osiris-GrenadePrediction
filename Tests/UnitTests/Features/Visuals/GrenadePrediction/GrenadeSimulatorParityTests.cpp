@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <Mocks/GrenadePrediction/ScriptedGrenadeTrace.h>
@@ -12,6 +13,13 @@ namespace
 {
 
 using Simulator = GrenadeSimulator<GrenadeSimulatorTestHookContext>;
+
+[[nodiscard]] GrenadePlayerCollisionSnapshot availablePlayerCollisionSnapshot() noexcept
+{
+    GrenadePlayerCollisionSnapshot snapshot;
+    snapshot.status = GrenadePlayerCollisionSnapshotStatus::Available;
+    return snapshot;
+}
 
 TEST(GrenadeSimulationParityTest, FallsBackToDefaultGravity)
 {
@@ -216,6 +224,139 @@ TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyWhenWorldHandleIsR
         simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, engine_trace::kWorldEntityHandle, false}, unknownVelocity, GrenadeKind::HEGrenade));
     EXPECT_NEAR(worldVelocity.z, 227.24025f, 0.001f);
     EXPECT_NEAR(unknownVelocity.z, 450.0140625f, 0.001f);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, DeeperOverlapBeatsLowerHandle)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {2.0f, -1.0f, -1.0f}, {4.0f, 1.0f, 1.0f}, true};
+    snapshot.candidates[snapshot.count++] = {100, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 100);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, NestedContainingBoundsUseNearestCenter)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {-10.0f, -10.0f, -10.0f}, {10.0f, 10.0f, 10.0f}, true};
+    snapshot.candidates[snapshot.count++] = {100, {0.0f, -1.0f, -1.0f}, {2.0f, 1.0f, 1.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {1.0f, 0.0f, 0.0f});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 100);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, RanksActualCenterDistanceInsteadOfLargestAxisDistance)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {-4.0f, -4.0f, -4.0f}, {0.0f, 0.0f, 0.0f}, true};
+    snapshot.candidates[snapshot.count++] = {100, {-4.4f, -1.0f, -1.0f}, {0.0f, 1.0f, 1.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 100);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, ReversingSnapshotOrderDoesNotChangeSelection)
+{
+    auto firstSnapshot = availablePlayerCollisionSnapshot();
+    firstSnapshot.candidates[firstSnapshot.count++] = {1, {2.0f, -1.0f, -1.0f}, {4.0f, 1.0f, 1.0f}, true};
+    firstSnapshot.candidates[firstSnapshot.count++] = {100, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+    auto secondSnapshot = availablePlayerCollisionSnapshot();
+    secondSnapshot.candidates[secondSnapshot.count++] = firstSnapshot.candidates[1];
+    secondSnapshot.candidates[secondSnapshot.count++] = firstSnapshot.candidates[0];
+
+    const auto* const firstSelection = grenade_player_collision_mirror::select(firstSnapshot, {});
+    const auto* const secondSelection = grenade_player_collision_mirror::select(secondSnapshot, {});
+
+    ASSERT_NE(firstSelection, nullptr);
+    ASSERT_NE(secondSelection, nullptr);
+    EXPECT_EQ(firstSelection->rawHandle, 100);
+    EXPECT_EQ(secondSelection->rawHandle, firstSelection->rawHandle);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, IdenticalGeometryUsesLowestHandle)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {100, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+    snapshot.candidates[snapshot.count++] = {1, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 1);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, SkipsIneligibleCandidate)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, false};
+    snapshot.candidates[snapshot.count++] = {100, {-2.0f, -2.0f, -2.0f}, {2.0f, 2.0f, 2.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 100);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, FailsClosedForUnavailableOrInvalidInput)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+
+    snapshot.status = GrenadePlayerCollisionSnapshotStatus::Unavailable;
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {}), nullptr);
+    snapshot.status = GrenadePlayerCollisionSnapshotStatus::Available;
+    snapshot.count = -1;
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {}), nullptr);
+    snapshot.count = GrenadePlayerCollisionSnapshot::kCapacity + 1;
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {}), nullptr);
+    snapshot.count = 1;
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {std::numeric_limits<float>::infinity(), 0.0f, 0.0f}), nullptr);
+    snapshot.candidates[0].mins.x = 2.0f;
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {}), nullptr);
+    snapshot.candidates[0] = {1, {-1.0f, -1.0f, -1.0f}, {std::numeric_limits<float>::infinity(), 1.0f, 1.0f}, true};
+    EXPECT_EQ(grenade_player_collision_mirror::select(snapshot, {}), nullptr);
+}
+
+TEST(GrenadePlayerCollisionSelectionTest, CoCenteredNestedBoundsUseLowestHandle)
+{
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {100, {-10.0f, -10.0f, -10.0f}, {10.0f, 10.0f, 10.0f}, true};
+    snapshot.candidates[snapshot.count++] = {1, {-1.0f, -1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}, true};
+
+    const auto* const selected = grenade_player_collision_mirror::select(snapshot, {});
+
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->rawHandle, 1);
+}
+
+TEST(GrenadeSimulationParityTest, PreservesBaselinePlayerBounceResponse)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    auto snapshot = availablePlayerCollisionSnapshot();
+    snapshot.candidates[snapshot.count++] = {1, {-2.0f, -2.0f, -2.0f}, {2.0f, 2.0f, 2.0f}, true};
+    simulator.setPlayerCollisionSnapshot(&snapshot);
+    cs2::Vector position{1.0f, 0.0f, 0.0f};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    const auto result = GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::step(simulator, position, velocity, GrenadeKind::HEGrenade);
+
+    EXPECT_TRUE(result.traceSucceeded);
+    EXPECT_NEAR(velocity.x, -30.0f, 0.001f);
+    EXPECT_NEAR(velocity.y, 0.0f, 0.001f);
+    EXPECT_NEAR(velocity.z, -5.0f, 0.001f);
+    EXPECT_NEAR(position.x, 0.53125f, 0.001f);
+    EXPECT_NEAR(position.y, 0.0f, 0.001f);
+    EXPECT_NEAR(position.z, -0.0390625f, 0.001f);
+    EXPECT_EQ(context.trace.inFlightCalls, 2);
 }
 
 }
