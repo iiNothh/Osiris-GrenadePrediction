@@ -26,10 +26,19 @@ struct Projectile {
     Optional<cs2::Vector> position;
     Optional<cs2::Vector> velocity;
     Optional<cs2::CEntityHandle> owner;
+    Optional<GrenadeProjectileSample> sample;
+    bool currentKinematicsAvailable{true};
+    bool currentTimingAvailable{true};
 
     [[nodiscard]] Optional<cs2::Vector> initialPosition() const noexcept { return position; }
     [[nodiscard]] Optional<cs2::Vector> initialVelocity() const noexcept { return velocity; }
     [[nodiscard]] Optional<cs2::CEntityHandle> thrower() const noexcept { return owner; }
+    [[nodiscard]] Optional<GrenadeProjectileSample> currentSample() const noexcept
+    {
+        if (currentKinematicsAvailable && currentTimingAvailable)
+            return sample;
+        return {};
+    }
 };
 
 struct FlashbangWeapon {};
@@ -250,6 +259,126 @@ TEST(GrenadePredictionLiveCacheTest, RemovesSmokeAndDecoyWhenLifecycleEnds)
     EXPECT_TRUE(updater.update(projectile, secondProjectile, GrenadeKind::Decoy, {.decoyShotTick = 1}));
     cache.endScan();
     EXPECT_FALSE(cache.newestForThrower(localPawn).hasValue());
+}
+
+TEST(GrenadePredictionLiveCacheTest, RecordsBaselineSnapshotWhenFirstCurrentSampleIsUnavailable)
+{
+    LiveGrenadeCache cache;
+    LiveGrenadeCacheUpdater updater{cache};
+    Projectile projectile{cs2::Vector{1.0f, 2.0f, 3.0f}, cs2::Vector{4.0f, 5.0f, 6.0f}, localPawn};
+
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+
+    const auto current = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(current.hasValue());
+    EXPECT_FALSE(current.value().currentSample.hasValue());
+    EXPECT_EQ(current.value().projectileHandle, firstProjectile);
+}
+
+TEST(GrenadePredictionLiveCacheTest, KeepsCurrentSampleAtomicWithoutChangingSnapshotIdentityOrBaselineValidity)
+{
+    LiveGrenadeCache cache;
+    LiveGrenadeCacheUpdater updater{cache};
+    Projectile projectile{cs2::Vector{1.0f, 2.0f, 3.0f}, cs2::Vector{4.0f, 5.0f, 6.0f}, localPawn};
+
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto baseline = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(baseline.hasValue());
+
+    projectile.sample = GrenadeProjectileSample{{7.0f, 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}, 20.0f, 10.0f, 0.015625f, 128};
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto sampled = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(sampled.hasValue());
+    ASSERT_TRUE(sampled.value().currentSample.hasValue());
+    EXPECT_EQ(sampled.value().observationSequence, baseline.value().observationSequence);
+    EXPECT_EQ(sampled.value().projectileHandle, baseline.value().projectileHandle);
+    EXPECT_EQ(sampled.value().throwerHandle, baseline.value().throwerHandle);
+    EXPECT_EQ(sampled.value().initialPosition, baseline.value().initialPosition);
+    EXPECT_EQ(sampled.value().initialVelocity, baseline.value().initialVelocity);
+    EXPECT_EQ(sampled.value().currentSample.value().origin, (cs2::Vector{7.0f, 8.0f, 9.0f}));
+    EXPECT_EQ(sampled.value().currentSample.value().worldTickCount, 128);
+
+    projectile.currentKinematicsAvailable = false;
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto unavailableKinematics = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(unavailableKinematics.hasValue());
+    EXPECT_FALSE(unavailableKinematics.value().currentSample.hasValue());
+    EXPECT_EQ(unavailableKinematics.value().observationSequence, baseline.value().observationSequence);
+    EXPECT_EQ(unavailableKinematics.value().projectileHandle, baseline.value().projectileHandle);
+    EXPECT_EQ(unavailableKinematics.value().throwerHandle, baseline.value().throwerHandle);
+    EXPECT_EQ(unavailableKinematics.value().kind, baseline.value().kind);
+    EXPECT_FALSE(unavailableKinematics.value().lifecycleEnded);
+
+    projectile.currentKinematicsAvailable = true;
+    projectile.currentTimingAvailable = false;
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto unavailableTiming = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(unavailableTiming.hasValue());
+    EXPECT_FALSE(unavailableTiming.value().currentSample.hasValue());
+    EXPECT_EQ(unavailableTiming.value().observationSequence, baseline.value().observationSequence);
+    EXPECT_EQ(unavailableTiming.value().projectileHandle, baseline.value().projectileHandle);
+    EXPECT_EQ(unavailableTiming.value().throwerHandle, baseline.value().throwerHandle);
+    EXPECT_EQ(unavailableTiming.value().initialPosition, baseline.value().initialPosition);
+    EXPECT_EQ(unavailableTiming.value().initialVelocity, baseline.value().initialVelocity);
+    EXPECT_FALSE(unavailableTiming.value().lifecycleEnded);
+
+    projectile.currentTimingAvailable = true;
+    projectile.sample = GrenadeProjectileSample{{std::numeric_limits<float>::quiet_NaN(), 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}, 20.0f, 10.0f, 0.015625f, 128};
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto afterNonFiniteSample = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(afterNonFiniteSample.hasValue());
+    EXPECT_FALSE(afterNonFiniteSample.value().currentSample.hasValue());
+    EXPECT_EQ(afterNonFiniteSample.value().observationSequence, baseline.value().observationSequence);
+    EXPECT_FALSE(afterNonFiniteSample.value().lifecycleEnded);
+}
+
+TEST(GrenadePredictionLiveCacheTest, CommitsLifecycleEndingObservationWhenCurrentSampleIsUnavailable)
+{
+    LiveGrenadeCache cache;
+    LiveGrenadeCacheUpdater updater{cache};
+    Projectile projectile{cs2::Vector{1.0f, 2.0f, 3.0f}, cs2::Vector{4.0f, 5.0f, 6.0f}, localPawn};
+    LiveGrenadeAuthority authority;
+    authority.observeLocalPawn(localPawn);
+
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::Flashbang));
+    cache.endScan();
+    const auto baseline = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(baseline.hasValue());
+    ASSERT_TRUE(authority.observeForSimulation(baseline.value()));
+    authority.accept(baseline.value());
+
+    projectile.currentKinematicsAvailable = false;
+    cache.beginScan();
+    ASSERT_TRUE(updater.update(projectile, firstProjectile, GrenadeKind::SmokeGrenade, {.smokeEffectStarted = true}));
+    cache.endScan();
+
+    EXPECT_FALSE(cache.newestForThrower(localPawn).hasValue());
+    const auto ended = cache.find(baseline.value().projectileHandle, baseline.value().throwerHandle, baseline.value().observationSequence);
+    ASSERT_TRUE(ended.hasValue());
+    EXPECT_TRUE(ended.value().seen);
+    EXPECT_TRUE(ended.value().lifecycleEnded);
+    EXPECT_EQ(ended.value().kind, GrenadeKind::SmokeGrenade);
+    EXPECT_FALSE(ended.value().currentSample.hasValue());
+    EXPECT_EQ(ended.value().initialPosition, baseline.value().initialPosition);
+    EXPECT_EQ(ended.value().initialVelocity, baseline.value().initialVelocity);
+    EXPECT_FALSE(cache.contains(baseline.value()));
+
+    authority.update(cache);
+    EXPECT_FALSE(authority.hasAcceptedLiveProjectile());
+    EXPECT_FALSE(authority.hasObservedLiveProjectile());
 }
 
 TEST(GrenadePredictionStateTest, HonorsVisibilityModesAndFlashExpiry)

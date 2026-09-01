@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
+#include <CS2/Classes/Vector.h>
 #include "CEntityInstance.h"
 
 namespace cs2
@@ -11,7 +12,10 @@ namespace cs2
 struct CEntitySubclassVDataBase;
 struct CGameSceneNode;
 struct CRenderComponent;
-struct Vector;
+
+struct CNetworkVelocityVector {
+    Vector velocity;
+};
 
 struct C_BaseEntity : CEntityInstance {
     using m_pGameSceneNode = CGameSceneNode*;
@@ -23,6 +27,8 @@ struct C_BaseEntity : CEntityInstance {
     using m_hOwnerEntity = CEntityHandle;
     using m_vecViewOffset = Vector;
     using m_vecAbsVelocity = Vector;
+    using m_flCreateTime = float;
+    using m_vecServerVelocity = CNetworkVelocityVector;
     using GetAbsOrigin = Vector*(C_BaseEntity* thisptr);
 };
 

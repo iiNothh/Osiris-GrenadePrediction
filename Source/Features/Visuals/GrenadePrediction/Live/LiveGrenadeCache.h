@@ -8,6 +8,7 @@
 #include <CS2/Classes/Vector.h>
 #include <CS2/Constants/EntityHandle.h>
 #include <GameClient/Entities/GrenadeKind.h>
+#include <GameClient/Entities/GrenadeProjectileSample.h>
 #include <Utils/Math.h>
 #include <Utils/Optional.h>
 
@@ -20,6 +21,7 @@ struct LiveGrenadeSnapshot {
     std::uint32_t observationSequence{};
     bool seen{};
     bool lifecycleEnded{};
+    Optional<GrenadeProjectileSample> currentSample{};
 };
 
 static_assert(std::is_trivially_copyable_v<LiveGrenadeSnapshot>);
@@ -42,6 +44,9 @@ public:
     {
         if (!isValid(snapshot))
             return false;
+
+        if (!isFinite(snapshot.currentSample))
+            snapshot.currentSample = {};
 
         for (std::size_t i = 0; i < grenadeCount; ++i) {
             if (grenades[i].projectileHandle == snapshot.projectileHandle) {
@@ -108,6 +113,21 @@ public:
         return newest;
     }
 
+    [[nodiscard]] Optional<LiveGrenadeSnapshot> find(cs2::CEntityHandle projectileHandle, cs2::CEntityHandle throwerHandle,
+        std::uint32_t observationSequence) const noexcept
+    {
+        if (!hasAuthoritativeScan())
+            return {};
+
+        for (std::size_t i = 0; i < grenadeCount; ++i) {
+            const auto& grenade = grenades[i];
+            if (grenade.projectileHandle == projectileHandle && grenade.throwerHandle == throwerHandle
+                && grenade.observationSequence == observationSequence)
+                return grenade;
+        }
+        return {};
+    }
+
     [[nodiscard]] bool contains(const LiveGrenadeSnapshot& snapshot) const noexcept
     {
         if (!hasAuthoritativeScan() || !isValid(snapshot))
@@ -148,6 +168,14 @@ private:
     [[nodiscard]] static bool isValidHandle(cs2::CEntityHandle handle) noexcept
     {
         return handle.value != cs2::INVALID_EHANDLE_INDEX;
+    }
+
+    [[nodiscard]] static bool isFinite(const Optional<GrenadeProjectileSample>& sample) noexcept
+    {
+        return !sample.hasValue()
+            || (Math::isFinite(sample.value().origin.x) && Math::isFinite(sample.value().origin.y) && Math::isFinite(sample.value().origin.z)
+                && Math::isFinite(sample.value().velocity.x) && Math::isFinite(sample.value().velocity.y) && Math::isFinite(sample.value().velocity.z)
+                && Math::isFinite(sample.value().worldTime) && Math::isFinite(sample.value().createTime) && Math::isFinite(sample.value().worldTickInterval));
     }
 
     LiveGrenadeSnapshot grenades[maxEntries]{};

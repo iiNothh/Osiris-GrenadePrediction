@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 #include <CS2/Classes/Color.h>
@@ -13,6 +14,7 @@
 #include <GameClient/Entities/TeamNumber.h>
 #include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
 #include <OutlineGlow/GlowSceneObjects.h>
+#include <Utils/Math.h>
 #include <Utils/Optional.h>
 
 #include <GameClient/EntitySystem/EntityIdentity.h>
@@ -38,6 +40,22 @@ public:
         if (entity && hookContext.patternSearchResults().template get<GetAbsOriginFunction>())
             return *hookContext.patternSearchResults().template get<GetAbsOriginFunction>()(entity);
         return {};
+    }
+
+    [[nodiscard]] Optional<float> createTime() const noexcept
+    {
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<BaseEntityCreateTimeOffset>())
+            return finite(hookContext.patternSearchResults().template get<BaseEntityCreateTimeOffset>().of(entity).toOptional());
+        else return {};
+    }
+
+    [[nodiscard]] Optional<cs2::Vector> serverVelocity() const noexcept
+    {
+        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<BaseEntityServerVelocityOffset>()) {
+            return finite(hookContext.patternSearchResults().template get<BaseEntityServerVelocityOffset>().of(entity).toOptional().transform([](const auto& velocity) noexcept {
+                return velocity.velocity;
+            }));
+        } else return {};
     }
 
     [[nodiscard]] auto absVelocity() const noexcept
@@ -188,6 +206,20 @@ public:
     }
 
 private:
+    [[nodiscard]] static Optional<float> finite(Optional<float> value) noexcept
+    {
+        if (!value.hasValue() || !Math::isFinite(value.value()))
+            return {};
+        return value;
+    }
+
+    [[nodiscard]] static Optional<cs2::Vector> finite(Optional<cs2::Vector> value) noexcept
+    {
+        if (!value.hasValue() || !Math::isFinite(value.value().x) || !Math::isFinite(value.value().y) || !Math::isFinite(value.value().z))
+            return {};
+        return value;
+    }
+
     [[nodiscard]] auto invokeWithGameSceneNodeOwner(auto& f) const noexcept
     {
         return [&f](auto&& gameSceneNode) { f(gameSceneNode.owner()); };

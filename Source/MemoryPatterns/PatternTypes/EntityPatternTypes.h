@@ -18,4 +18,6 @@ STRONG_TYPE_ALIAS(OffsetToRenderComponent, EntityOffset<cs2::C_BaseEntity::m_pRe
 STRONG_TYPE_ALIAS(OffsetToOwnerEntity, EntityOffset<cs2::C_BaseEntity::m_hOwnerEntity, std::int32_t>);
 STRONG_TYPE_ALIAS(OffsetToViewOffset, EntityOffset<cs2::C_BaseEntity::m_vecViewOffset, std::int32_t>);
 STRONG_TYPE_ALIAS(OffsetToAbsVelocity, EntityOffset<cs2::C_BaseEntity::m_vecAbsVelocity, std::int32_t>);
+STRONG_TYPE_ALIAS(BaseEntityCreateTimeOffset, EntityOffset<cs2::C_BaseEntity::m_flCreateTime, std::int32_t>);
+STRONG_TYPE_ALIAS(BaseEntityServerVelocityOffset, EntityOffset<cs2::C_BaseEntity::m_vecServerVelocity, std::int32_t>);
 STRONG_TYPE_ALIAS(GetAbsOriginFunction, cs2::C_BaseEntity::GetAbsOrigin*);

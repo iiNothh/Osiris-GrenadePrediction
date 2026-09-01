@@ -10,3 +10,5 @@ template <typename FieldType, typename OffsetType>
 using GlobalVarsOffset = FieldOffset<cs2::GlobalVars, FieldType, OffsetType>;
 
 STRONG_TYPE_ALIAS(OffsetToFrametime, GlobalVarsOffset<cs2::GlobalVars::frametime, std::int8_t>);
+STRONG_TYPE_ALIAS(GlobalVarsTickCountOffset, GlobalVarsOffset<cs2::GlobalVars::tickcount, std::int8_t>);
+STRONG_TYPE_ALIAS(GlobalVarsTickIntervalFunction, float (*)(const cs2::GlobalVars*));

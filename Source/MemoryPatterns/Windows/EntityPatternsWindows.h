@@ -16,6 +16,8 @@ struct EntityPatterns {
             .template addPattern<OffsetToOwnerEntity, CodePattern{"44 8B 81 ? ? ? ? 4C 8B DA"}.add(3).read()>()
             .template addPattern<OffsetToViewOffset, CodePattern{"F3 0F 10 15 ? ? ? ? 48 81 C1 ? ? ? ? 33 D2 E9 ? ? ? ?"}.add(11).read()>()
             .template addPattern<OffsetToAbsVelocity, CodePattern{"F2 0F 11 86 ? ? ? ? 8B 40 08 89 86 ? ? ? ? E9"}.add(4).read()>()
+            .template addPattern<BaseEntityCreateTimeOffset, CodePattern{"F3 0F 10 87 ? ? ? ? 0F 2E C6 7A ? 74 ? F3 0F 10 05 ? ? ? ? F3 0F 11 87 ? ? ? ?"}.add(4).read()>()
+            .template addPattern<BaseEntityServerVelocityOffset, CodePattern{"80 A7 ? ? ? ? FE 48 8D 8F ? ? ? ? 66 44 89 B7 ? ? ? ?"}.add(10).read()>()
             .template addPattern<GetAbsOriginFunction, CodePattern{"F8 ? 75 ? E8 ? ? ? ? F3"}.add(5).abs()>();
     }
 };
