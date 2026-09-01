@@ -1,6 +1,7 @@
 target_sources(UnitTests PRIVATE
   GrenadePredictionAuthorityParityTests.cpp
   GrenadePredictionConfigVariablesTests.cpp
+  GrenadeContinuationTests.cpp
   GrenadePredictionControllerTests.cpp
   GrenadePredictionLifecycleTests.cpp
   GrenadePredictionPrimitivesTests.cpp
@@ -8,4 +9,5 @@ target_sources(UnitTests PRIVATE
   GrenadeSimulatorParityTests.cpp
   GrenadeThrowObservationParityTests.cpp
   ManualGrenadeLaunchTests.cpp
+  TimedTrajectoryTests.cpp
 )

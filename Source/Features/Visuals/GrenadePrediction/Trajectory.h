@@ -1,9 +1,16 @@
 #pragma once
 
 #include <CS2/Classes/Vector.h>
+#include <Utils/Math.h>
+
+enum class TrajectoryMarkerKind {
+    WorldContact,
+    PlayerResponse
+};
 
 struct TrajectoryMarker {
     int pointIndex{};
+    TrajectoryMarkerKind kind{TrajectoryMarkerKind::WorldContact};
 };
 
 struct Trajectory {
@@ -13,6 +20,7 @@ struct Trajectory {
 
     int pointsCount{};
     cs2::Vector points[kPointsCapacity]{};
+    float elapsedTimes[kPointsCapacity]{};
     int markersCount{};
     int worldContactMarkersCount{};
     TrajectoryMarker markers[kMarkersCapacity]{};
@@ -32,15 +40,22 @@ struct Trajectory {
 
     [[nodiscard]] bool appendPoint(cs2::Vector point) noexcept
     {
-        if (pointsCount == kPointsCapacity)
+        const float elapsedTime = pointsCount ? elapsedTimes[pointsCount - 1] + 1.0f : 0.0f;
+        return appendPoint(point, elapsedTime);
+    }
+
+    [[nodiscard]] bool appendPoint(cs2::Vector point, float elapsedTime) noexcept
+    {
+        if (pointsCount == kPointsCapacity || !Math::isFinite(elapsedTime) || (pointsCount && elapsedTime <= elapsedTimes[pointsCount - 1]))
             return false;
-        points[pointsCount++] = point;
+        points[pointsCount] = point;
+        elapsedTimes[pointsCount++] = elapsedTime;
         return true;
     }
 
     [[nodiscard]] bool appendWorldContactMarker() noexcept
     {
-        if (worldContactMarkersCount == kWorldContactMarkersCapacity || !appendMarker())
+        if (worldContactMarkersCount == kWorldContactMarkersCapacity || !appendMarker(TrajectoryMarkerKind::WorldContact))
             return false;
         ++worldContactMarkersCount;
         return true;
@@ -48,15 +63,15 @@ struct Trajectory {
 
     [[nodiscard]] bool appendPlayerResponseMarker() noexcept
     {
-        return appendMarker();
+        return appendMarker(TrajectoryMarkerKind::PlayerResponse);
     }
 
 private:
-    [[nodiscard]] bool appendMarker() noexcept
+    [[nodiscard]] bool appendMarker(TrajectoryMarkerKind kind) noexcept
     {
         if (!pointsCount || markersCount == kMarkersCapacity)
             return false;
-        markers[markersCount++] = {pointsCount - 1};
+        markers[markersCount++] = {pointsCount - 1, kind};
         return true;
     }
 };

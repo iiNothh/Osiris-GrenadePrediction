@@ -19,6 +19,14 @@ struct StepResult {
     int contactsCount{};
 };
 
+struct GrenadeContinuationInput {
+    GrenadeLaunchState launch;
+    float elapsedTime;
+    int consumedWorldContacts;
+    bool playerResponseConsumed;
+    bool landedOnSurface{};
+};
+
 template <typename HookContext> struct GrenadeSimulatorTestAccess;
 
 template <typename HookContext>
@@ -59,25 +67,43 @@ public:
 
     void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
-        trajectory.clear();
-        trajectory.endPos = launch.origin;
-        SimulationScratch scratch{&trajectory, configuredPlayerCollisionSnapshot};
+        simulateContinuation(trajectory, {launch, 0.0f, 0, false}, kind, skipEntity, serverGravity);
+    }
 
-        if (kind == GrenadeKind::None || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f)
+    void simulateContinuation(Trajectory& trajectory, const GrenadeContinuationInput& input, GrenadeKind kind, void* skipEntity,
+        float serverGravity) noexcept
+    {
+        trajectory.clear();
+        trajectory.endPos = input.launch.origin;
+
+        if (kind == GrenadeKind::None || !finite(input.launch.origin) || !finite(input.launch.velocity) || !Math::isFinite(input.elapsedTime)
+            || input.elapsedTime < 0.0f || input.elapsedTime >= simulationHorizon() || input.consumedWorldContacts < 0
+            || input.consumedWorldContacts > grenade_prediction_params::kMaxBounces || !Math::isFinite(serverGravity) || serverGravity <= 0.0f)
             return;
 
-        auto position = launch.origin;
-        auto velocity = launch.velocity;
+        SimulationScratch scratch{&trajectory, configuredPlayerCollisionSnapshot, input.playerResponseConsumed};
+        auto position = input.launch.origin;
+        auto velocity = input.launch.velocity;
         int pointTimer{};
-        int bounceCount{};
-        bool landedOnSurface{};
+        int bounceCount{input.consumedWorldContacts};
+        bool landedOnSurface{input.landedOnSurface};
+        float terminalElapsedTime{};
+        if (!appendPointAtTime(trajectory, position, input.elapsedTime)) {
+            invalidate(trajectory, input.launch.origin);
+            return;
+        }
+
         for (int tick{}; tick < grenade_prediction_params::kMaxTicks; ++tick) {
+            const float tickStartTime = input.elapsedTime + static_cast<float>(tick) * grenade_prediction_params::kSimDt;
+            const float tickEndTime = tickStartTime + grenade_prediction_params::kSimDt;
+            if (!Math::isFinite(tickStartTime) || !Math::isFinite(tickEndTime) || tickStartTime >= simulationHorizon())
+                break;
             if (pointTimer == 0)
-                static_cast<void>(trajectory.appendPoint(position));
+                static_cast<void>(appendPointAtTime(trajectory, position, tickStartTime));
             const auto previousPosition = position;
-            const auto result = step(scratch, position, velocity, kind, skipEntity, serverGravity);
+            const auto result = step(scratch, position, velocity, kind, skipEntity, serverGravity, tickStartTime);
             if (!result.traceSucceeded || !finite(position) || !finite(velocity)) {
-                invalidate(trajectory, launch.origin);
+                invalidate(trajectory, input.launch.origin);
                 return;
             }
 
@@ -85,9 +111,10 @@ public:
             landedOnSurface = landedOnSurface || result.impactDetonate;
             const bool stopped = (kind == GrenadeKind::SmokeGrenade || kind == GrenadeKind::Decoy)
                 && (position - previousPosition).squareLength() < grenade_prediction_params::kStopDisplacementSq;
-            if (result.impactDetonate || stopped || bounceCount > grenade_prediction_params::kMaxBounces || shouldDetonate(kind, tick)) {
+            if (result.impactDetonate || stopped || bounceCount > grenade_prediction_params::kMaxBounces || shouldDetonateAtElapsedTime(kind, tickStartTime, tickEndTime)) {
                 trajectory.endPos = position;
                 trajectory.valid = true;
+                terminalElapsedTime = tickEndTime;
                 if (kind == GrenadeKind::Molotov || kind == GrenadeKind::Incendiary)
                     trajectory.validLanding = landedOnSurface;
                 break;
@@ -98,7 +125,7 @@ public:
 
         if (trajectory.valid && trajectory.pointsCount && trajectory.points[trajectory.pointsCount - 1].squareDistTo(trajectory.endPos) > 1.0f
             && trajectory.pointsCount < Trajectory::kPointsCapacity)
-            static_cast<void>(trajectory.appendPoint(trajectory.endPos));
+            static_cast<void>(appendPointAtTime(trajectory, trajectory.endPos, terminalElapsedTime));
     }
 
 private:
@@ -128,6 +155,10 @@ private:
     };
 
     [[nodiscard]] static bool finite(cs2::Vector value) noexcept { return grenade_player_collision_mirror::finite(value); }
+    [[nodiscard]] static float simulationHorizon() noexcept
+    {
+        return static_cast<float>(grenade_prediction_params::kMaxTicks) * grenade_prediction_params::kSimDt;
+    }
     [[nodiscard]] static bool validTrace(const Optional<TraceResult>& trace) noexcept
     {
         return trace.hasValue() && Math::isFinite(trace.value().fraction) && trace.value().fraction >= 0.0f && trace.value().fraction <= 1.0f
@@ -158,18 +189,25 @@ private:
             return {};
         return trace;
     }
-    [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
+    [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
+        float serverGravity) noexcept
+    {
+        return step(scratch, position, velocity, kind, skipEntity, serverGravity, 0.0f);
+    }
+    [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
+        float serverGravity, float elapsedTime) noexcept
     {
         StepResult result;
         if (!scratch.playerResponseUsed && scratch.playerCollisionSnapshot) {
             if (const auto* candidate = grenade_player_collision_mirror::select(*scratch.playerCollisionSnapshot, position);
                 candidate && grenade_player_collision_mirror::apply(position, *candidate, velocity)) {
                 scratch.playerResponseUsed = true;
-                appendPlayerResponsePoint(scratch, position);
+                appendPlayerResponsePoint(scratch, position, elapsedTime);
             }
         }
         for (int substep{}; substep < grenade_prediction_params::kMovementSubsteps; ++substep) {
-            const auto collision = movementSubstep(scratch, position, velocity, kind, skipEntity, result, serverGravity);
+            const auto collision = movementSubstep(scratch, position, velocity, kind, skipEntity, result, serverGravity,
+                elapsedTime + static_cast<float>(substep) * grenade_prediction_params::kMovementSubstepDt);
             if (!collision.traceSucceeded)
                 return {.traceSucceeded = false};
             if (collision.impactDetonate) {
@@ -181,6 +219,11 @@ private:
     }
     [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
         StepResult& result, float serverGravity) noexcept
+    {
+        return movementSubstep(scratch, position, velocity, kind, skipEntity, result, serverGravity, 0.0f);
+    }
+    [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
+        StepResult& result, float serverGravity, float elapsedTime) noexcept
     {
         const float oldZ = velocity.z;
         velocity.z -= serverGravity * grenade_prediction_params::kGravityScale * grenade_prediction_params::kMovementSubstepDt;
@@ -202,14 +245,14 @@ private:
             position = trace.value().endPos;
             velocity = velocity * 0.4f;
             result.hit = true;
-            return continueAfterDynamicProp(scratch, position, velocity, movement, trace.value().fraction, kind, skipEntity, result);
+            return continueAfterDynamicProp(scratch, position, velocity, movement, trace.value().fraction, kind, skipEntity, result, elapsedTime);
         }
         if (isUnresolvedNonWorldEntity(trace.value()))
             return {.traceSucceeded = false};
         position = trace.value().endPos;
         result.hit = true;
         ++result.contactsCount;
-        appendWorldContactPoint(scratch, position);
+        appendWorldContactPoint(scratch, position, elapsedTime + trace.value().fraction * grenade_prediction_params::kMovementSubstepDt);
         const auto response = applyContactResponse(trace.value(), velocity, kind);
         if (response.stopped || response.impactDetonate)
             return response;
@@ -223,7 +266,7 @@ private:
         return {};
     }
     [[nodiscard]] CollisionResult continueAfterDynamicProp(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity,
-        cs2::Vector movement, float impactFraction, GrenadeKind kind, void* skipEntity, StepResult& result) noexcept
+        cs2::Vector movement, float impactFraction, GrenadeKind kind, void* skipEntity, StepResult& result, float elapsedTime) noexcept
     {
         const auto continuationMovement = movement * ((1.0f - impactFraction) * 0.4f);
         const auto continuation = traceInFlight(scratch, position, position + continuationMovement, skipEntity);
@@ -236,7 +279,8 @@ private:
         position = continuation.value().endPos;
         result.hit = true;
         ++result.contactsCount;
-        appendWorldContactPoint(scratch, position);
+        appendWorldContactPoint(scratch, position, elapsedTime + (impactFraction + (1.0f - impactFraction) * continuation.value().fraction)
+            * grenade_prediction_params::kMovementSubstepDt);
         return applyContactResponse(continuation.value(), velocity, kind);
     }
     [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, GrenadeKind kind) noexcept
@@ -269,14 +313,27 @@ private:
         const float backoff = (projected > 0.0f ? projected : 0.0f) + grenade_prediction_params::kClipPushOff;
         return velocity + normal * backoff;
     }
-    void appendWorldContactPoint(const SimulationScratch& scratch, cs2::Vector point) noexcept
+    [[nodiscard]] static bool appendPointAtTime(Trajectory& trajectory, cs2::Vector point, float elapsedTime) noexcept
     {
-        if (scratch.trajectoryOutput && scratch.trajectoryOutput->appendPoint(point))
+        if (!finite(point) || !Math::isFinite(elapsedTime))
+            return false;
+        if (trajectory.pointsCount) {
+            const float previousElapsedTime = trajectory.elapsedTimes[trajectory.pointsCount - 1];
+            if (elapsedTime == previousElapsedTime)
+                return true;
+            if (elapsedTime < previousElapsedTime)
+                return false;
+        }
+        return trajectory.appendPoint(point, elapsedTime);
+    }
+    void appendWorldContactPoint(const SimulationScratch& scratch, cs2::Vector point, float elapsedTime) noexcept
+    {
+        if (scratch.trajectoryOutput && appendPointAtTime(*scratch.trajectoryOutput, point, elapsedTime))
             static_cast<void>(scratch.trajectoryOutput->appendWorldContactMarker());
     }
-    void appendPlayerResponsePoint(const SimulationScratch& scratch, cs2::Vector point) noexcept
+    void appendPlayerResponsePoint(const SimulationScratch& scratch, cs2::Vector point, float elapsedTime) noexcept
     {
-        if (scratch.trajectoryOutput && scratch.trajectoryOutput->appendPoint(point))
+        if (scratch.trajectoryOutput && appendPointAtTime(*scratch.trajectoryOutput, point, elapsedTime))
             static_cast<void>(scratch.trajectoryOutput->appendPlayerResponseMarker());
     }
     [[nodiscard]] bool getDynamicPropHandle(const TraceResult& traceResult, cs2::CEntityHandle& dynamicPropHandle) const noexcept
@@ -338,6 +395,23 @@ private:
             return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeDecoy;
         case GrenadeKind::SmokeGrenade:
             return static_cast<float>(tick) * grenade_prediction_params::kSimDt > grenade_prediction_params::kDetonateTimeSmokeCap;
+        default:
+            return false;
+        }
+    }
+    [[nodiscard]] static bool shouldDetonateAtElapsedTime(GrenadeKind kind, float tickStartTime, float tickEndTime) noexcept
+    {
+        switch (kind) {
+        case GrenadeKind::Flashbang:
+        case GrenadeKind::HEGrenade:
+            return tickEndTime > grenade_prediction_params::kDetonateTimeHeFlash + grenade_prediction_params::kClientTracerHorizonPadding;
+        case GrenadeKind::Molotov:
+        case GrenadeKind::Incendiary:
+            return tickEndTime > grenade_prediction_params::kDetonateTimeMolotov + grenade_prediction_params::kClientTracerHorizonPadding;
+        case GrenadeKind::Decoy:
+            return tickStartTime > grenade_prediction_params::kDetonateTimeDecoy;
+        case GrenadeKind::SmokeGrenade:
+            return tickStartTime > grenade_prediction_params::kDetonateTimeSmokeCap;
         default:
             return false;
         }

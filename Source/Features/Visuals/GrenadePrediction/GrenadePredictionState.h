@@ -165,7 +165,10 @@ private:
     static void copyTrajectory(Trajectory& destination, const Trajectory& source) noexcept
     {
         destination.pointsCount = source.pointsCount;
-        for (int i{}; i < source.pointsCount; ++i) destination.points[i] = source.points[i];
+        for (int i{}; i < source.pointsCount; ++i) {
+            destination.points[i] = source.points[i];
+            destination.elapsedTimes[i] = source.elapsedTimes[i];
+        }
         destination.markersCount = source.markersCount;
         destination.worldContactMarkersCount = source.worldContactMarkersCount;
         for (int i{}; i < source.markersCount; ++i) destination.markers[i] = source.markers[i];
