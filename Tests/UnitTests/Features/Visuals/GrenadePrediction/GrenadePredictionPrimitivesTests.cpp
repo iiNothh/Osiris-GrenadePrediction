@@ -52,6 +52,66 @@ TEST(GrenadePredictionThrowObservationTest, CommitsOnlyTheOwnedCompletedSequence
     EXPECT_TRUE(observation.isFinalized());
 }
 
+TEST(GrenadePredictionThrowObservationTest, ClearsFinalizedSequenceWhenThrowTimeResets)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+    observation.retainThrowStrength(0.5f);
+    ASSERT_TRUE(observation.observeThrowTime(&weapon, 10.0f));
+    ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
+    const auto finalizedSequence = observation.pendingSequence();
+
+    EXPECT_TRUE(observation.observeThrowTime(&weapon, 0.0f));
+    EXPECT_FALSE(observation.isFinalized());
+    EXPECT_FALSE(observation.isStrengthLocked());
+    EXPECT_FALSE(observation.hasPendingExecution());
+    EXPECT_NE(observation.pendingSequence(), finalizedSequence);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+}
+
+TEST(GrenadePredictionThrowObservationTest, PreparesLaunchWhenSameWeaponIsImmediatelyReequipped)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    int manualCalls{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+    observation.retainThrowStrength(0.5f);
+    ASSERT_TRUE(observation.observeThrowTime(&weapon, 10.0f));
+    ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
+
+    ASSERT_TRUE(observation.observeThrowTime(&weapon, 0.0f));
+    const auto prepared = prepareGrenadeLaunch(observation.isFinalized(), observation.hasRetainedThrowStrength,
+        []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> {
+            ++manualCalls;
+            return GrenadeLaunchState{};
+        });
+
+    EXPECT_EQ(prepared.status, GrenadeLaunchPreparationStatus::Ready);
+    EXPECT_TRUE(prepared.state.hasValue());
+    EXPECT_EQ(manualCalls, 1);
+}
+
+TEST(GrenadePredictionThrowObservationTest, ClearsPendingExecutionWithoutResettingItsSequence)
+{
+    GrenadeThrowObservation observation;
+    const int weapon{};
+    static_cast<void>(observation.observeWeapon(&weapon));
+    observation.retainThrowStrength(0.5f);
+    ASSERT_TRUE(observation.observeThrowTime(&weapon, 10.0f));
+    const auto pendingSequence = observation.pendingSequence();
+
+    EXPECT_TRUE(observation.observeThrowTime(&weapon, 0.0f));
+    EXPECT_FALSE(observation.hasPendingExecution());
+    EXPECT_FALSE(observation.isFinalized());
+    EXPECT_FALSE(observation.isStrengthLocked());
+    EXPECT_EQ(observation.pendingSequence(), pendingSequence);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.5f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
+}
+
 TEST(GrenadePredictionThrowObservationTest, TreatsNonFiniteThrowAndCurrentTimesAsUnavailable)
 {
     GrenadeThrowObservation observation;

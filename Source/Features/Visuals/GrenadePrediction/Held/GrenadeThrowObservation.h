@@ -54,6 +54,10 @@ struct GrenadeThrowObservation {
         if (!Math::isFinite(throwTime))
             return false;
         if (!(throwTime > 0.0f)) {
+            if (phase == GrenadeThrowPhase::Finalized) {
+                resetThrowSequence();
+                return true;
+            }
             if (phase != GrenadeThrowPhase::PendingExecution)
                 return false;
             pendingThrowTime = 0.0f;
