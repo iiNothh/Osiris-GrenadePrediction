@@ -10,6 +10,19 @@
 namespace
 {
 
+[[nodiscard]] constexpr engine_trace::HullTraceRequest makeRequest(cs2::Vector start, cs2::Vector end,
+    engine_trace::TraceFilterExcludedEntities excludedEntities = {}) noexcept
+{
+    return {
+        .start = start,
+        .end = end,
+        .mins = {-2.0f, -2.0f, -2.0f},
+        .maxs = {2.0f, 2.0f, 2.0f},
+        .excludedEntities = excludedEntities,
+        .filter = {.mask = engine_trace::kMaskGrenade, .collisionGroup = 4, .queryByte = 7}
+    };
+}
+
 struct GenericTraceRecorder {
     int initFilterCalls{};
     int traceShapeCalls{};
@@ -118,13 +131,46 @@ TEST(EngineTraceTest, RejectsNonFiniteGenericInputsBeforeNativeCalls)
     EngineTrace trace{context};
 
     for (const auto invalid : invalidVectors) {
-        EXPECT_FALSE(trace.traceGrenadeHull(invalid, {}, nullptr).hasValue());
-        EXPECT_FALSE(trace.traceGrenadeHull({}, invalid, nullptr, engine_trace::kMaskGrenade, 4, 7).hasValue());
+        EXPECT_FALSE(trace.traceHull(makeRequest(invalid, {})).hasValue());
+        EXPECT_FALSE(trace.traceHull(makeRequest({}, invalid)).hasValue());
     }
 
     EXPECT_EQ(context.patternSearchResultsCalls, 0);
     EXPECT_EQ(recorder.initFilterCalls, 0);
     EXPECT_EQ(recorder.traceShapeCalls, 0);
+}
+
+TEST(HullTraceRequestTest, NormalizesEntityExclusionsWithoutChangingTheSecondExclusionSlot)
+{
+    std::byte first{};
+    std::byte second{};
+
+    const engine_trace::TraceFilterExcludedEntities noEntities;
+    const engine_trace::TraceFilterExcludedEntities oneEntity{nullptr, &first};
+    const engine_trace::TraceFilterExcludedEntities twoEntities{&first, &second};
+    const engine_trace::TraceFilterExcludedEntities duplicateEntity{&first, &first};
+
+    EXPECT_EQ(noEntities.first, nullptr);
+    EXPECT_EQ(noEntities.second, nullptr);
+    EXPECT_EQ(oneEntity.first, nullptr);
+    EXPECT_EQ(oneEntity.second, &first);
+    EXPECT_EQ(twoEntities.first, &first);
+    EXPECT_EQ(twoEntities.second, &second);
+    EXPECT_EQ(duplicateEntity.first, &first);
+    EXPECT_EQ(duplicateEntity.second, nullptr);
+}
+
+TEST(HullTraceRequestTest, MapsSemanticRequestToRawDescriptor)
+{
+    const auto request = makeRequest({1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f});
+
+    const auto descriptor = engine_trace::makeHullTraceDescriptor(request);
+
+    EXPECT_EQ(descriptor.mins, request.mins);
+    EXPECT_EQ(descriptor.maxs, request.maxs);
+    EXPECT_EQ(descriptor.type, 2u);
+    EXPECT_EQ(descriptor.zeroesBeforeType[0], std::byte{});
+    EXPECT_EQ(descriptor.trailingZeroes[0], std::byte{});
 }
 
 }

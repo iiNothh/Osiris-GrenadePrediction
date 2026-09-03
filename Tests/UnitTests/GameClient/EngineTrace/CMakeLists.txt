@@ -1,10 +1,6 @@
 target_sources(UnitTests PRIVATE
+  EngineTraceBackendTests.cpp
   EngineTraceTests.cpp
   EngineTraceTypesTests.cpp
+  EngineTraceProfileTests.cpp
 )
-
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-  target_sources(UnitTests PRIVATE
-    EngineTraceProfileTests.cpp
-  )
-endif()

@@ -100,6 +100,7 @@ TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStren
 TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)
 {
     GrenadePredictionState state;
+    state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(secondProjectile)));
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
     state.liveGrenadeTrajectoryScratch.valid = true;
@@ -119,6 +120,22 @@ TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewes
     EXPECT_TRUE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
     EXPECT_EQ(state.liveGrenadeAuthority.acceptedLiveProjectile().projectileHandle, firstProjectile);
     EXPECT_FALSE(state.tempTrajectory.valid);
+}
+
+TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLiveProjectile)
+{
+    GrenadePredictionState state;
+    state.liveGrenadeCache.beginScan();
+    state.liveGrenadeCache.endScan();
+    bool simulated{};
+
+    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [&](const auto&) noexcept {
+        simulated = true;
+        return true;
+    }));
+
+    EXPECT_FALSE(simulated);
+    EXPECT_FALSE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 }
 
 TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProjectile)

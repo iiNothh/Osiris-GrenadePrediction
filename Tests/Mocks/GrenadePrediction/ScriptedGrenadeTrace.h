@@ -28,22 +28,21 @@ struct ScriptedGrenadeTrace {
             results[resultCount++] = result;
     }
     void clearAfterScript() noexcept { fallback = TraceResult{1.0f, {}, {}}; }
-    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
+    [[nodiscard]] Optional<TraceResult> traceHull(const engine_trace::HullTraceRequest& request) noexcept
     {
-        lastStart = start;
-        lastEnd = end;
-        lastSkipEntity = skipEntity;
+        lastStart = request.start;
+        lastEnd = request.end;
+        lastSkipEntity = request.excludedEntities.first;
         ++genericCalls;
         return nextResult();
     }
-    [[nodiscard]] bool isInFlightGrenadeTraceAvailable() const noexcept { return inFlightTraceAvailable; }
-    [[nodiscard]] Optional<TraceResult> traceInFlightGrenadeHull(cs2::Vector start, cs2::Vector end,
-        engine_trace::TraceFilterExcludedEntities excludedEntities) noexcept
+    [[nodiscard]] bool isNativePipHullTraceAvailable() const noexcept { return inFlightTraceAvailable; }
+    [[nodiscard]] Optional<TraceResult> traceNativePipHull(const engine_trace::HullTraceRequest& request) noexcept
     {
-        lastStart = start;
-        lastEnd = end;
-        lastExcludedFirst = excludedEntities.first;
-        lastExcludedSecond = excludedEntities.second;
+        lastStart = request.start;
+        lastEnd = request.end;
+        lastExcludedFirst = request.excludedEntities.first;
+        lastExcludedSecond = request.excludedEntities.second;
         ++inFlightCalls;
         return inFlightTraceAvailable ? nextResult() : Optional<TraceResult>{};
     }
