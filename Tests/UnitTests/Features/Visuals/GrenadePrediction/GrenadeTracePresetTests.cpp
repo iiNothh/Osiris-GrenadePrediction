@@ -37,7 +37,7 @@ void expectLegacyGrenadeRequest(const engine_trace::HullTraceRequest& request, c
     EXPECT_EQ(request.maxs, (cs2::Vector{2.0f, 2.0f, 2.0f}));
     EXPECT_EQ(request.excludedEntities.first, firstExcluded);
     EXPECT_EQ(request.excludedEntities.second, secondExcluded);
-    EXPECT_EQ(request.filter.mask, engine_trace::kMaskGrenade);
+    EXPECT_EQ(request.filter.mask, grenade_trace_preset::MASK_GRENADE);
     EXPECT_EQ(request.filter.collisionGroup, 4);
     EXPECT_EQ(request.filter.queryByte, 7);
 }
@@ -51,7 +51,9 @@ TEST(GrenadeTracePresetTest, ProducesTheExactLegacyRequest)
 
     const auto request = grenade_trace_preset::makeRequest(start, end, {&firstExcluded, &secondExcluded});
 
+    EXPECT_EQ(grenade_trace_preset::MASK_GRENADE, 0x001C200Bull);
     expectLegacyGrenadeRequest(request, start, end, &firstExcluded, &secondExcluded);
+    EXPECT_EQ(engine_trace::makeHullTraceDescriptor(request).type, 2u);
 }
 
 TEST(GrenadeTracePresetTest, SelectsTheGenericAndNativePipFacadeOperations)

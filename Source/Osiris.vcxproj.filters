@@ -1897,6 +1897,9 @@
     <ClInclude Include="CS2\Constants\RoundWinStatus.h">
       <Filter>CS2\Constants</Filter>
     </ClInclude>
+    <ClInclude Include="CS2\Constants\EngineTraceContents.h">
+      <Filter>CS2\Constants</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Hud\BombPlantAlert\BombPlantAlert.h">
       <Filter>Features\Hud\BombPlantAlert</Filter>
     </ClInclude>
