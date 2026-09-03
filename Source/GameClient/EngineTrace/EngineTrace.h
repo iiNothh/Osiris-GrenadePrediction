@@ -1,27 +1,11 @@
 #pragma once
 
-#include <cstdint>
 #include <type_traits>
 
 #include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <GameClient/EngineTrace/NativePipTrace.h>
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
 #include <Utils/Optional.h>
-
-namespace engine_trace {
-
-constexpr std::uint64_t kContentsSolid = 0x1;
-constexpr std::uint64_t kContentsHitboxes = 0x2;
-constexpr std::uint64_t kContentsSky = 0x8;
-constexpr std::uint64_t kContentsWindow = 0x1000;
-constexpr std::uint64_t kContentsPassBullets = 0x2000;
-constexpr std::uint64_t kContentsPlayer = 0x40000;
-constexpr std::uint64_t kContentsNpc = 0x80000;
-constexpr std::uint64_t kContentsDebris = 0x100000;
-constexpr std::uint64_t kMaskShot = kContentsSolid | kContentsHitboxes | kContentsWindow | kContentsPassBullets | kContentsPlayer | kContentsNpc | kContentsDebris;
-constexpr std::uint64_t kMaskGrenade = (kMaskShot & ~kContentsWindow) | kContentsSky;
-
-}
 
 template <typename HookContext>
 class EngineTrace {

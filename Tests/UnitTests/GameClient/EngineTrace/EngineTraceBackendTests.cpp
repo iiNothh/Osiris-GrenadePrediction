@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <CS2/Constants/EngineTraceContents.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 
 namespace
@@ -144,7 +145,7 @@ struct RegularEngineTraceContext {
         .mins = {-2.0f, -2.0f, -2.0f},
         .maxs = {2.0f, 2.0f, 2.0f},
         .excludedEntities = excludedEntities,
-        .filter = {.mask = engine_trace::kMaskGrenade, .collisionGroup = 4, .queryByte = 7}
+        .filter = {.mask = cs2::engine_trace::CONTENTS_SOLID, .collisionGroup = 4, .queryByte = 7}
     };
 }
 

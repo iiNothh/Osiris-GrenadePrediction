@@ -2,14 +2,20 @@
 
 #include <cstdint>
 
+#include <CS2/Constants/EngineTraceContents.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 
 namespace grenade_trace_preset {
 
 constexpr cs2::Vector kHullMins{-2.0f, -2.0f, -2.0f};
 constexpr cs2::Vector kHullMaxs{2.0f, 2.0f, 2.0f};
+constexpr std::uint64_t MASK_GRENADE = (cs2::engine_trace::CONTENTS_CATEGORY_SOLID | cs2::engine_trace::CONTENTS_CATEGORY_HITBOXES
+    | cs2::engine_trace::CONTENTS_CATEGORY_SKY | cs2::engine_trace::CONTENTS_CATEGORY_WINDOW | cs2::engine_trace::CONTENTS_CATEGORY_PASS_BULLETS
+    | cs2::engine_trace::CONTENTS_CATEGORY_PLAYER | cs2::engine_trace::CONTENTS_CATEGORY_NPC | cs2::engine_trace::CONTENTS_CATEGORY_DEBRIS)
+    & ~cs2::engine_trace::CONTENTS_CATEGORY_WINDOW;
+
 constexpr engine_trace::TraceFilterParameters kFilter{
-    .mask = engine_trace::kMaskGrenade,
+    .mask = MASK_GRENADE,
     .collisionGroup = 4,
     .queryByte = 7
 };

@@ -1,10 +1,12 @@
 #include <array>
 #include <bit>
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
 #include <gtest/gtest.h>
 
+#include <CS2/Constants/EngineTraceContents.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 
 namespace
@@ -19,14 +21,47 @@ namespace
         .mins = {-2.0f, -2.0f, -2.0f},
         .maxs = {2.0f, 2.0f, 2.0f},
         .excludedEntities = excludedEntities,
-        .filter = {.mask = engine_trace::kMaskGrenade, .collisionGroup = 4, .queryByte = 7}
+        .filter = {.mask = cs2::engine_trace::CONTENTS_SOLID, .collisionGroup = 4, .queryByte = 7}
     };
 }
 
 struct GenericTraceRecorder {
     int initFilterCalls{};
+    int addSecondExclusionCalls{};
     int traceShapeCalls{};
+    void* firstExcludedEntity{};
+    std::uint64_t filterMask{};
+    std::uint8_t collisionGroup{};
+    std::uint8_t queryByte{};
+    void* secondExclusionFirstEntity{};
+    void* secondExcludedEntity{};
+    cs2::engine_trace::HullTraceDescriptor descriptor{};
+    cs2::Vector start{};
+    cs2::Vector end{};
 };
+
+TEST(EngineTraceContentsTest, DefinesVerifiedRawCategoriesAndComposites)
+{
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_EMPTY, 0x00000000ull);
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_CATEGORY_SOLID, 0x00000001ull);
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_CATEGORY_WATER, 0x00008000ull);
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_CATEGORY_STATIC_LEVEL, 0x40000000ull);
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_SOLID, 0x000004C1ull);
+    EXPECT_EQ(cs2::engine_trace::CONTENTS_SOLID_NO_BLOCK_LOS, 0x00000481ull);
+}
+
+TEST(EngineTraceContentsTest, DefinesObservedInteractionMasks)
+{
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kWall, 0x400004C1ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kWindowDynamicProp, 0x10021400ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kRailing, 0x40002000ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kInteractiveDoor, 0x18020481ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kVentCover, 0x100200C1ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kDynamicProp, 0x10020081ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kBreakableProp, 0x10300081ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kLadder, 0x40002100ull);
+    EXPECT_EQ(cs2::engine_trace::observed_interacts_as::kPlayerEntity, 0x10060000ull);
+}
 
 GenericTraceRecorder* activeRecorder{};
 
@@ -51,18 +86,50 @@ private:
     GenericTraceRecorder& recorder;
 };
 
-[[nodiscard]] void* genericInitFilter(void*, void*, std::uint64_t, std::uint8_t, std::uint8_t) noexcept
+[[nodiscard]] void* genericInitFilter(void* storage, void* firstExcludedEntity, std::uint64_t filterMask,
+    std::uint8_t collisionGroup, std::uint8_t queryByte) noexcept
 {
-    if (activeRecorder != nullptr)
+    if (activeRecorder != nullptr) {
         ++activeRecorder->initFilterCalls;
-    return nullptr;
+        activeRecorder->firstExcludedEntity = firstExcludedEntity;
+        activeRecorder->filterMask = filterMask;
+        activeRecorder->collisionGroup = collisionGroup;
+        activeRecorder->queryByte = queryByte;
+    }
+    return storage;
 }
 
-[[nodiscard]] bool genericTraceShape(void*, const void*, const cs2::Vector*, const cs2::Vector*, void*, void*) noexcept
+void genericAddSecondExcludedEntity(void*, void* firstExcludedEntity, void* secondExcludedEntity) noexcept
 {
-    if (activeRecorder != nullptr)
+    if (activeRecorder != nullptr) {
+        ++activeRecorder->addSecondExclusionCalls;
+        activeRecorder->secondExclusionFirstEntity = firstExcludedEntity;
+        activeRecorder->secondExcludedEntity = secondExcludedEntity;
+    }
+}
+
+template <typename T>
+void writeOutput(cs2::engine_trace::TraceOutputStorage& output, std::size_t offset, T value) noexcept
+{
+    const auto bytes = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
+    for (std::size_t i{}; i < sizeof(T); ++i)
+        output.storage[offset + i] = bytes[i];
+}
+
+[[nodiscard]] bool genericTraceShape(void*, const void* descriptor, const cs2::Vector* start, const cs2::Vector* end,
+    void*, void* output) noexcept
+{
+    if (activeRecorder != nullptr) {
         ++activeRecorder->traceShapeCalls;
-    return false;
+        activeRecorder->descriptor = *static_cast<const cs2::engine_trace::HullTraceDescriptor*>(descriptor);
+        activeRecorder->start = *start;
+        activeRecorder->end = *end;
+    }
+    auto& traceOutput = *static_cast<cs2::engine_trace::TraceOutputStorage*>(output);
+    writeOutput(traceOutput, 0x10, cs2::Vector{1.0f, 2.0f, 3.0f});
+    writeOutput(traceOutput, 0x20, cs2::Vector{});
+    writeOutput(traceOutput, 0x30, 1.0f);
+    return true;
 }
 
 struct GenericEngineTraceContext {
@@ -73,6 +140,7 @@ struct GenericEngineTraceContext {
             return std::is_same_v<T, TraceShapeFunctionPointer>
                 || std::is_same_v<T, GameTraceManagerStoragePointer>
                 || std::is_same_v<T, InitFilterFunctionPointer>
+                || std::is_same_v<T, AddSecondExcludedEntityToFilterFunctionPointer>
                 || std::is_same_v<T, CGameTraceEndPositionOffset>
                 || std::is_same_v<T, CGameTraceNormalOffset>
                 || std::is_same_v<T, CGameTraceFractionOffset>;
@@ -87,6 +155,8 @@ struct GenericEngineTraceContext {
                 return &context.managerHolder;
             else if constexpr (std::is_same_v<T, InitFilterFunctionPointer>)
                 return &genericInitFilter;
+            else if constexpr (std::is_same_v<T, AddSecondExcludedEntityToFilterFunctionPointer>)
+                return &genericAddSecondExcludedEntity;
             else if constexpr (std::is_same_v<T, CGameTraceEndPositionOffset>)
                 return std::int32_t{0x10};
             else if constexpr (std::is_same_v<T, CGameTraceNormalOffset>)
@@ -111,7 +181,8 @@ struct GenericEngineTraceContext {
         return results;
     }
 
-    void* managerHolder{};
+    std::byte managerObject{};
+    void* managerHolder{&managerObject};
     mutable int patternSearchResultsCalls{};
     PatternSearchResults results;
 };
@@ -160,7 +231,7 @@ TEST(HullTraceRequestTest, NormalizesEntityExclusionsWithoutChangingTheSecondExc
     EXPECT_EQ(duplicateEntity.second, nullptr);
 }
 
-TEST(HullTraceRequestTest, MapsSemanticRequestToRawDescriptor)
+TEST(HullTraceRequestTest, MapsUnequalBoundsToHullDescriptor)
 {
     const auto request = makeRequest({1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f});
 
@@ -171,6 +242,27 @@ TEST(HullTraceRequestTest, MapsSemanticRequestToRawDescriptor)
     EXPECT_EQ(descriptor.type, 2u);
     EXPECT_EQ(descriptor.zeroesBeforeType[0], std::byte{});
     EXPECT_EQ(descriptor.trailingZeroes[0], std::byte{});
+}
+
+TEST(HullTraceRequestTest, MapsEqualBoundsToLineDescriptor)
+{
+    constexpr engine_trace::HullTraceRequest request{
+        .mins = {1.0f, 2.0f, 3.0f},
+        .maxs = {1.0f, 2.0f, 3.0f}
+    };
+
+    EXPECT_EQ(engine_trace::makeHullTraceDescriptor(request).type, 0u);
+}
+
+TEST(HullTraceRequestTest, UsesExactBoundsEqualityForDescriptorType)
+{
+    constexpr auto smallestPositiveFloat = std::bit_cast<float>(std::uint32_t{1});
+    constexpr engine_trace::HullTraceRequest request{
+        .mins = {},
+        .maxs = {smallestPositiveFloat, 0.0f, 0.0f}
+    };
+
+    EXPECT_EQ(engine_trace::makeHullTraceDescriptor(request).type, 2u);
 }
 
 }

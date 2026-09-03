@@ -82,7 +82,11 @@ using cs2::engine_trace::kWorldEntityHandle;
 
 [[nodiscard]] constexpr cs2::engine_trace::HullTraceDescriptor makeHullTraceDescriptor(const HullTraceRequest& request) noexcept
 {
-    return {.mins = request.mins, .maxs = request.maxs};
+    const auto hasEqualBounds = request.mins.x == request.maxs.x
+        && request.mins.y == request.maxs.y
+        && request.mins.z == request.maxs.z;
+    const auto type = hasEqualBounds ? 0u : 2u;
+    return {.mins = request.mins, .maxs = request.maxs, .type = type};
 }
 
 [[nodiscard]] constexpr bool hasValidTraceOutputLayout(const TraceOutputLayout& layout) noexcept
