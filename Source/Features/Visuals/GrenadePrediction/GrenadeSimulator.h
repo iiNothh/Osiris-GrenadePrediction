@@ -5,8 +5,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
-#include <GameClient/EngineTrace/EngineTrace.h>
-#include <GameClient/EngineTrace/EngineTraceTypes.h>
+#include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
 #include <GameClient/Entities/EntityClassifier.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
@@ -140,21 +139,21 @@ private:
     }
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
-        return hookContext.template make<EngineTrace>().traceGrenadeHull(start, end, skipEntity);
+        return grenade_trace_preset::traceSpawnHull(hookContext.template make<EngineTrace>(), start, end, skipEntity);
     }
     [[nodiscard]] Optional<TraceResult> traceInFlight(const SimulationScratch& scratch, cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
         if (auto* const passedPane = resolvePassedPane(scratch)) {
-            return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceInFlightGrenadeHull(start, end,
-                engine_trace::TraceFilterExcludedEntities{skipEntity, passedPane}));
+            return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), start, end,
+                {skipEntity, passedPane}));
         }
-        return validateInFlightTrace(scratch, hookContext.template make<EngineTrace>().traceInFlightGrenadeHull(start, end,
-            engine_trace::TraceFilterExcludedEntities{skipEntity, nullptr}));
+        return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), start, end,
+            {skipEntity}));
     }
     [[nodiscard]] static Optional<TraceResult> validateInFlightTrace(const SimulationScratch& scratch, Optional<TraceResult> trace) noexcept
     {
         if (trace.hasValue() && trace.value().fraction < 1.0f
-            && (!trace.value().handleRead || (scratch.hasPassedPane && trace.value().rawEntityHandle == static_cast<std::int32_t>(scratch.passedPaneHandle.value))))
+            && (!trace.value().rawEntityHandle.hasValue() || (scratch.hasPassedPane && trace.value().rawEntityHandle.value() == static_cast<std::int32_t>(scratch.passedPaneHandle.value))))
             return {};
         return trace;
     }
@@ -245,7 +244,7 @@ private:
         const float speedSq = bounce.squareLength();
         if (!finite(bounce) || !Math::isFinite(speedSq))
             return {.traceSucceeded = false};
-        if (trace.handleRead && trace.rawEntityHandle == engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
+        if (trace.rawEntityHandle.hasValue() && trace.rawEntityHandle.value() == engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
             && speedSq > grenade_prediction_params::kSteepFloorDampingSpeedSq) {
             const float directionDot = (bounce * (1.0f / Math::sqrt(speedSq))).dot(trace.normal);
             if (directionDot > grenade_prediction_params::kSteepFloorDampingDirectionDot)
@@ -286,9 +285,9 @@ private:
             context.entityClassifier().template entityIs<cs2::C_DynamicProp>(nullptr);
         }) return false;
         else {
-            if (!traceResult.handleRead)
+            if (!traceResult.rawEntityHandle.hasValue())
                 return false;
-            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle)};
+            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle.value())};
             const auto entitySystem = hookContext.template make<EntitySystem>();
             auto* const entity = entitySystem.getEntityFromHandle(handle);
             if (!entity || !entity->identity || entity->identity->entity != entity || entity->identity->handle != handle)
@@ -301,12 +300,12 @@ private:
     }
     [[nodiscard]] bool isUnresolvedNonWorldEntity(const TraceResult& traceResult) const noexcept
     {
-        if (traceResult.fraction >= 1.0f || !traceResult.handleRead || traceResult.rawEntityHandle == engine_trace::kWorldEntityHandle)
+        if (traceResult.fraction >= 1.0f || !traceResult.rawEntityHandle.hasValue() || traceResult.rawEntityHandle.value() == engine_trace::kWorldEntityHandle)
             return false;
         if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) { context.template make<EntitySystem>().getEntityFromHandle(handle); })
             return true;
         else {
-            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle)};
+            const cs2::CEntityHandle handle{static_cast<std::uint32_t>(traceResult.rawEntityHandle.value())};
             const auto entitySystem = hookContext.template make<EntitySystem>();
             const auto* const entity = entitySystem.getEntityFromHandle(handle);
             return !entity || !entity->identity || entity->identity->entity != entity || entity->identity->handle != handle || !entity->identity->entityClass;

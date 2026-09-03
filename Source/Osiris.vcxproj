@@ -97,6 +97,7 @@
     <ClInclude Include="CS2\Constants\StylePropertySymbolNames.h" />
     <ClInclude Include="CS2\Constants\StylePropertyTypeNames.h" />
     <ClInclude Include="CS2\Constants\TeamNumberConstants.h" />
+    <ClInclude Include="CS2\EngineTrace\EngineTraceTypes.h" />
     <ClInclude Include="CS2\Econ\ItemDefinitionIndex.h" />
     <ClInclude Include="CS2\Econ\ItemId.h" />
     <ClInclude Include="CS2\Econ\PaintKitIndex.h" />
@@ -202,6 +203,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeSimulator.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTracePreset.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadePredictionUpdateScheduler.h" />
@@ -293,6 +295,7 @@
     <ClInclude Include="GameClient\Econ\FauxItemId.h" />
     <ClInclude Include="GameClient\EngineTrace\EngineTrace.h" />
     <ClInclude Include="GameClient\EngineTrace\EngineTraceTypes.h" />
+    <ClInclude Include="GameClient\EngineTrace\NativePipTrace.h" />
     <ClInclude Include="GameClient\Entities\BaseEntity.h" />
     <ClInclude Include="GameClient\Entities\BaseModelEntity.h" />
     <ClInclude Include="GameClient\Entities\BaseWeapon.h" />

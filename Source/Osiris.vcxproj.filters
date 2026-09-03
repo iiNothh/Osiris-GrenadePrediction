@@ -1960,6 +1960,9 @@
     <ClInclude Include="UI\Panorama\Tabs\VisualsTab\PlayerOutlineGlowDropdownSelectionChangeHandler.h">
       <Filter>UI\Panorama\Tabs\VisualsTab</Filter>
     </ClInclude>
+    <ClInclude Include="CS2\EngineTrace\EngineTraceTypes.h">
+      <Filter>CS2</Filter>
+    </ClInclude>
     <ClInclude Include="CS2\Classes\CCollisionProperty.h">
       <Filter>CS2\Classes</Filter>
     </ClInclude>
@@ -2002,6 +2005,9 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeSimulator.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTracePreset.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
@@ -2042,6 +2048,9 @@
       <Filter>GameClient</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\EngineTrace\EngineTraceTypes.h">
+      <Filter>GameClient</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\NativePipTrace.h">
       <Filter>GameClient</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\Entities\CollisionProperty.h">

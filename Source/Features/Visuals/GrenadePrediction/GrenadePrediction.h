@@ -15,6 +15,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
+#include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <GameClient/Entities/GrenadeProjectile.h>
 #include <GameClient/Entities/DecoyProjectile.h>
@@ -37,15 +38,13 @@ public:
     {
         auto& state = context().state();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(state.playerCollisionCollectionScratch);
-        if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
+        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
     }
 
     void endLiveGrenadeScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
         auto& state = context().state();
-        if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
+        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot, state.playerCollisionCollectionScratch,
             static_cast<cs2::C_BaseEntity*>(localPawn));
     }
@@ -94,7 +93,7 @@ public:
             presentCachedTrajectory();
             return;
         } else {
-            if (!hookContext.template make<EngineTrace>().isInFlightGrenadeTraceAvailable()) {
+            if (!grenade_trace_preset::isInFlightTraceAvailable(hookContext.template make<EngineTrace>())) {
                 clearPrediction();
                 return;
             }
@@ -206,7 +205,7 @@ public:
         auto& state = context().state();
         GrenadePredictionController::beginFrame(state);
         if constexpr (GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
-            if (!hookContext.template make<EngineTrace>().isInFlightGrenadeTraceAvailable()) {
+            if (!grenade_trace_preset::isInFlightTraceAvailable(hookContext.template make<EngineTrace>())) {
                 clearPrediction();
                 return;
             }
@@ -286,11 +285,8 @@ private:
     }
     [[nodiscard]] static bool acceptedProjectilePresent(const GrenadePredictionState& state, bool hasCurtime, float curtime) noexcept
     {
-        if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            return state.liveGrenadeAuthority.hasAcceptedLiveProjectile() && !state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(hasCurtime ? Optional<float>{curtime} : Optional<float>{})
-                && state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile());
-        else
-            return false;
+        return state.liveGrenadeAuthority.hasAcceptedLiveProjectile() && !state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(hasCurtime ? Optional<float>{curtime} : Optional<float>{})
+            && state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile());
     }
     HookContext& hookContext;
 };
