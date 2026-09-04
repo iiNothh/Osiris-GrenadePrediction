@@ -78,19 +78,6 @@ void writeOutput(cs2::engine_trace::TraceOutputStorage& output, std::size_t offs
 struct RegularEngineTraceContext {
     struct PatternSearchResults {
         template <typename T>
-        [[nodiscard]] static consteval bool supports() noexcept
-        {
-            return std::is_same_v<T, TraceShapeFunctionPointer>
-                || std::is_same_v<T, GameTraceManagerStoragePointer>
-                || std::is_same_v<T, InitFilterFunctionPointer>
-                || std::is_same_v<T, AddSecondExcludedEntityToFilterFunctionPointer>
-                || std::is_same_v<T, CGameTraceEndPositionOffset>
-                || std::is_same_v<T, CGameTraceNormalOffset>
-                || std::is_same_v<T, CGameTraceFractionOffset>
-                || std::is_same_v<T, CGameTraceRawEntityHandleOffset>;
-        }
-
-        template <typename T>
         [[nodiscard]] auto get() const noexcept
         {
             ++context.patternGetCalls;

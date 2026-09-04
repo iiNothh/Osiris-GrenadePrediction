@@ -1,7 +1,5 @@
 #pragma once
 
-#include <type_traits>
-
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Entities/WeaponEntities.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
@@ -254,17 +252,13 @@ private:
             context().state().invalidateTempTrajectory();
         bool pinPulled{};
         bool releaseEdge{};
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToPinPulled>()) {
-            if (const auto pinState = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional(); pinState.hasValue()) {
-                pinPulled = pinState.value();
-                releaseEdge = GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled);
-            }
+        if (const auto pinState = hookContext.patternSearchResults().template get<OffsetToPinPulled>().of(weapon).toOptional(); pinState.hasValue()) {
+            pinPulled = pinState.value();
+            releaseEdge = GrenadePredictionController::observeHeldThrow(observation, weapon, pinPulled);
         }
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToThrowStrength>()) {
-            GrenadePredictionController::captureThrowStrength(observation, pinPulled, throwTime, [&]() noexcept {
-                return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
-            });
-        }
+        GrenadePredictionController::captureThrowStrength(observation, pinPulled, throwTime, [&]() noexcept {
+            return hookContext.patternSearchResults().template get<OffsetToThrowStrength>().of(weapon).toOptional();
+        });
         return releaseEdge;
     }
     void drawTrajectory(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept

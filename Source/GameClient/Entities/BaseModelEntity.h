@@ -1,7 +1,5 @@
 #pragma once
 
-#include <type_traits>
-
 #include <CS2/Classes/Entities/C_BaseModelEntity.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/CollisionProperty.h>
@@ -38,10 +36,7 @@ public:
 
     [[nodiscard]] decltype(auto) collisionProperty() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToCollisionProperty>())
-            return hookContext.template make<CollisionProperty>(hookContext.patternSearchResults().template get<OffsetToCollisionProperty>().of(baseModelEntity).get());
-        else
-            return hookContext.template make<CollisionProperty>(nullptr);
+        return hookContext.template make<CollisionProperty>(hookContext.patternSearchResults().template get<OffsetToCollisionProperty>().of(baseModelEntity).get());
     }
 
 private:

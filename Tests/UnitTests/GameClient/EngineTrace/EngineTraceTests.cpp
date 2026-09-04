@@ -135,18 +135,6 @@ void writeOutput(cs2::engine_trace::TraceOutputStorage& output, std::size_t offs
 struct GenericEngineTraceContext {
     struct PatternSearchResults {
         template <typename T>
-        [[nodiscard]] static consteval bool supports() noexcept
-        {
-            return std::is_same_v<T, TraceShapeFunctionPointer>
-                || std::is_same_v<T, GameTraceManagerStoragePointer>
-                || std::is_same_v<T, InitFilterFunctionPointer>
-                || std::is_same_v<T, AddSecondExcludedEntityToFilterFunctionPointer>
-                || std::is_same_v<T, CGameTraceEndPositionOffset>
-                || std::is_same_v<T, CGameTraceNormalOffset>
-                || std::is_same_v<T, CGameTraceFractionOffset>;
-        }
-
-        template <typename T>
         [[nodiscard]] auto get() const noexcept
         {
             if constexpr (std::is_same_v<T, TraceShapeFunctionPointer>)
@@ -161,9 +149,11 @@ struct GenericEngineTraceContext {
                 return std::int32_t{0x10};
             else if constexpr (std::is_same_v<T, CGameTraceNormalOffset>)
                 return std::int32_t{0x20};
-            else {
-                static_assert(std::is_same_v<T, CGameTraceFractionOffset>);
+            else if constexpr (std::is_same_v<T, CGameTraceFractionOffset>)
                 return std::int32_t{0x30};
+            else {
+                static_assert(std::is_same_v<T, CGameTraceRawEntityHandleOffset>);
+                return std::uint8_t{};
             }
         }
 
