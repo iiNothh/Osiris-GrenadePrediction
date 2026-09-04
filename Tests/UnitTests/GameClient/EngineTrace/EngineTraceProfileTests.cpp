@@ -2,28 +2,22 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include <type_traits>
 
 #include <gtest/gtest.h>
 
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/EngineTrace/NativePipTrace.h>
-#include <Utils/MemorySection.h>
 
 namespace
 {
 
 enum class NativePipInitOutcome {
     Correct,
-    WrongReturn,
-    WrongVtable,
-    Bit7Set,
-    NonzeroTailFlag
+    WrongReturn
 };
 
 struct NativePipTraceRecorder {
-    void** baseVtable{};
     NativePipInitOutcome initOutcome{NativePipInitOutcome::Correct};
     void** managerStorage{};
     bool clearManagerOnInit{};
@@ -89,19 +83,9 @@ void writeOutput(cs2::engine_trace::TraceOutputStorage& output, std::size_t offs
     activeRecorder->initializedWithNativeArguments = firstInteraction == engine_trace::native_pip::kFirstInteraction
         && collisionGroup == engine_trace::native_pip::kCollisionGroup && queryByte == engine_trace::native_pip::kQueryByte;
     auto& filter = *static_cast<cs2::engine_trace::TraceFilterStorage*>(storage);
-    cs2::engine_trace::writeFilterValue(filter, 0x00, activeRecorder->baseVtable);
     switch (activeRecorder->initOutcome) {
     case NativePipInitOutcome::WrongReturn:
         return filter.storage + 1;
-    case NativePipInitOutcome::WrongVtable:
-        cs2::engine_trace::writeFilterValue(filter, 0x00, static_cast<void*>(nullptr));
-        return &filter;
-    case NativePipInitOutcome::Bit7Set:
-        filter.storage[0x39] = std::byte{0x80};
-        return &filter;
-    case NativePipInitOutcome::NonzeroTailFlag:
-        filter.storage[0x40] = std::byte{0x01};
-        return &filter;
     case NativePipInitOutcome::Correct:
         return &filter;
     }
@@ -145,14 +129,7 @@ enum class NativePipDependency {
     TraceShape,
     ManagerStorage,
     InitFilter,
-    SecondExclusion,
-    BaseVtable,
-    PipFilterBody,
-    PushFilterConstructor,
-    PrimaryTraceShapeCandidate,
-    SecondaryTraceShapeCandidate,
-    PrimaryToSecondaryCallsite,
-    SecondaryCandidateEnumerationFunction
+    SecondExclusion
 };
 
 struct NativePipEngineTraceContext {
@@ -181,23 +158,9 @@ struct NativePipEngineTraceContext {
                 return context.normalOffset;
             else if constexpr (std::is_same_v<T, CGameTraceFractionOffset>)
                 return context.fractionOffset;
-            else if constexpr (std::is_same_v<T, CGameTraceRawEntityHandleOffset>)
-                return context.rawEntityHandleOffset;
-            else if constexpr (std::is_same_v<T, CTraceFilterBaseVtablePointer>)
-                return context.baseVtableAvailable ? context.baseVtable : nullptr;
-            else if constexpr (std::is_same_v<T, NativePipTraceFilterBodyProfilePointer>)
-                return context.pipFilterBodyAvailable ? context.markerStorage.data() : nullptr;
-            else if constexpr (std::is_same_v<T, NativePipPushFilterConstructorPointer>)
-                return context.pushFilterConstructorAvailable ? context.markerStorage.data() : nullptr;
-            else if constexpr (std::is_same_v<T, PrimaryTraceShapeCandidateProfileMarker>)
-                return context.primaryTraceShapeCandidateAvailable ? context.markerStorage.data() : nullptr;
-            else if constexpr (std::is_same_v<T, SecondaryTraceShapeCandidateProfileMarker>)
-                return context.secondaryTraceShapeCandidateAvailable ? context.markerStorage.data() + 0x9C3 : nullptr;
-            else if constexpr (std::is_same_v<T, PrimaryToSecondaryEnumerationCallsiteMarker>)
-                return context.primaryToSecondaryCallsiteAvailable ? context.markerStorage.data() + context.primaryToSecondaryCallsiteOffset : nullptr;
             else {
-                static_assert(std::is_same_v<T, SecondaryCandidateEnumerationFunctionPointer>);
-                return context.secondaryCandidateEnumerationFunctionAvailable ? context.markerStorage.data() + context.secondaryCandidateEnumerationFunctionOffset : nullptr;
+                static_assert(std::is_same_v<T, CGameTraceRawEntityHandleOffset>);
+                return context.rawEntityHandleOffset;
             }
         }
 
@@ -205,9 +168,7 @@ struct NativePipEngineTraceContext {
     };
 
     NativePipEngineTraceContext() noexcept
-        : clientCodeSectionStorage{std::span{callbackBytes}}
-        , clientVmtSectionStorage{std::span{reinterpret_cast<const std::byte*>(baseVtable), sizeof(baseVtable)}}
-        , results{*this}
+        : results{*this}
     {
     }
 
@@ -216,9 +177,6 @@ struct NativePipEngineTraceContext {
         ++patternSearchResultsCalls;
         return results;
     }
-    [[nodiscard]] const MemorySection& clientCodeSection() const noexcept { return clientCodeSectionStorage; }
-    [[nodiscard]] const MemorySection& clientVmtSection() const noexcept { return clientVmtSectionStorage; }
-
     void setDependencyAvailable(NativePipDependency dependency, bool available) noexcept
     {
         switch (dependency) {
@@ -226,23 +184,11 @@ struct NativePipEngineTraceContext {
         case NativePipDependency::ManagerStorage: managerStorageAvailable = available; break;
         case NativePipDependency::InitFilter: initFilterAvailable = available; break;
         case NativePipDependency::SecondExclusion: secondExclusionAvailable = available; break;
-        case NativePipDependency::BaseVtable: baseVtableAvailable = available; break;
-        case NativePipDependency::PipFilterBody: pipFilterBodyAvailable = available; break;
-        case NativePipDependency::PushFilterConstructor: pushFilterConstructorAvailable = available; break;
-        case NativePipDependency::PrimaryTraceShapeCandidate: primaryTraceShapeCandidateAvailable = available; break;
-        case NativePipDependency::SecondaryTraceShapeCandidate: secondaryTraceShapeCandidateAvailable = available; break;
-        case NativePipDependency::PrimaryToSecondaryCallsite: primaryToSecondaryCallsiteAvailable = available; break;
-        case NativePipDependency::SecondaryCandidateEnumerationFunction: secondaryCandidateEnumerationFunctionAvailable = available; break;
         }
     }
 
-    std::array<std::byte, 3> callbackBytes{std::byte{0xB0}, std::byte{0x01}, std::byte{0xC3}};
-    void* baseVtable[2]{nullptr, callbackBytes.data()};
     std::byte managerObject{};
     void* managerHolder{&managerObject};
-    std::array<std::byte, 0xA00> markerStorage{};
-    MemorySection clientCodeSectionStorage;
-    MemorySection clientVmtSectionStorage;
     mutable int patternSearchResultsCalls{};
     mutable int patternGetCalls{};
     PatternSearchResults results;
@@ -250,19 +196,10 @@ struct NativePipEngineTraceContext {
     bool managerStorageAvailable{true};
     bool initFilterAvailable{true};
     bool secondExclusionAvailable{true};
-    bool baseVtableAvailable{true};
-    bool pipFilterBodyAvailable{true};
-    bool pushFilterConstructorAvailable{true};
-    bool primaryTraceShapeCandidateAvailable{true};
-    bool secondaryTraceShapeCandidateAvailable{true};
-    bool primaryToSecondaryCallsiteAvailable{true};
-    bool secondaryCandidateEnumerationFunctionAvailable{true};
     std::int32_t endPositionOffset{0x10};
     std::int32_t normalOffset{0x20};
     std::int32_t fractionOffset{0x30};
     std::uint8_t rawEntityHandleOffset{0x40};
-    std::size_t primaryToSecondaryCallsiteOffset{0x210};
-    std::size_t secondaryCandidateEnumerationFunctionOffset{0x400};
 };
 
 using NativePipEngineTrace = EngineTrace<NativePipEngineTraceContext>;
@@ -281,25 +218,18 @@ struct ReducedNativePipEngineTraceContext {
     PatternSearchResults results;
 };
 
-TEST(EngineTraceNativePipProfileTest, RequiresEveryResolvedProfileDependency)
+TEST(EngineTraceNativePipTest, RequiresEveryOperationalBinding)
 {
     constexpr std::array dependencies{
         NativePipDependency::TraceShape,
         NativePipDependency::ManagerStorage,
         NativePipDependency::InitFilter,
-        NativePipDependency::SecondExclusion,
-        NativePipDependency::BaseVtable,
-        NativePipDependency::PipFilterBody,
-        NativePipDependency::PushFilterConstructor,
-        NativePipDependency::PrimaryTraceShapeCandidate,
-        NativePipDependency::SecondaryTraceShapeCandidate,
-        NativePipDependency::PrimaryToSecondaryCallsite,
-        NativePipDependency::SecondaryCandidateEnumerationFunction
+        NativePipDependency::SecondExclusion
     };
 
     for (const auto dependency : dependencies) {
         NativePipEngineTraceContext context;
-        NativePipTraceRecorder recorder{context.baseVtable};
+        NativePipTraceRecorder recorder;
         ActiveRecorderGuard activeRecorderGuard{recorder};
         context.setDependencyAvailable(dependency, false);
         NativePipEngineTrace trace{context};
@@ -310,7 +240,7 @@ TEST(EngineTraceNativePipProfileTest, RequiresEveryResolvedProfileDependency)
     }
 }
 
-TEST(EngineTraceNativePipProfileTest, ReducedPatternResultsAreUnavailableWithoutNativeCalls)
+TEST(EngineTraceNativePipTest, ReducedPatternResultsAreUnavailableWithoutNativeCalls)
 {
     ReducedNativePipEngineTraceContext context;
     EngineTrace trace{context};
@@ -319,7 +249,7 @@ TEST(EngineTraceNativePipProfileTest, ReducedPatternResultsAreUnavailableWithout
     EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
 }
 
-TEST(EngineTraceNativePipProfileTest, RejectsNonFiniteInFlightInputsBeforeNativeCalls)
+TEST(EngineTraceNativePipTest, RejectsNonFiniteInFlightInputsBeforeNativeCalls)
 {
     constexpr auto nan = std::bit_cast<float>(std::uint32_t{0x7FC00000});
     constexpr auto infinity = std::bit_cast<float>(std::uint32_t{0x7F800000});
@@ -329,7 +259,7 @@ TEST(EngineTraceNativePipProfileTest, RejectsNonFiniteInFlightInputsBeforeNative
     };
 
     NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
+    NativePipTraceRecorder recorder;
     ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
 
@@ -343,10 +273,10 @@ TEST(EngineTraceNativePipProfileTest, RejectsNonFiniteInFlightInputsBeforeNative
     EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
-TEST(EngineTraceNativePipProfileTest, RequiresValidOutputAndManagerDependencies)
+TEST(EngineTraceNativePipTest, RequiresValidOutputAndManagerDependencies)
 {
     NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
+    NativePipTraceRecorder recorder;
     ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
 
@@ -368,111 +298,24 @@ TEST(EngineTraceNativePipProfileTest, RequiresValidOutputAndManagerDependencies)
     EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
-TEST(EngineTraceNativePipProfileTest, RejectsOutOfRangeCallbackBeforeReadingItsBytes)
+TEST(EngineTraceNativePipTest, RejectsWrongFilterInitializationReturnBeforeTracing)
 {
     NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
+    NativePipTraceRecorder recorder{.initOutcome = NativePipInitOutcome::WrongReturn};
     ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.clientCodeSectionStorage = MemorySection{};
     NativePipEngineTrace trace{context};
 
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
+    EXPECT_TRUE(trace.isNativePipHullTraceAvailable());
     EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
+    EXPECT_EQ(recorder.initCalls, 1);
+    EXPECT_EQ(recorder.secondExclusionCalls, 0);
     EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
-TEST(EngineTraceNativePipProfileTest, RejectsBaseVtableOutsideTheClientVmtSection)
+TEST(EngineTraceNativePipTest, AppliesOverlayThenSecondExclusionBeforeTracing)
 {
     NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
-    ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.clientVmtSectionStorage = {};
-    NativePipEngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-    EXPECT_EQ(recorder.traceShapeCalls, 0);
-}
-
-TEST(EngineTraceNativePipProfileTest, RejectsBaseVtableWithoutTwoReadableEntries)
-{
-    NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
-    ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.clientVmtSectionStorage = MemorySection{std::span{reinterpret_cast<const std::byte*>(context.baseVtable), sizeof(void*)}};
-    NativePipEngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-    EXPECT_EQ(recorder.traceShapeCalls, 0);
-}
-
-TEST(EngineTraceNativePipProfileTest, RejectsUnexpectedCallbackBytesWithoutTracing)
-{
-    NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
-    ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.callbackBytes[1] = std::byte{};
-    NativePipEngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-    EXPECT_EQ(recorder.traceShapeCalls, 0);
-}
-
-TEST(EngineTraceNativePipProfileTest, RejectsUnexpectedPrimaryStructuralDeltaWithoutTracing)
-{
-    NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
-    ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.primaryToSecondaryCallsiteOffset = 0x20F;
-    NativePipEngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-    EXPECT_EQ(recorder.traceShapeCalls, 0);
-}
-
-TEST(EngineTraceNativePipProfileTest, RejectsWrongProfileCalleeWithoutTracing)
-{
-    NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
-    ActiveRecorderGuard activeRecorderGuard{recorder};
-    context.secondaryCandidateEnumerationFunctionOffset = 0x401;
-    NativePipEngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-    EXPECT_EQ(recorder.traceShapeCalls, 0);
-}
-
-TEST(EngineTraceNativePipProfileTest, RejectsInvalidFilterInitializationBeforeTracing)
-{
-    constexpr std::array outcomes{
-        NativePipInitOutcome::WrongReturn,
-        NativePipInitOutcome::WrongVtable,
-        NativePipInitOutcome::Bit7Set,
-        NativePipInitOutcome::NonzeroTailFlag
-    };
-
-    for (const auto outcome : outcomes) {
-        NativePipEngineTraceContext context;
-        NativePipTraceRecorder recorder{context.baseVtable, outcome};
-        ActiveRecorderGuard activeRecorderGuard{recorder};
-        NativePipEngineTrace trace{context};
-
-        EXPECT_TRUE(trace.isNativePipHullTraceAvailable());
-        EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
-        EXPECT_EQ(recorder.initCalls, 1);
-        EXPECT_EQ(recorder.secondExclusionCalls, 0);
-        EXPECT_EQ(recorder.traceShapeCalls, 0);
-    }
-}
-
-TEST(EngineTraceNativePipProfileTest, AppliesOverlayThenSecondExclusionBeforeTracing)
-{
-    NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
+    NativePipTraceRecorder recorder;
     ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
     std::byte firstExcluded{};
@@ -489,10 +332,10 @@ TEST(EngineTraceNativePipProfileTest, AppliesOverlayThenSecondExclusionBeforeTra
     EXPECT_TRUE(recorder.traceShapeCalledAfterSecondExclusion);
 }
 
-TEST(EngineTraceNativePipProfileTest, UsesOneBindingSnapshotForTheWholeTraceCall)
+TEST(EngineTraceNativePipTest, UsesOneBindingSnapshotForTheWholeTraceCall)
 {
     NativePipEngineTraceContext context;
-    NativePipTraceRecorder recorder{context.baseVtable};
+    NativePipTraceRecorder recorder;
     ActiveRecorderGuard activeRecorderGuard{recorder};
     NativePipEngineTrace trace{context};
 
@@ -500,16 +343,16 @@ TEST(EngineTraceNativePipProfileTest, UsesOneBindingSnapshotForTheWholeTraceCall
 
     ASSERT_TRUE(result.hasValue());
     EXPECT_EQ(context.patternSearchResultsCalls, 1);
-    EXPECT_EQ(context.patternGetCalls, 15);
+    EXPECT_EQ(context.patternGetCalls, 8);
     EXPECT_EQ(recorder.initCalls, 1);
+    EXPECT_EQ(recorder.secondExclusionCalls, 0);
     EXPECT_EQ(recorder.traceShapeCalls, 1);
 }
 
-TEST(EngineTraceNativePipProfileTest, FailsClosedWhenManagerBecomesNullBeforeTraceInvocation)
+TEST(EngineTraceNativePipTest, FailsClosedWhenManagerBecomesNullBeforeTraceInvocation)
 {
     NativePipEngineTraceContext context;
     NativePipTraceRecorder recorder{
-        .baseVtable = context.baseVtable,
         .managerStorage = &context.managerHolder,
         .clearManagerOnInit = true
     };
