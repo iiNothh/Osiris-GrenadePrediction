@@ -15,17 +15,6 @@ struct AllMemoryPatternSearchResults {
     }
 
     template <typename PatternType>
-    [[nodiscard]] static constexpr bool supports() noexcept
-    {
-        return decltype(kClientPatterns)::PatternPool::PatternTypes::template contains<PatternType>()
-            || decltype(kSceneSystemPatterns)::PatternPool::PatternTypes::template contains<PatternType>()
-            || decltype(kTier0Patterns)::PatternPool::PatternTypes::template contains<PatternType>()
-            || decltype(kFileSystemPatterns)::PatternPool::PatternTypes::template contains<PatternType>()
-            || decltype(kSoundSystemPatterns)::PatternPool::PatternTypes::template contains<PatternType>()
-            || decltype(kPanoramaPatterns)::PatternPool::PatternTypes::template contains<PatternType>();
-    }
-
-    template <typename PatternType>
     [[nodiscard]] auto get() const noexcept
     {
         if constexpr (decltype(kClientPatterns)::PatternPool::PatternTypes::template contains<PatternType>())

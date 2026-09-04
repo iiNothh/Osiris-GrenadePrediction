@@ -1,7 +1,5 @@
 #pragma once
 
-#include <type_traits>
-
 #include <CS2/Classes/Entities/GrenadeProjectiles.h>
 #include <MemoryPatterns/PatternTypes/DecoyProjectilePatternTypes.h>
 #include <Utils/Optional.h>
@@ -19,10 +17,7 @@ public:
 
     [[nodiscard]] Optional<std::int32_t> decoyShotTick() const noexcept
     {
-        if constexpr (std::remove_cvref_t<decltype(hookContext.patternSearchResults())>::template supports<OffsetToDecoyShotTick>())
-            return hookContext.patternSearchResults().template get<OffsetToDecoyShotTick>().of(decoyProjectile).toOptional();
-        else
-            return {};
+        return hookContext.patternSearchResults().template get<OffsetToDecoyShotTick>().of(decoyProjectile).toOptional();
     }
 
 private:

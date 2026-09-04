@@ -1,7 +1,5 @@
 #pragma once
 
-#include <type_traits>
-
 #include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <GameClient/EngineTrace/NativePipTrace.h>
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
@@ -20,30 +18,25 @@ public:
         if (!engine_trace::isValidHullTraceRequest(request))
             return {};
 
-        using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
-        if constexpr (!hasTracePatternSupport<PatternSearchResults>) {
+        const auto bindings = resolveBindings();
+        if (!hasValidBindings(bindings, request.excludedEntities.second != nullptr))
             return {};
-        } else {
-            const auto bindings = resolveBindings();
-            if (!hasValidBindings(bindings, request.excludedEntities.second != nullptr))
-                return {};
 
-            const auto descriptor = engine_trace::makeHullTraceDescriptor(request);
-            cs2::engine_trace::TraceFilterStorage filter{};
-            cs2::engine_trace::TraceOutputStorage output{};
-            if (bindings.initFilter(&filter, request.excludedEntities.first, request.filter.mask, request.filter.collisionGroup, request.filter.queryByte)
-                != static_cast<void*>(&filter))
-                return {};
+        const auto descriptor = engine_trace::makeHullTraceDescriptor(request);
+        cs2::engine_trace::TraceFilterStorage filter{};
+        cs2::engine_trace::TraceOutputStorage output{};
+        if (bindings.initFilter(&filter, request.excludedEntities.first, request.filter.mask, request.filter.collisionGroup, request.filter.queryByte)
+            != static_cast<void*>(&filter))
+            return {};
 
-            if (request.excludedEntities.second != nullptr)
-                bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
+        if (request.excludedEntities.second != nullptr)
+            bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
 
-            void* const managerHolder = *bindings.managerStorage;
-            if (managerHolder == nullptr)
-                return {};
-            bindings.traceShape(managerHolder, &descriptor, &request.start, &request.end, &filter, &output);
-            return engine_trace::decodeTraceOutput(output, bindings.outputLayout);
-        }
+        void* const managerHolder = *bindings.managerStorage;
+        if (managerHolder == nullptr)
+            return {};
+        bindings.traceShape(managerHolder, &descriptor, &request.start, &request.end, &filter, &output);
+        return engine_trace::decodeTraceOutput(output, bindings.outputLayout);
     }
 
     [[nodiscard]] bool isNativePipHullTraceAvailable() const noexcept
@@ -65,14 +58,6 @@ private:
         engine_trace::TraceOutputLayout outputLayout{};
     };
 
-    template <typename PatternSearchResults>
-    inline static constexpr bool hasTracePatternSupport = PatternSearchResults::template supports<TraceShapeFunctionPointer>()
-        && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
-        && PatternSearchResults::template supports<InitFilterFunctionPointer>()
-        && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
-        && PatternSearchResults::template supports<CGameTraceNormalOffset>()
-        && PatternSearchResults::template supports<CGameTraceFractionOffset>();
-
     [[nodiscard]] TraceBindings resolveBindings() const noexcept
     {
         const auto& results = hookContext.patternSearchResults();
@@ -86,11 +71,8 @@ private:
                 .fractionOffset = results.template get<CGameTraceFractionOffset>()
             }
         };
-        using PatternSearchResults = std::remove_cvref_t<decltype(results)>;
-        if constexpr (PatternSearchResults::template supports<AddSecondExcludedEntityToFilterFunctionPointer>())
-            bindings.addSecondExcludedEntity = results.template get<AddSecondExcludedEntityToFilterFunctionPointer>();
-        if constexpr (PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>())
-            bindings.outputLayout.rawEntityHandleOffset = results.template get<CGameTraceRawEntityHandleOffset>();
+        bindings.addSecondExcludedEntity = results.template get<AddSecondExcludedEntityToFilterFunctionPointer>();
+        bindings.outputLayout.rawEntityHandleOffset = results.template get<CGameTraceRawEntityHandleOffset>();
         return bindings;
     }
 

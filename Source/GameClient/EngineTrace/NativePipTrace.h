@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <type_traits>
 #include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
 
@@ -13,20 +12,6 @@ constexpr std::uint64_t kFilterInteractionMask{0x0000000000040200ULL};
 constexpr std::uint64_t kFilterObjectMask{0x0000008000020001ULL};
 constexpr std::uint8_t kCollisionGroup{0x10};
 constexpr std::uint8_t kQueryByte{0x0F};
-
-template <typename PatternSearchResults>
-inline constexpr bool hasTracePatternSupport = PatternSearchResults::template supports<TraceShapeFunctionPointer>()
-    && PatternSearchResults::template supports<GameTraceManagerStoragePointer>()
-    && PatternSearchResults::template supports<InitFilterFunctionPointer>()
-    && PatternSearchResults::template supports<AddSecondExcludedEntityToFilterFunctionPointer>()
-    && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
-    && PatternSearchResults::template supports<CGameTraceNormalOffset>()
-    && PatternSearchResults::template supports<CGameTraceFractionOffset>()
-    && PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>()
-    && PatternSearchResults::template supports<CTraceFilterInteractsExcludeOffset>()
-    && PatternSearchResults::template supports<CTraceFilterInteractsAsOffset>()
-    && PatternSearchResults::template supports<CTraceFilterFlagsOffset>()
-    && PatternSearchResults::template supports<CTraceFilterCandidateCollectionModeOffset>();
 
 struct FilterOverlayLayout {
     std::uint8_t interactsExcludeOffset{};
@@ -125,47 +110,37 @@ template <typename HookContext>
 template <typename HookContext>
 [[nodiscard]] bool isTraceAvailable(HookContext& hookContext) noexcept
 {
-    using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
-    if constexpr (!hasTracePatternSupport<PatternSearchResults>) {
-        return false;
-    } else {
-        const auto bindings = resolveBindings(hookContext);
-        return hasValidBindings(bindings);
-    }
+    const auto bindings = resolveBindings(hookContext);
+    return hasValidBindings(bindings);
 }
 
 template <typename HookContext>
 [[nodiscard]] Optional<TraceResult> traceHull(HookContext& hookContext, const HullTraceRequest& request) noexcept
 {
-    using PatternSearchResults = std::remove_cvref_t<decltype(hookContext.patternSearchResults())>;
-    if constexpr (!hasTracePatternSupport<PatternSearchResults>) {
+    if (!isValidHullTraceRequest(request))
         return {};
-    } else {
-        if (!isValidHullTraceRequest(request))
-            return {};
 
-        const auto bindings = resolveBindings(hookContext);
-        if (!hasValidBindings(bindings))
-            return {};
+    const auto bindings = resolveBindings(hookContext);
+    if (!hasValidBindings(bindings))
+        return {};
 
-        const auto descriptor = makeHullTraceDescriptor(request);
-        cs2::engine_trace::TraceFilterStorage filter{};
-        cs2::engine_trace::TraceOutputStorage output{};
-        if (bindings.initFilter(&filter, request.excludedEntities.first, kFirstInteraction, kCollisionGroup, kQueryByte)
-                != static_cast<void*>(&filter))
-            return {};
+    const auto descriptor = makeHullTraceDescriptor(request);
+    cs2::engine_trace::TraceFilterStorage filter{};
+    cs2::engine_trace::TraceOutputStorage output{};
+    if (bindings.initFilter(&filter, request.excludedEntities.first, kFirstInteraction, kCollisionGroup, kQueryByte)
+            != static_cast<void*>(&filter))
+        return {};
 
-        if (!applyFilterOverlay(filter, bindings.filterOverlayLayout))
-            return {};
-        if (request.excludedEntities.second != nullptr)
-            bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
+    if (!applyFilterOverlay(filter, bindings.filterOverlayLayout))
+        return {};
+    if (request.excludedEntities.second != nullptr)
+        bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
 
-        void* const managerHolder = *bindings.managerStorage;
-        if (managerHolder == nullptr)
-            return {};
-        bindings.traceShape(managerHolder, &descriptor, &request.start, &request.end, &filter, &output);
-        return decodeTraceOutput(output, bindings.outputLayout);
-    }
+    void* const managerHolder = *bindings.managerStorage;
+    if (managerHolder == nullptr)
+        return {};
+    bindings.traceShape(managerHolder, &descriptor, &request.start, &request.end, &filter, &output);
+    return decodeTraceOutput(output, bindings.outputLayout);
 }
 
 }

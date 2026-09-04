@@ -160,12 +160,6 @@ enum class NativePipDependency {
 
 struct NativePipEngineTraceContext {
     struct PatternSearchResults {
-        template <typename>
-        [[nodiscard]] static consteval bool supports() noexcept
-        {
-            return true;
-        }
-
         template <typename T>
         [[nodiscard]] auto get() const noexcept
         {
@@ -247,20 +241,6 @@ struct NativePipEngineTraceContext {
 
 using NativePipEngineTrace = EngineTrace<NativePipEngineTraceContext>;
 
-struct ReducedNativePipEngineTraceContext {
-    struct PatternSearchResults {
-        template <typename>
-        [[nodiscard]] static consteval bool supports() noexcept
-        {
-            return false;
-        }
-    };
-
-    [[nodiscard]] const PatternSearchResults& patternSearchResults() const noexcept { return results; }
-
-    PatternSearchResults results;
-};
-
 TEST(EngineTraceNativePipTest, RequiresEveryOperationalBinding)
 {
     constexpr std::array dependencies{
@@ -291,15 +271,6 @@ TEST(EngineTraceNativePipTest, RequiresEveryOperationalBinding)
         EXPECT_EQ(recorder.secondExclusionCalls, 0);
         EXPECT_EQ(recorder.traceShapeCalls, 0);
     }
-}
-
-TEST(EngineTraceNativePipTest, ReducedPatternResultsAreUnavailableWithoutNativeCalls)
-{
-    ReducedNativePipEngineTraceContext context;
-    EngineTrace trace{context};
-
-    EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
-    EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
 }
 
 TEST(EngineTraceNativePipTest, RejectsNonFiniteInFlightInputsBeforeNativeCalls)
