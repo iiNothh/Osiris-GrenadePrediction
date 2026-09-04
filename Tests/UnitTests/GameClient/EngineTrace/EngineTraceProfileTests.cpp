@@ -12,6 +12,13 @@
 namespace
 {
 
+constexpr engine_trace::native_pip::FilterOverlayLayout kCanonicalFilterOverlayLayout{
+    .interactsExcludeOffset = 0x10,
+    .interactsAsOffset = 0x18,
+    .flagsOffset = 0x39,
+    .candidateCollectionModeOffset = 0x40
+};
+
 enum class NativePipInitOutcome {
     Correct,
     WrongReturn
@@ -25,8 +32,10 @@ struct NativePipTraceRecorder {
     int secondExclusionCalls{};
     int traceShapeCalls{};
     bool initializedWithNativeArguments{};
+    bool constructorFieldsPreservedBeforeSecondExclusion{};
     bool overlayAppliedBeforeSecondExclusion{};
     bool traceShapeCalledAfterSecondExclusion{};
+    engine_trace::native_pip::FilterOverlayLayout filterOverlayLayout{kCanonicalFilterOverlayLayout};
 };
 
 NativePipTraceRecorder* activeRecorder{};
@@ -83,6 +92,13 @@ void writeOutput(cs2::engine_trace::TraceOutputStorage& output, std::size_t offs
     activeRecorder->initializedWithNativeArguments = firstInteraction == engine_trace::native_pip::kFirstInteraction
         && collisionGroup == engine_trace::native_pip::kCollisionGroup && queryByte == engine_trace::native_pip::kQueryByte;
     auto& filter = *static_cast<cs2::engine_trace::TraceFilterStorage*>(storage);
+    cs2::engine_trace::writeFilterValue(filter, 0x08, firstInteraction);
+    cs2::engine_trace::writeFilterValue(filter, 0x34, std::uint16_t{0xFFFF});
+    filter.storage[0x36] = std::byte{};
+    filter.storage[0x37] = std::byte{queryByte};
+    filter.storage[0x38] = std::byte{collisionGroup};
+    filter.storage[activeRecorder->filterOverlayLayout.flagsOffset] = std::byte{0x49};
+    filter.storage[activeRecorder->filterOverlayLayout.candidateCollectionModeOffset] = std::byte{0xA5};
     switch (activeRecorder->initOutcome) {
     case NativePipInitOutcome::WrongReturn:
         return filter.storage + 1;
@@ -99,15 +115,16 @@ void nativePipAddSecondExcludedEntity(void* storage, void*, void*) noexcept
 
     ++activeRecorder->secondExclusionCalls;
     const auto& filter = *static_cast<const cs2::engine_trace::TraceFilterStorage*>(storage);
-    activeRecorder->overlayAppliedBeforeSecondExclusion = cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x08) == engine_trace::native_pip::kFirstInteraction
-        && cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x10) == engine_trace::native_pip::kFilterInteractionMask
-        && cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x18) == engine_trace::native_pip::kFilterObjectMask
+    activeRecorder->constructorFieldsPreservedBeforeSecondExclusion = cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x08) == engine_trace::native_pip::kFirstInteraction
         && cs2::engine_trace::readFilterValue<std::uint16_t>(filter, 0x34) == 0xFFFF
         && filter.storage[0x36] == std::byte{}
-        && filter.storage[0x37] == std::byte{0x0F}
-        && filter.storage[0x38] == std::byte{0x10}
-        && filter.storage[0x39] == std::byte{0x4B}
-        && filter.storage[0x40] == std::byte{0x01};
+        && filter.storage[0x37] == std::byte{engine_trace::native_pip::kQueryByte}
+        && filter.storage[0x38] == std::byte{engine_trace::native_pip::kCollisionGroup};
+    const auto& layout = activeRecorder->filterOverlayLayout;
+    activeRecorder->overlayAppliedBeforeSecondExclusion = cs2::engine_trace::readFilterValue<std::uint64_t>(filter, layout.interactsExcludeOffset) == engine_trace::native_pip::kFilterInteractionMask
+        && cs2::engine_trace::readFilterValue<std::uint64_t>(filter, layout.interactsAsOffset) == engine_trace::native_pip::kFilterObjectMask
+        && filter.storage[layout.flagsOffset] == std::byte{0x4B}
+        && filter.storage[layout.candidateCollectionModeOffset] == std::byte{0x01};
 }
 
 [[nodiscard]] bool nativePipTraceShape(void*, const void*, const cs2::Vector*, const cs2::Vector*, void*, void* output) noexcept
@@ -116,7 +133,8 @@ void nativePipAddSecondExcludedEntity(void* storage, void*, void*) noexcept
         return false;
 
     ++activeRecorder->traceShapeCalls;
-    activeRecorder->traceShapeCalledAfterSecondExclusion = activeRecorder->overlayAppliedBeforeSecondExclusion
+    activeRecorder->traceShapeCalledAfterSecondExclusion = activeRecorder->constructorFieldsPreservedBeforeSecondExclusion
+        && activeRecorder->overlayAppliedBeforeSecondExclusion
         && activeRecorder->secondExclusionCalls == 1;
     auto& traceOutput = *static_cast<cs2::engine_trace::TraceOutputStorage*>(output);
     writeOutput(traceOutput, 0x10, cs2::Vector{1.0f, 2.0f, 3.0f});
@@ -129,7 +147,15 @@ enum class NativePipDependency {
     TraceShape,
     ManagerStorage,
     InitFilter,
-    SecondExclusion
+    SecondExclusion,
+    EndPosition,
+    Normal,
+    Fraction,
+    RawEntityHandle,
+    InteractsExclude,
+    InteractsAs,
+    Flags,
+    CandidateCollectionMode
 };
 
 struct NativePipEngineTraceContext {
@@ -158,9 +184,17 @@ struct NativePipEngineTraceContext {
                 return context.normalOffset;
             else if constexpr (std::is_same_v<T, CGameTraceFractionOffset>)
                 return context.fractionOffset;
-            else {
-                static_assert(std::is_same_v<T, CGameTraceRawEntityHandleOffset>);
+            else if constexpr (std::is_same_v<T, CGameTraceRawEntityHandleOffset>)
                 return context.rawEntityHandleOffset;
+            else if constexpr (std::is_same_v<T, CTraceFilterInteractsExcludeOffset>)
+                return context.filterOverlayLayout.interactsExcludeOffset;
+            else if constexpr (std::is_same_v<T, CTraceFilterInteractsAsOffset>)
+                return context.filterOverlayLayout.interactsAsOffset;
+            else if constexpr (std::is_same_v<T, CTraceFilterFlagsOffset>)
+                return context.filterOverlayLayout.flagsOffset;
+            else {
+                static_assert(std::is_same_v<T, CTraceFilterCandidateCollectionModeOffset>);
+                return context.filterOverlayLayout.candidateCollectionModeOffset;
             }
         }
 
@@ -184,6 +218,14 @@ struct NativePipEngineTraceContext {
         case NativePipDependency::ManagerStorage: managerStorageAvailable = available; break;
         case NativePipDependency::InitFilter: initFilterAvailable = available; break;
         case NativePipDependency::SecondExclusion: secondExclusionAvailable = available; break;
+        case NativePipDependency::EndPosition: endPositionOffset = available ? 0x10 : 0; break;
+        case NativePipDependency::Normal: normalOffset = available ? 0x20 : 0; break;
+        case NativePipDependency::Fraction: fractionOffset = available ? 0x30 : 0; break;
+        case NativePipDependency::RawEntityHandle: rawEntityHandleOffset = available ? 0x40 : 0; break;
+        case NativePipDependency::InteractsExclude: filterOverlayLayout.interactsExcludeOffset = available ? kCanonicalFilterOverlayLayout.interactsExcludeOffset : 0; break;
+        case NativePipDependency::InteractsAs: filterOverlayLayout.interactsAsOffset = available ? kCanonicalFilterOverlayLayout.interactsAsOffset : 0; break;
+        case NativePipDependency::Flags: filterOverlayLayout.flagsOffset = available ? kCanonicalFilterOverlayLayout.flagsOffset : 0; break;
+        case NativePipDependency::CandidateCollectionMode: filterOverlayLayout.candidateCollectionModeOffset = available ? kCanonicalFilterOverlayLayout.candidateCollectionModeOffset : 0; break;
         }
     }
 
@@ -200,6 +242,7 @@ struct NativePipEngineTraceContext {
     std::int32_t normalOffset{0x20};
     std::int32_t fractionOffset{0x30};
     std::uint8_t rawEntityHandleOffset{0x40};
+    engine_trace::native_pip::FilterOverlayLayout filterOverlayLayout{kCanonicalFilterOverlayLayout};
 };
 
 using NativePipEngineTrace = EngineTrace<NativePipEngineTraceContext>;
@@ -224,7 +267,15 @@ TEST(EngineTraceNativePipTest, RequiresEveryOperationalBinding)
         NativePipDependency::TraceShape,
         NativePipDependency::ManagerStorage,
         NativePipDependency::InitFilter,
-        NativePipDependency::SecondExclusion
+        NativePipDependency::SecondExclusion,
+        NativePipDependency::EndPosition,
+        NativePipDependency::Normal,
+        NativePipDependency::Fraction,
+        NativePipDependency::RawEntityHandle,
+        NativePipDependency::InteractsExclude,
+        NativePipDependency::InteractsAs,
+        NativePipDependency::Flags,
+        NativePipDependency::CandidateCollectionMode
     };
 
     for (const auto dependency : dependencies) {
@@ -236,6 +287,8 @@ TEST(EngineTraceNativePipTest, RequiresEveryOperationalBinding)
 
         EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
         EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
+        EXPECT_EQ(recorder.initCalls, 0);
+        EXPECT_EQ(recorder.secondExclusionCalls, 0);
         EXPECT_EQ(recorder.traceShapeCalls, 0);
     }
 }
@@ -298,6 +351,50 @@ TEST(EngineTraceNativePipTest, RequiresValidOutputAndManagerDependencies)
     EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
+TEST(EngineTraceNativePipTest, InvalidFilterLayoutsAreUnavailableBeforeNativeCalls)
+{
+    constexpr std::array invalidLayouts{
+        engine_trace::native_pip::FilterOverlayLayout{
+            .interactsExcludeOffset = 0,
+            .interactsAsOffset = 0x18,
+            .flagsOffset = 0x39,
+            .candidateCollectionModeOffset = 0x40
+        },
+        engine_trace::native_pip::FilterOverlayLayout{
+            .interactsExcludeOffset = 0x48,
+            .interactsAsOffset = 0x18,
+            .flagsOffset = 0x39,
+            .candidateCollectionModeOffset = 0x40
+        },
+        engine_trace::native_pip::FilterOverlayLayout{
+            .interactsExcludeOffset = 0x11,
+            .interactsAsOffset = 0x18,
+            .flagsOffset = 0x39,
+            .candidateCollectionModeOffset = 0x40
+        },
+        engine_trace::native_pip::FilterOverlayLayout{
+            .interactsExcludeOffset = 0x10,
+            .interactsAsOffset = 0x18,
+            .flagsOffset = 0x18,
+            .candidateCollectionModeOffset = 0x40
+        }
+    };
+
+    for (const auto layout : invalidLayouts) {
+        NativePipEngineTraceContext context;
+        NativePipTraceRecorder recorder;
+        ActiveRecorderGuard activeRecorderGuard{recorder};
+        context.filterOverlayLayout = layout;
+        NativePipEngineTrace trace{context};
+
+        EXPECT_FALSE(trace.isNativePipHullTraceAvailable());
+        EXPECT_FALSE(trace.traceNativePipHull(nativePipRequest({}, {})).hasValue());
+        EXPECT_EQ(recorder.initCalls, 0);
+        EXPECT_EQ(recorder.secondExclusionCalls, 0);
+        EXPECT_EQ(recorder.traceShapeCalls, 0);
+    }
+}
+
 TEST(EngineTraceNativePipTest, RejectsWrongFilterInitializationReturnBeforeTracing)
 {
     NativePipEngineTraceContext context;
@@ -328,6 +425,7 @@ TEST(EngineTraceNativePipTest, AppliesOverlayThenSecondExclusionBeforeTracing)
     EXPECT_TRUE(recorder.initializedWithNativeArguments);
     EXPECT_EQ(recorder.secondExclusionCalls, 1);
     EXPECT_EQ(recorder.traceShapeCalls, 1);
+    EXPECT_TRUE(recorder.constructorFieldsPreservedBeforeSecondExclusion);
     EXPECT_TRUE(recorder.overlayAppliedBeforeSecondExclusion);
     EXPECT_TRUE(recorder.traceShapeCalledAfterSecondExclusion);
 }
@@ -343,7 +441,7 @@ TEST(EngineTraceNativePipTest, UsesOneBindingSnapshotForTheWholeTraceCall)
 
     ASSERT_TRUE(result.hasValue());
     EXPECT_EQ(context.patternSearchResultsCalls, 1);
-    EXPECT_EQ(context.patternGetCalls, 8);
+    EXPECT_EQ(context.patternGetCalls, 12);
     EXPECT_EQ(recorder.initCalls, 1);
     EXPECT_EQ(recorder.secondExclusionCalls, 0);
     EXPECT_EQ(recorder.traceShapeCalls, 1);

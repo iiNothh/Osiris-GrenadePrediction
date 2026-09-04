@@ -13,3 +13,7 @@ STRONG_TYPE_ALIAS(CGameTraceEndPositionOffset, std::int32_t);
 STRONG_TYPE_ALIAS(CGameTraceNormalOffset, std::int32_t);
 STRONG_TYPE_ALIAS(CGameTraceFractionOffset, std::int32_t);
 STRONG_TYPE_ALIAS(CGameTraceRawEntityHandleOffset, std::uint8_t);
+STRONG_TYPE_ALIAS(CTraceFilterInteractsExcludeOffset, std::uint8_t);
+STRONG_TYPE_ALIAS(CTraceFilterInteractsAsOffset, std::uint8_t);
+STRONG_TYPE_ALIAS(CTraceFilterFlagsOffset, std::uint8_t);
+STRONG_TYPE_ALIAS(CTraceFilterCandidateCollectionModeOffset, std::uint8_t);

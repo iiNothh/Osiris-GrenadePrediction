@@ -211,6 +211,20 @@ TEST(EngineTraceTest, RejectsNonFiniteGenericInputsBeforeNativeCalls)
     EXPECT_EQ(recorder.traceShapeCalls, 0);
 }
 
+TEST(EngineTraceTest, GenericTracingDoesNotRequireNativePipFilterLayoutPatterns)
+{
+    GenericEngineTraceContext context;
+    GenericTraceRecorder recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    EngineTrace trace{context};
+
+    const auto result = trace.traceHull(makeRequest({}, {}));
+
+    ASSERT_TRUE(result.hasValue());
+    EXPECT_EQ(recorder.initFilterCalls, 1);
+    EXPECT_EQ(recorder.traceShapeCalls, 1);
+}
+
 TEST(HullTraceRequestTest, NormalizesEntityExclusionsWithoutChangingTheSecondExclusionSlot)
 {
     std::byte first{};

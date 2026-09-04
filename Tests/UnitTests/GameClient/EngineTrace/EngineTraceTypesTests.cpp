@@ -45,32 +45,153 @@ TEST(EngineTraceDescriptorTest, UsesFixedHullLayout)
     EXPECT_EQ(bytes, expected);
 }
 
-TEST(EngineTraceNativePipFilterTest, OverlayWritesOnlyTheWhitelistedBytes)
+constexpr engine_trace::native_pip::FilterOverlayLayout kCanonicalFilterOverlayLayout{
+    .interactsExcludeOffset = 0x10,
+    .interactsAsOffset = 0x18,
+    .flagsOffset = 0x39,
+    .candidateCollectionModeOffset = 0x40
+};
+
+constexpr engine_trace::native_pip::FilterOverlayLayout kAlternateFilterOverlayLayout{
+    .interactsExcludeOffset = 0x20,
+    .interactsAsOffset = 0x28,
+    .flagsOffset = 0x10,
+    .candidateCollectionModeOffset = 0x11
+};
+
+void mockInitFilter(cs2::engine_trace::TraceFilterStorage& filter) noexcept
+{
+    cs2::engine_trace::writeFilterValue(filter, 0x08, engine_trace::native_pip::kFirstInteraction);
+    cs2::engine_trace::writeFilterValue(filter, 0x34, std::uint16_t{0xFFFF});
+    filter.storage[0x36] = std::byte{};
+    filter.storage[0x37] = std::byte{engine_trace::native_pip::kQueryByte};
+    filter.storage[0x38] = std::byte{engine_trace::native_pip::kCollisionGroup};
+    filter.storage[kAlternateFilterOverlayLayout.flagsOffset] = std::byte{0xA4};
+    filter.storage[kAlternateFilterOverlayLayout.candidateCollectionModeOffset] = std::byte{0xA5};
+}
+
+TEST(EngineTraceNativePipFilterLayoutTest, AcceptsCanonicalAndAlternateLayouts)
+{
+    EXPECT_TRUE(engine_trace::native_pip::hasValidFilterOverlayLayout(kCanonicalFilterOverlayLayout));
+    EXPECT_TRUE(engine_trace::native_pip::hasValidFilterOverlayLayout(kAlternateFilterOverlayLayout));
+}
+
+TEST(EngineTraceNativePipFilterLayoutTest, RejectsZeroAndVtableRegionOffsets)
+{
+    auto layout = kCanonicalFilterOverlayLayout;
+    layout.interactsExcludeOffset = 0;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsAsOffset = 0;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.flagsOffset = 0;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = 0;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsExcludeOffset = sizeof(void*) - 1;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsAsOffset = sizeof(void*) - 1;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.flagsOffset = sizeof(void*) - 1;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = sizeof(void*) - 1;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+}
+
+TEST(EngineTraceNativePipFilterLayoutTest, RejectsOutOfRangeAndMisalignedQwordOffsets)
+{
+    auto layout = kCanonicalFilterOverlayLayout;
+    layout.interactsExcludeOffset = cs2::engine_trace::kFilterCapacity;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsAsOffset = cs2::engine_trace::kFilterCapacity;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.flagsOffset = cs2::engine_trace::kFilterCapacity;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = cs2::engine_trace::kFilterCapacity;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsExcludeOffset = 0x11;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.interactsAsOffset = 0x19;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+}
+
+TEST(EngineTraceNativePipFilterLayoutTest, RejectsEveryPairOfOverlappingFields)
+{
+    auto layout = kCanonicalFilterOverlayLayout;
+    layout.interactsAsOffset = layout.interactsExcludeOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.flagsOffset = layout.interactsExcludeOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = layout.interactsExcludeOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.flagsOffset = layout.interactsAsOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = layout.interactsAsOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+    layout = kCanonicalFilterOverlayLayout;
+    layout.candidateCollectionModeOffset = layout.flagsOffset;
+    EXPECT_FALSE(engine_trace::native_pip::hasValidFilterOverlayLayout(layout));
+}
+
+TEST(EngineTraceNativePipFilterTest, RejectsInvalidLayoutWithoutWriting)
 {
     cs2::engine_trace::TraceFilterStorage filter;
     for (auto& byte : filter.storage)
         byte = std::byte{0xA5};
-    const auto before = std::bit_cast<std::array<std::byte, cs2::engine_trace::kFilterCapacity>>(filter);
+    const auto before = filter;
+    auto invalidLayout = kCanonicalFilterOverlayLayout;
+    invalidLayout.interactsExcludeOffset = 0;
 
-    engine_trace::native_pip::applyFilterOverlay(filter);
+    EXPECT_FALSE(engine_trace::native_pip::applyFilterOverlay(filter, invalidLayout));
+    for (std::size_t i{}; i < cs2::engine_trace::kFilterCapacity; ++i)
+        EXPECT_EQ(filter.storage[i], before.storage[i]);
+}
+
+TEST(EngineTraceNativePipFilterTest, AppliesOnlyAtResolvedOffsetsAndPreservesFlagBits)
+{
+    cs2::engine_trace::TraceFilterStorage filter;
+    for (auto& byte : filter.storage)
+        byte = std::byte{0xA5};
+    mockInitFilter(filter);
+    const auto afterInitFilter = filter;
+
+    ASSERT_TRUE(engine_trace::native_pip::applyFilterOverlay(filter, kAlternateFilterOverlayLayout));
 
     for (std::size_t i{}; i < cs2::engine_trace::kFilterCapacity; ++i) {
-        if (!engine_trace::native_pip::isFilterWriteWhitelistedOffset(i))
-            EXPECT_EQ(filter.storage[i], before[i]);
+        if (!engine_trace::native_pip::isFilterOverlayWriteOffset(kAlternateFilterOverlayLayout, i))
+            EXPECT_EQ(filter.storage[i], afterInitFilter.storage[i]);
     }
-    for (std::size_t i{0x3A}; i <= 0x3F; ++i) {
-        EXPECT_FALSE(engine_trace::native_pip::isFilterWriteWhitelistedOffset(i));
-        EXPECT_EQ(filter.storage[i], before[i]);
-    }
-    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x08), engine_trace::native_pip::kFirstInteraction);
-    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x10), engine_trace::native_pip::kFilterInteractionMask);
-    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x18), engine_trace::native_pip::kFilterObjectMask);
-    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint16_t>(filter, 0x34), 0xFFFF);
-    EXPECT_EQ(filter.storage[0x36], std::byte{});
-    EXPECT_EQ(filter.storage[0x37], std::byte{0x0F});
-    EXPECT_EQ(filter.storage[0x38], std::byte{0x10});
-    EXPECT_EQ(filter.storage[0x39], std::byte{0x4B});
-    EXPECT_EQ(filter.storage[0x40], std::byte{0x01});
+    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, 0x08), cs2::engine_trace::readFilterValue<std::uint64_t>(afterInitFilter, 0x08));
+    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, kAlternateFilterOverlayLayout.interactsExcludeOffset), engine_trace::native_pip::kFilterInteractionMask);
+    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint64_t>(filter, kAlternateFilterOverlayLayout.interactsAsOffset), engine_trace::native_pip::kFilterObjectMask);
+    EXPECT_EQ(cs2::engine_trace::readFilterValue<std::uint16_t>(filter, 0x34), cs2::engine_trace::readFilterValue<std::uint16_t>(afterInitFilter, 0x34));
+    EXPECT_EQ(filter.storage[0x36], afterInitFilter.storage[0x36]);
+    EXPECT_EQ(filter.storage[0x37], afterInitFilter.storage[0x37]);
+    EXPECT_EQ(filter.storage[0x38], afterInitFilter.storage[0x38]);
+    EXPECT_EQ(filter.storage[kAlternateFilterOverlayLayout.flagsOffset], std::byte{0xA6});
+    EXPECT_EQ(filter.storage[kAlternateFilterOverlayLayout.candidateCollectionModeOffset], std::byte{0x01});
+
+    const auto afterFirstOverlay = filter;
+    ASSERT_TRUE(engine_trace::native_pip::applyFilterOverlay(filter, kAlternateFilterOverlayLayout));
+    for (std::size_t i{}; i < cs2::engine_trace::kFilterCapacity; ++i)
+        EXPECT_EQ(filter.storage[i], afterFirstOverlay.storage[i]);
 }
 
 }

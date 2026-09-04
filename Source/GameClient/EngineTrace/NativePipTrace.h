@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
-
 #include <GameClient/EngineTrace/EngineTraceTypes.h>
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
 
@@ -23,36 +22,59 @@ inline constexpr bool hasTracePatternSupport = PatternSearchResults::template su
     && PatternSearchResults::template supports<CGameTraceEndPositionOffset>()
     && PatternSearchResults::template supports<CGameTraceNormalOffset>()
     && PatternSearchResults::template supports<CGameTraceFractionOffset>()
-    && PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>();
+    && PatternSearchResults::template supports<CGameTraceRawEntityHandleOffset>()
+    && PatternSearchResults::template supports<CTraceFilterInteractsExcludeOffset>()
+    && PatternSearchResults::template supports<CTraceFilterInteractsAsOffset>()
+    && PatternSearchResults::template supports<CTraceFilterFlagsOffset>()
+    && PatternSearchResults::template supports<CTraceFilterCandidateCollectionModeOffset>();
 
-[[nodiscard]] constexpr bool isFilterWriteWhitelistedOffset(std::size_t offset) noexcept
+struct FilterOverlayLayout {
+    std::uint8_t interactsExcludeOffset{};
+    std::uint8_t interactsAsOffset{};
+    std::uint8_t flagsOffset{};
+    std::uint8_t candidateCollectionModeOffset{};
+};
+
+[[nodiscard]] constexpr bool isValidFilterFieldOffset(std::size_t offset, std::size_t size, std::size_t alignment = 1) noexcept
 {
-    return (offset >= 0x08 && offset <= 0x1F) || (offset >= 0x34 && offset <= 0x39) || offset == 0x40;
+    return offset >= sizeof(void*) && offset % alignment == 0
+        && offset <= cs2::engine_trace::kFilterCapacity && size <= cs2::engine_trace::kFilterCapacity - offset;
 }
 
-static_assert(!isFilterWriteWhitelistedOffset(0x00));
-static_assert(isFilterWriteWhitelistedOffset(0x08));
-static_assert(isFilterWriteWhitelistedOffset(0x1F));
-static_assert(!isFilterWriteWhitelistedOffset(0x20));
-static_assert(!isFilterWriteWhitelistedOffset(0x33));
-static_assert(isFilterWriteWhitelistedOffset(0x34));
-static_assert(isFilterWriteWhitelistedOffset(0x39));
-static_assert(!isFilterWriteWhitelistedOffset(0x3A));
-static_assert(!isFilterWriteWhitelistedOffset(0x3F));
-static_assert(isFilterWriteWhitelistedOffset(0x40));
-static_assert(!isFilterWriteWhitelistedOffset(0x41));
-
-inline void applyFilterOverlay(cs2::engine_trace::TraceFilterStorage& filter) noexcept
+[[nodiscard]] constexpr bool hasValidFilterOverlayLayout(const FilterOverlayLayout& layout) noexcept
 {
-    cs2::engine_trace::writeFilterValue(filter, 0x08, kFirstInteraction);
-    cs2::engine_trace::writeFilterValue(filter, 0x10, kFilterInteractionMask);
-    cs2::engine_trace::writeFilterValue(filter, 0x18, kFilterObjectMask);
-    cs2::engine_trace::writeFilterValue(filter, 0x34, std::uint16_t{0xFFFF});
-    filter.storage[0x36] = std::byte{};
-    filter.storage[0x37] = std::byte{kQueryByte};
-    filter.storage[0x38] = std::byte{kCollisionGroup};
-    filter.storage[0x39] = std::byte{0x4B};
-    filter.storage[0x40] = std::byte{0x01};
+    constexpr auto kQwordSize = sizeof(std::uint64_t);
+    constexpr auto kByteSize = sizeof(std::uint8_t);
+    return isValidFilterFieldOffset(layout.interactsExcludeOffset, kQwordSize, alignof(std::uint64_t))
+        && isValidFilterFieldOffset(layout.interactsAsOffset, kQwordSize, alignof(std::uint64_t))
+        && isValidFilterFieldOffset(layout.flagsOffset, kByteSize)
+        && isValidFilterFieldOffset(layout.candidateCollectionModeOffset, kByteSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.interactsExcludeOffset, kQwordSize, layout.interactsAsOffset, kQwordSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.interactsExcludeOffset, kQwordSize, layout.flagsOffset, kByteSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.interactsExcludeOffset, kQwordSize, layout.candidateCollectionModeOffset, kByteSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.interactsAsOffset, kQwordSize, layout.flagsOffset, kByteSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.interactsAsOffset, kQwordSize, layout.candidateCollectionModeOffset, kByteSize)
+        && !cs2::engine_trace::doRegionsOverlap(layout.flagsOffset, kByteSize, layout.candidateCollectionModeOffset, kByteSize);
+}
+
+[[nodiscard]] constexpr bool isFilterOverlayWriteOffset(const FilterOverlayLayout& layout, std::size_t offset) noexcept
+{
+    return hasValidFilterOverlayLayout(layout)
+        && (offset >= layout.interactsExcludeOffset && offset < layout.interactsExcludeOffset + sizeof(std::uint64_t)
+            || offset >= layout.interactsAsOffset && offset < layout.interactsAsOffset + sizeof(std::uint64_t)
+            || offset == layout.flagsOffset || offset == layout.candidateCollectionModeOffset);
+}
+
+[[nodiscard]] inline bool applyFilterOverlay(cs2::engine_trace::TraceFilterStorage& filter, const FilterOverlayLayout& layout) noexcept
+{
+    if (!hasValidFilterOverlayLayout(layout))
+        return false;
+
+    cs2::engine_trace::writeFilterValue(filter, layout.interactsExcludeOffset, kFilterInteractionMask);
+    cs2::engine_trace::writeFilterValue(filter, layout.interactsAsOffset, kFilterObjectMask);
+    filter.storage[layout.flagsOffset] |= std::byte{0x02};
+    filter.storage[layout.candidateCollectionModeOffset] = std::byte{0x01};
+    return true;
 }
 
 struct TraceBindings {
@@ -61,6 +83,7 @@ struct TraceBindings {
     UnpackStrongTypeAliasT<InitFilterFunctionPointer> initFilter{};
     UnpackStrongTypeAliasT<AddSecondExcludedEntityToFilterFunctionPointer> addSecondExcludedEntity{};
     TraceOutputLayout outputLayout{};
+    FilterOverlayLayout filterOverlayLayout{};
 };
 
 template <typename HookContext>
@@ -77,6 +100,12 @@ template <typename HookContext>
             .normalOffset = results.template get<CGameTraceNormalOffset>(),
             .fractionOffset = results.template get<CGameTraceFractionOffset>(),
             .rawEntityHandleOffset = results.template get<CGameTraceRawEntityHandleOffset>()
+        },
+        .filterOverlayLayout = {
+            .interactsExcludeOffset = results.template get<CTraceFilterInteractsExcludeOffset>(),
+            .interactsAsOffset = results.template get<CTraceFilterInteractsAsOffset>(),
+            .flagsOffset = results.template get<CTraceFilterFlagsOffset>(),
+            .candidateCollectionModeOffset = results.template get<CTraceFilterCandidateCollectionModeOffset>()
         }
     };
 }
@@ -87,7 +116,8 @@ template <typename HookContext>
         || bindings.initFilter == nullptr || bindings.addSecondExcludedEntity == nullptr
         || !hasValidTraceOutputLayout(bindings.outputLayout) || !bindings.outputLayout.rawEntityHandleOffset.hasValue()
         || !cs2::engine_trace::isValidRawEntityHandleOffset(bindings.outputLayout.rawEntityHandleOffset.value(),
-            bindings.outputLayout.endPositionOffset, bindings.outputLayout.normalOffset, bindings.outputLayout.fractionOffset))
+            bindings.outputLayout.endPositionOffset, bindings.outputLayout.normalOffset, bindings.outputLayout.fractionOffset)
+        || !hasValidFilterOverlayLayout(bindings.filterOverlayLayout))
         return false;
     return true;
 }
@@ -125,7 +155,8 @@ template <typename HookContext>
                 != static_cast<void*>(&filter))
             return {};
 
-        applyFilterOverlay(filter);
+        if (!applyFilterOverlay(filter, bindings.filterOverlayLayout))
+            return {};
         if (request.excludedEntities.second != nullptr)
             bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
 
