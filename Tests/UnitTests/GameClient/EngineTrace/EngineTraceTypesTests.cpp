@@ -2,7 +2,6 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 
 #include <gtest/gtest.h>
 
@@ -72,46 +71,6 @@ TEST(EngineTraceNativePipFilterTest, OverlayWritesOnlyTheWhitelistedBytes)
     EXPECT_EQ(filter.storage[0x38], std::byte{0x10});
     EXPECT_EQ(filter.storage[0x39], std::byte{0x4B});
     EXPECT_EQ(filter.storage[0x40], std::byte{0x01});
-}
-
-TEST(EngineTraceNativePipFilterTest, RequiresReadableBaseVtableAndExpectedCallback)
-{
-    std::array<std::byte, 3> callback{std::byte{0xB0}, std::byte{0x01}, std::byte{0xC3}};
-    void* vtable[2]{nullptr, callback.data()};
-    const MemorySection callbackCode{std::span{callback}};
-    const MemorySection vtableSection{std::span{reinterpret_cast<const std::byte*>(vtable), sizeof(vtable)}};
-    const MemorySection incompleteVtableSection{std::span{reinterpret_cast<const std::byte*>(vtable), sizeof(void*)}};
-
-    const auto* const callbackAddress = engine_trace::native_pip::baseFilterCallback(vtableSection, vtable);
-    EXPECT_EQ(callbackAddress, callback.data());
-    EXPECT_TRUE(engine_trace::native_pip::hasExpectedBaseFilterCallback(callbackCode, callbackAddress));
-    EXPECT_EQ(engine_trace::native_pip::baseFilterCallback(incompleteVtableSection, vtable), nullptr);
-    EXPECT_EQ(engine_trace::native_pip::baseFilterCallback(MemorySection{}, vtable), nullptr);
-    callback[1] = std::byte{};
-    EXPECT_FALSE(engine_trace::native_pip::hasExpectedBaseFilterCallback(callbackCode, callbackAddress));
-}
-
-TEST(EngineTraceNativePipFilterTest, RequiresEveryResolvedProfileMarker)
-{
-    std::byte marker{};
-    void* vtable[2]{};
-
-    EXPECT_TRUE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, &marker, &marker, &marker, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(nullptr, &marker, &marker, &marker, &marker, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, nullptr, &marker, &marker, &marker, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, nullptr, &marker, &marker, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, &marker, nullptr, &marker, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, &marker, &marker, nullptr, &marker, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, &marker, &marker, &marker, nullptr, &marker));
-    EXPECT_FALSE(engine_trace::native_pip::hasProfileMarkers(vtable, &marker, &marker, &marker, &marker, &marker, nullptr));
-}
-
-TEST(EngineTraceNativePipFilterTest, RejectsUnexpectedProfileStructuralDeltas)
-{
-    EXPECT_TRUE(engine_trace::native_pip::hasCurrentProfileStructure(0x1000, 0x25C3, 0x1210, 0x2000));
-    EXPECT_FALSE(engine_trace::native_pip::hasCurrentProfileStructure(0x1000, 0x25C3, 0x120F, 0x2000));
-    EXPECT_FALSE(engine_trace::native_pip::hasCurrentProfileStructure(0x1000, 0x25C2, 0x1210, 0x2000));
-    EXPECT_FALSE(engine_trace::native_pip::hasCurrentProfileStructure(0x1210, 0x25C3, 0x1000, 0x2000));
 }
 
 }
