@@ -1,6 +1,8 @@
 target_sources(UnitTests PRIVATE
   EngineTraceBackendTests.cpp
-  EngineTraceTests.cpp
-  EngineTraceTypesTests.cpp
   EngineTraceProfileTests.cpp
+  EngineTraceTests.cpp
+  GrenadeTraceFilterTests.cpp
+  TraceLayoutTests.cpp
+  TraceResultTests.cpp
 )

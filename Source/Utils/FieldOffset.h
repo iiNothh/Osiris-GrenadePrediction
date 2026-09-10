@@ -27,6 +27,11 @@ struct FieldOffset {
         return offset > 0;
     }
 
+    [[nodiscard]] constexpr OffsetType value() const noexcept
+    {
+        return offset;
+    }
+
     [[nodiscard]] OptionalPointee<FieldType> of(ClassType* thisptr) const noexcept
     {
         using BytePointer = std::byte*;
