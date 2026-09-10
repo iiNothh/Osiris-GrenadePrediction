@@ -3,10 +3,12 @@
 
 #include <gtest/gtest.h>
 
+#include <CS2/EngineTrace/CGameTrace.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <GameClient/Entities/GrenadeKind.h>
-#include <GameClient/EngineTrace/EngineTraceTypes.h>
+#include <GameClient/EngineTrace/TraceConversion.h>
+#include <GameClient/EngineTrace/TraceResult.h>
 #include <Mocks/GrenadePrediction/ScriptedGrenadeTrace.h>
 
 namespace
@@ -48,7 +50,7 @@ TEST(GrenadeSimulationParityTest, RecordsContactsUntilReferenceMarkerCapacity)
 {
     GrenadeSimulatorTestHookContext context;
     for (int i{}; i <= 20; ++i) {
-        context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, engine_trace::kWorldEntityHandle});
+        context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
         context.trace.push(TraceResult{1.0f, {}, {}});
     }
     context.trace.clearAfterScript();
@@ -85,7 +87,7 @@ TEST(GrenadeSimulationParityTest, UsesReferenceDecoyAndSmokeTimeoutTicks)
 TEST(GrenadeSimulationParityTest, ContinuesTraceForTheUnusedCollisionSubstep)
 {
     GrenadeSimulatorTestHookContext context;
-    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, engine_trace::kWorldEntityHandle});
+    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
     context.trace.clearAfterScript();
     Simulator simulator{context};
     cs2::Vector position{};
@@ -176,7 +178,7 @@ TEST(GrenadeSimulationParityTest, AppliesAnOrdinaryResponseWhenPaneContinuationR
     const cs2::CEntityHandle pane{42u};
     context.entitySystem.setDynamicProp(pane);
     context.trace.push(TraceResult{0.5f, {4.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, static_cast<std::int32_t>(pane.value)});
-    context.trace.push(TraceResult{0.5f, {4.1f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, engine_trace::kWorldEntityHandle});
+    context.trace.push(TraceResult{0.5f, {4.1f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
     context.trace.clearAfterScript();
     Simulator simulator{context};
     cs2::Vector position{};
@@ -219,7 +221,7 @@ TEST(GrenadeSimulationParityTest, AppliesSteepFloorDampingOnlyWhenWorldHandleIsR
     cs2::Vector worldVelocity{100.0f, 0.0f, -1000.0f};
     cs2::Vector unknownVelocity = worldVelocity;
     static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
-        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, engine_trace::kWorldEntityHandle}, worldVelocity, GrenadeKind::HEGrenade));
+        simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}, cs2::engine_trace::kWorldEntityHandle}, worldVelocity, GrenadeKind::HEGrenade));
     static_cast<void>(GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::applyContactResponse(
         simulator, {0.5f, {}, {0.0f, 0.0f, 1.0f}}, unknownVelocity, GrenadeKind::HEGrenade));
     EXPECT_NEAR(worldVelocity.z, 227.24025f, 0.001f);

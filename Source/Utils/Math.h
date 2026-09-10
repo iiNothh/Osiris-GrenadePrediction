@@ -3,7 +3,7 @@
 #include <xmmintrin.h>
 
 namespace Math {
-    [[nodiscard]] inline bool isFinite(float x) noexcept
+    [[nodiscard]] constexpr bool isFinite(float x) noexcept
     {
         constexpr float kMaxFinite = 3.402823466e+38F;
         return x == x && x >= -kMaxFinite && x <= kMaxFinite;

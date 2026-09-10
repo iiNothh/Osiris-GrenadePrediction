@@ -5,6 +5,9 @@
 
 #include <CS2/Classes/ConVarTypes.h>
 #include <GameClient/Entities/GrenadeKind.h>
+#include <GameClient/EngineTrace/EngineTrace.h>
+#include <GameClient/EngineTrace/HullTraceRequest.h>
+#include <GameClient/EngineTrace/TraceResult.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
 
 struct ScriptedGrenadeTrace {
@@ -36,8 +39,8 @@ struct ScriptedGrenadeTrace {
         ++genericCalls;
         return nextResult();
     }
-    [[nodiscard]] bool isNativePipHullTraceAvailable() const noexcept { return inFlightTraceAvailable; }
-    [[nodiscard]] Optional<TraceResult> traceNativePipHull(const engine_trace::HullTraceRequest& request) noexcept
+    [[nodiscard]] bool isGrenadeHullTraceAvailable() const noexcept { return inFlightTraceAvailable; }
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const engine_trace::HullTraceRequest& request) noexcept
     {
         lastStart = request.start;
         lastEnd = request.end;

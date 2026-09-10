@@ -1,15 +1,22 @@
+#include <cstdint>
+
 #include <gtest/gtest.h>
 
+#include <CS2/Constants/CollisionGroup.h>
+#include <CS2/Constants/InteractionLayers.h>
+#include <CS2/Constants/PhysicsQueryFlag.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
+#include <GameClient/EngineTrace/HullTraceRequest.h>
+#include <GameClient/EngineTrace/TraceResult.h>
 
 namespace
 {
 
 struct RecordingTrace {
     engine_trace::HullTraceRequest genericRequest{};
-    engine_trace::HullTraceRequest nativePipRequest{};
+    engine_trace::HullTraceRequest grenadeRequest{};
     bool genericCalled{};
-    bool nativePipCalled{};
+    bool grenadeCalled{};
 
     [[nodiscard]] Optional<TraceResult> traceHull(const engine_trace::HullTraceRequest& request) noexcept
     {
@@ -18,12 +25,12 @@ struct RecordingTrace {
         return TraceResult{};
     }
 
-    [[nodiscard]] bool isNativePipHullTraceAvailable() const noexcept { return true; }
+    [[nodiscard]] bool isGrenadeHullTraceAvailable() const noexcept { return true; }
 
-    [[nodiscard]] Optional<TraceResult> traceNativePipHull(const engine_trace::HullTraceRequest& request) noexcept
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const engine_trace::HullTraceRequest& request) noexcept
     {
-        nativePipRequest = request;
-        nativePipCalled = true;
+        grenadeRequest = request;
+        grenadeCalled = true;
         return TraceResult{};
     }
 };
@@ -37,9 +44,10 @@ void expectLegacyGrenadeRequest(const engine_trace::HullTraceRequest& request, c
     EXPECT_EQ(request.maxs, (cs2::Vector{2.0f, 2.0f, 2.0f}));
     EXPECT_EQ(request.excludedEntities.first, firstExcluded);
     EXPECT_EQ(request.excludedEntities.second, secondExcluded);
-    EXPECT_EQ(request.filter.mask, grenade_trace_preset::MASK_GRENADE);
-    EXPECT_EQ(request.filter.collisionGroup, 4);
-    EXPECT_EQ(request.filter.queryByte, 7);
+    EXPECT_EQ(request.filter.interactsWith, grenade_trace_preset::kGrenadeInteractionLayerMask);
+    EXPECT_EQ(request.filter.collisionGroup, cs2::CollisionGroup::Default);
+    EXPECT_EQ(request.filter.queryFlags, cs2::PhysicsQueryFlag::IncludeSolidContacts
+        | cs2::PhysicsQueryFlag::RespectDisabledSolidContacts | cs2::PhysicsQueryFlag::IncludeTriggerContacts);
 }
 
 TEST(GrenadeTracePresetTest, ProducesTheExactLegacyRequest)
@@ -51,12 +59,11 @@ TEST(GrenadeTracePresetTest, ProducesTheExactLegacyRequest)
 
     const auto request = grenade_trace_preset::makeRequest(start, end, {&firstExcluded, &secondExcluded});
 
-    EXPECT_EQ(grenade_trace_preset::MASK_GRENADE, 0x001C200Bull);
+    EXPECT_EQ(static_cast<std::uint64_t>(grenade_trace_preset::kGrenadeInteractionLayerMask), 0x001C200Bull);
     expectLegacyGrenadeRequest(request, start, end, &firstExcluded, &secondExcluded);
-    EXPECT_EQ(engine_trace::makeHullTraceDescriptor(request).type, 2u);
 }
 
-TEST(GrenadeTracePresetTest, SelectsTheGenericAndNativePipFacadeOperations)
+TEST(GrenadeTracePresetTest, SelectsTheGenericAndGrenadeFacadeOperations)
 {
     RecordingTrace trace;
     std::byte firstExcluded{};
@@ -68,9 +75,9 @@ TEST(GrenadeTracePresetTest, SelectsTheGenericAndNativePipFacadeOperations)
     ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, start, end, {&firstExcluded, &secondExcluded}).hasValue());
 
     EXPECT_TRUE(trace.genericCalled);
-    EXPECT_TRUE(trace.nativePipCalled);
+    EXPECT_TRUE(trace.grenadeCalled);
     expectLegacyGrenadeRequest(trace.genericRequest, start, end, &firstExcluded, nullptr);
-    expectLegacyGrenadeRequest(trace.nativePipRequest, start, end, &firstExcluded, &secondExcluded);
+    expectLegacyGrenadeRequest(trace.grenadeRequest, start, end, &firstExcluded, &secondExcluded);
 }
 
 TEST(GrenadeTracePresetTest, PreservesSecondExclusionSlotForPaneContinuation)
@@ -80,8 +87,8 @@ TEST(GrenadeTracePresetTest, PreservesSecondExclusionSlotForPaneContinuation)
 
     ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, {}, {}, {nullptr, &pane}).hasValue());
 
-    EXPECT_TRUE(trace.nativePipCalled);
-    expectLegacyGrenadeRequest(trace.nativePipRequest, {}, {}, nullptr, &pane);
+    EXPECT_TRUE(trace.grenadeCalled);
+    expectLegacyGrenadeRequest(trace.grenadeRequest, {}, {}, nullptr, &pane);
 }
 
 }

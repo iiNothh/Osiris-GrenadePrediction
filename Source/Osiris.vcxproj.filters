@@ -10,6 +10,9 @@
     <Filter Include="CS2\Constants">
       <UniqueIdentifier>{d999d684-295e-4c04-b949-35386439cd84}</UniqueIdentifier>
     </Filter>
+    <Filter Include="CS2\EngineTrace">
+      <UniqueIdentifier>{eeeeb412-7fdf-4132-9d54-c02314078981}</UniqueIdentifier>
+    </Filter>
     <Filter Include="Features">
       <UniqueIdentifier>{bdcd13b6-e67e-43e7-b6b5-9898375770d4}</UniqueIdentifier>
     </Filter>
@@ -195,6 +198,9 @@
     </Filter>
     <Filter Include="GameClient\Entities">
       <UniqueIdentifier>{574b797e-f5ef-47fe-9747-b268a82ec727}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="GameClient\EngineTrace">
+      <UniqueIdentifier>{b06b186c-dcbf-42e9-926f-aa07e0ed9c46}</UniqueIdentifier>
     </Filter>
     <Filter Include="GameClient\EntitySystem">
       <UniqueIdentifier>{f962b6df-d7ad-4ade-b2b8-80d1609e9985}</UniqueIdentifier>
@@ -394,6 +400,9 @@
       <Filter>UI\Panorama</Filter>
     </ClInclude>
     <ClInclude Include="Utils\Align.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="Utils\ByteStorage.h">
       <Filter>Utils</Filter>
     </ClInclude>
     <ClInclude Include="Utils\CharUtils.h">
@@ -1897,7 +1906,13 @@
     <ClInclude Include="CS2\Constants\RoundWinStatus.h">
       <Filter>CS2\Constants</Filter>
     </ClInclude>
-    <ClInclude Include="CS2\Constants\EngineTraceContents.h">
+    <ClInclude Include="CS2\Constants\InteractionLayers.h">
+      <Filter>CS2\Constants</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\Constants\CollisionGroup.h">
+      <Filter>CS2\Constants</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\Constants\PhysicsQueryFlag.h">
       <Filter>CS2\Constants</Filter>
     </ClInclude>
     <ClInclude Include="Features\Hud\BombPlantAlert\BombPlantAlert.h">
@@ -1963,8 +1978,17 @@
     <ClInclude Include="UI\Panorama\Tabs\VisualsTab\PlayerOutlineGlowDropdownSelectionChangeHandler.h">
       <Filter>UI\Panorama\Tabs\VisualsTab</Filter>
     </ClInclude>
-    <ClInclude Include="CS2\EngineTrace\EngineTraceTypes.h">
-      <Filter>CS2</Filter>
+    <ClInclude Include="CS2\EngineTrace\CGameTrace.h">
+      <Filter>CS2\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\EngineTrace\AABB_t.h">
+      <Filter>CS2\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\EngineTrace\CTraceFilter.h">
+      <Filter>CS2\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\EngineTrace\RnQueryShapeAttr_t.h">
+      <Filter>CS2\EngineTrace</Filter>
     </ClInclude>
     <ClInclude Include="CS2\Classes\CCollisionProperty.h">
       <Filter>CS2\Classes</Filter>
@@ -2048,13 +2072,28 @@
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\EngineTrace\EngineTrace.h">
-      <Filter>GameClient</Filter>
+      <Filter>GameClient\EngineTrace</Filter>
     </ClInclude>
-    <ClInclude Include="GameClient\EngineTrace\EngineTraceTypes.h">
-      <Filter>GameClient</Filter>
+    <ClInclude Include="GameClient\EngineTrace\TraceConversion.h">
+      <Filter>GameClient\EngineTrace</Filter>
     </ClInclude>
-    <ClInclude Include="GameClient\EngineTrace\NativePipTrace.h">
-      <Filter>GameClient</Filter>
+    <ClInclude Include="GameClient\EngineTrace\HullTraceRequest.h">
+      <Filter>GameClient\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\GrenadeTrace.h">
+      <Filter>GameClient\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\GrenadeTraceParams.h">
+      <Filter>GameClient\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\TraceFilter.h">
+      <Filter>GameClient\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\TraceLayout.h">
+      <Filter>GameClient\EngineTrace</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\EngineTrace\TraceResult.h">
+      <Filter>GameClient\EngineTrace</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\Entities\CollisionProperty.h">
       <Filter>GameClient\Entities</Filter>

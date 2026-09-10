@@ -19,6 +19,7 @@
 #include <GameClient/Entities/DecoyProjectile.h>
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/Entities/SmokeGrenadeProjectile.h>
+#include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 #include <HookContext/HookContextMacros.h>

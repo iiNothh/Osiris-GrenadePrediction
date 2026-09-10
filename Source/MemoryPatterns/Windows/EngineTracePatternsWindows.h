@@ -8,9 +8,10 @@ struct EngineTracePatterns {
     {
         return clientPatterns
             .template addPattern<TraceShapeFunctionPointer, CodePattern{"0F 97 45 ? E8 ? ? ? ? 48 8D 55"}.add(5).abs()>()
-            .template addPattern<GameTraceManagerStoragePointer, CodePattern{"48 8B 0D ? ? ? ? 4C 8D 4B ? 4C 8D 43"}.add(3).abs()>()
-            .template addPattern<InitFilterFunctionPointer, CodePattern{"48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 0F B6 41 ? 33 FF 24 C9"}>()
-            .template addPattern<AddSecondExcludedEntityToFilterFunctionPointer, CodePattern{"48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 57 48 83 EC 20 48 8B E9 49 8B F0 48 8B CA 48 8B FA E8 ? ? ? ? 48 8B CE 89 45 20 E8 ? ? ? ? 48 8B CF 89 45 24"}>()
+            .template addPattern<BuildRnQueryShapeAttrFromAABBFunctionPointer, CodePattern{"F3 0F 10 42 0C 0F 2E 02 7A ? 75 ? F3 0F 10 42 10 0F 2E 42 04 7A ? 75 ? F3 0F 10 42 14 0F 2E 42 08"}>()
+            .template addPattern<PhysicsWorldPointerSlotStoragePointer, CodePattern{"48 8B 0D ? ? ? ? 4C 8D 4B ? 4C 8D 43"}.add(3).abs()>()
+            .template addPattern<CTraceFilterConstructionFunctionPointer, CodePattern{"48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC 20 0F B6 41 ? 33 FF 24 C9"}>()
+            .template addPattern<CTraceFilterAddExcludedEntityFunctionPointer, CodePattern{"E8 ? ? ? ? 48 8B 06 48 8D ? ? ? 48 8B CE FF 90 50 05 00 00"}.add(1).abs()>()
             .template addPattern<CTraceFilterInteractsExcludeOffset, CodePattern{"48 89 79 ? 48 89 01 48 8B F2 0F B6 44 24 ? 88 41 ? 48 89 79 ?"}.add(3).read()>()
             .template addPattern<CTraceFilterInteractsAsOffset, CodePattern{"49 8B 46 ? 4C 8B CF 48 8B 9D ? ? ? ?"}.add(3).read()>()
             .template addPattern<CTraceFilterFlagsOffset, CodePattern{"48 8D 05 ? ? ? ? 80 4B ? 02 48 89 03"}.add(9).read()>()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <CS2/Classes/Vector.h>
+#include <CS2/EngineTrace/CGameTrace.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
@@ -8,6 +9,8 @@
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
 #include <GameClient/Entities/EntityClassifier.h>
 #include <GameClient/EntitySystem/EntitySystem.h>
+#include <GameClient/EngineTrace/EngineTrace.h>
+#include <GameClient/EngineTrace/TraceResult.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
 #include <Utils/Math.h>
 
@@ -244,7 +247,7 @@ private:
         const float speedSq = bounce.squareLength();
         if (!finite(bounce) || !Math::isFinite(speedSq))
             return {.traceSucceeded = false};
-        if (trace.rawEntityHandle.hasValue() && trace.rawEntityHandle.value() == engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
+        if (trace.rawEntityHandle.hasValue() && trace.rawEntityHandle.value() == cs2::engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
             && speedSq > grenade_prediction_params::kSteepFloorDampingSpeedSq) {
             const float directionDot = (bounce * (1.0f / Math::sqrt(speedSq))).dot(trace.normal);
             if (directionDot > grenade_prediction_params::kSteepFloorDampingDirectionDot)
@@ -300,7 +303,7 @@ private:
     }
     [[nodiscard]] bool isUnresolvedNonWorldEntity(const TraceResult& traceResult) const noexcept
     {
-        if (traceResult.fraction >= 1.0f || !traceResult.rawEntityHandle.hasValue() || traceResult.rawEntityHandle.value() == engine_trace::kWorldEntityHandle)
+        if (traceResult.fraction >= 1.0f || !traceResult.rawEntityHandle.hasValue() || traceResult.rawEntityHandle.value() == cs2::engine_trace::kWorldEntityHandle)
             return false;
         if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) { context.template make<EntitySystem>().getEntityFromHandle(handle); })
             return true;
