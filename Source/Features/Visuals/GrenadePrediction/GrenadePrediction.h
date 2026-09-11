@@ -6,7 +6,7 @@
 #include <GameClient/Entities/GrenadeKind.h>
 #include <GameClient/Entities/GrenadeKindMapper.h>
 #include <GameClient/Entities/GrenadeWeapon.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
+#include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchFallback.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionSnapshotBuilder.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>

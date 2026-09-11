@@ -3,7 +3,7 @@
 #include <limits>
 
 #include <GameClient/Entities/GrenadeKind.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
+#include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
