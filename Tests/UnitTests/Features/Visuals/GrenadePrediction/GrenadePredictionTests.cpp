@@ -10,6 +10,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
+#include <Platform/GrenadePredictionCapabilities.h>
 
 namespace
 {
@@ -131,6 +132,12 @@ TEST(GrenadePredictionTest, OnUnloadClearsStateAndDeletesPanels)
     EXPECT_FALSE(state.livePresentationState.panelStyle.initialized);
     EXPECT_EQ(state.lastCachePresentationState.activePanelCount, 0);
     EXPECT_FALSE(state.lastCachePresentationState.panelStyle.initialized);
+}
+
+TEST(GrenadePredictionPlatformCapabilitiesTest, ReportsLiveProjectileSupportThroughPlatformCapabilities)
+{
+    EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction, IS_WIN64());
+    EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsHeldPrediction, IS_WIN64());
 }
 
 }

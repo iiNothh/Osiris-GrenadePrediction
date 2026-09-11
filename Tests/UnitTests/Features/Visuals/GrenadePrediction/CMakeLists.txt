@@ -1,12 +1,15 @@
 target_sources(UnitTests PRIVATE
-  GrenadePredictionAuthorityParityTests.cpp
+  CachedGrenadeTrajectoryPresentationTests.cpp
   GrenadePredictionConfigVariablesTests.cpp
-  GrenadePredictionControllerTests.cpp
-  GrenadePredictionLifecycleTests.cpp
-  GrenadePredictionPrimitivesTests.cpp
+  GrenadePredictionStateTests.cpp
   GrenadePredictionTests.cpp
+  GrenadePredictionUpdateSchedulerTests.cpp
   GrenadeSimulatorParityTests.cpp
+  GrenadeThrowObservationTests.cpp
   GrenadeTracePresetTests.cpp
-  GrenadeThrowObservationParityTests.cpp
+  LiveGrenadeAuthorityTests.cpp
+  LiveGrenadeCacheTests.cpp
+  LiveGrenadeLifecycleTests.cpp
+  LiveGrenadePredictionTests.cpp
   ManualGrenadeLaunchTests.cpp
 )

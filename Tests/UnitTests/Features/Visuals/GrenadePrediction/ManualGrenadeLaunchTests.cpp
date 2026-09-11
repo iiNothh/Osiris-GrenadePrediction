@@ -186,6 +186,14 @@ TEST(ManualGrenadeLaunchTest, PrefersNativeLaunchWithoutCallingManualProvider)
     EXPECT_EQ(manualCalls, 0);
 }
 
+TEST(GrenadePredictionLaunchTest, RejectsUnavailableNativeLaunch)
+{
+    const auto unavailable = prepareGrenadeLaunch(false, false,
+        []() noexcept { return Optional<GrenadeLaunchState>{}; },
+        []() noexcept { return Optional<GrenadeLaunchState>{}; });
+    EXPECT_FALSE(unavailable.hasValue());
+}
+
 TEST(ManualGrenadeLaunchTest, FallsBackToManualLaunchWhenNativeIsUnavailable)
 {
     const GrenadeLaunchState manual{{7.0f, 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}};
