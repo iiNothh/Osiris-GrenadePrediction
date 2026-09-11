@@ -6,6 +6,8 @@
 #include <CS2/Constants/EntityHandle.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
+#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
+#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadePrediction.h>
 #include <Platform/GrenadePredictionCapabilities.h>
 
 namespace
@@ -55,6 +57,9 @@ struct Decoy {
     [[nodiscard]] int decoyShotTick() const noexcept { return 1; }
 };
 
+struct LiveGrenadePredictionTestContext {
+};
+
 [[nodiscard]] LiveGrenadeSnapshot snapshot(cs2::CEntityHandle handle) noexcept
 {
     return {handle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, GrenadeKind::Flashbang};
@@ -100,6 +105,8 @@ TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStren
 TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)
 {
     GrenadePredictionState state;
+    LiveGrenadePredictionTestContext context;
+    auto liveGrenadePrediction = LiveGrenadePrediction<LiveGrenadePredictionTestContext>{context, state};
     Trajectory liveGrenadeTrajectoryScratch;
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(secondProjectile)));
@@ -112,7 +119,7 @@ TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewes
     state.liveGrenadeCache.endScan();
 
     cs2::CEntityHandle simulatedProjectile{};
-    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto& projectile) noexcept {
+    EXPECT_TRUE(liveGrenadePrediction.attemptNewestProjectileAdoption(liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto& projectile) noexcept {
         simulatedProjectile = projectile.projectileHandle;
         return true;
     }));
@@ -165,12 +172,14 @@ TEST(GrenadePredictionControllerTest, DoesNotCacheOrOwnATempTrajectoryForAnInval
 TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLiveProjectile)
 {
     GrenadePredictionState state;
+    LiveGrenadePredictionTestContext context;
+    auto liveGrenadePrediction = LiveGrenadePrediction<LiveGrenadePredictionTestContext>{context, state};
     Trajectory liveGrenadeTrajectoryScratch;
     state.liveGrenadeCache.beginScan();
     state.liveGrenadeCache.endScan();
     bool simulated{};
 
-    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto&) noexcept {
+    EXPECT_FALSE(liveGrenadePrediction.attemptNewestProjectileAdoption(liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto&) noexcept {
         simulated = true;
         return true;
     }));
@@ -182,14 +191,16 @@ TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLivePro
 TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProjectile)
 {
     GrenadePredictionState state;
+    LiveGrenadePredictionTestContext context;
+    auto liveGrenadePrediction = LiveGrenadePrediction<LiveGrenadePredictionTestContext>{context, state};
     Trajectory liveGrenadeTrajectoryScratch;
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
     liveGrenadeTrajectoryScratch.valid = true;
     liveGrenadeTrajectoryScratch.pointsCount = 1;
     state.liveGrenadeCache.endScan();
 
-    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(
-        state, liveGrenadeTrajectoryScratch, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
+    EXPECT_TRUE(liveGrenadePrediction.attemptNewestProjectileAdoption(
+        liveGrenadeTrajectoryScratch, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
     EXPECT_FALSE(state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(100.0f));
 }
 
@@ -198,7 +209,7 @@ TEST(GrenadePredictionControllerTest, PropagatesDecoyAccessorTickToLifecycleCach
     GrenadePredictionState state;
     state.liveGrenadeCache.beginScan();
 
-    EXPECT_TRUE(GrenadePredictionController::updateDecoyLiveGrenade(state.liveGrenadeCache, Projectile{}, firstProjectile, Decoy{}));
+    EXPECT_TRUE(LiveGrenadeCacheUpdater{state.liveGrenadeCache}.update(Projectile{}, firstProjectile, GrenadeKind::Decoy, {.decoyShotTick = Decoy{}.decoyShotTick()}));
     state.liveGrenadeCache.endScan();
     EXPECT_FALSE(state.liveGrenadeCache.newestForThrower(localPawn).hasValue());
 }
