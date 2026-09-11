@@ -3,7 +3,6 @@
 #include <cstdint>
 
 #include <GameClient/Entities/GrenadeKind.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
@@ -67,20 +66,17 @@ TEST(GrenadePredictionAuthorityParityTest, RollbackAndMissingCustomTimeFollowRef
     state.lastCommittedTrajectory.pointsCount = 1;
     state.lastCommitCurtime = 10.0f;
     state.hasCommitCurtime = true;
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, Optional<float>{}));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, false, 0.0f, false),
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(false, 0.0f));
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, false, 0.0f, false),
         LastGrenadeCacheVisibility::Hide);
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 12.0f));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 12.0f, false),
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(true, 12.0f));
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 12.0f, false),
         LastGrenadeCacheVisibility::Show);
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_TRUE(GrenadePredictionController::observeCurrentTime(state, 11.0f));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false),
+    state.beginFrame();
+    EXPECT_TRUE(state.observeTime(true, 11.0f));
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false),
         LastGrenadeCacheVisibility::Hide);
     EXPECT_TRUE(state.rollbackDetected);
 }

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 
 namespace
 {
@@ -14,7 +14,7 @@ TEST(GrenadeThrowObservationParityTest, FinalizesLegacyReleaseWithoutRetainedPin
     state.tempTrajectory.pointsCount = 1;
     state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
     EXPECT_FALSE(state.throwObservation.observePinState(weapon, true));
-    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, weapon, state.throwObservation.observePinState(weapon, false), true, 10.0f));
+    EXPECT_TRUE(state.completeLegacyHeldThrow(weapon, state.throwObservation.observePinState(weapon, false), true, 10.0f));
     EXPECT_TRUE(state.throwObservation.isFinalized());
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
@@ -41,12 +41,12 @@ TEST(GrenadeThrowObservationParityTest, CapturesLateStrengthBeforeReadableThrowT
     constexpr cs2::CEntityHandle weapon{1};
     static_cast<void>(observation.observeWeapon(weapon));
 
-    GrenadePredictionController::captureThrowStrength(observation, false, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.25f}; });
+    observation.captureThrowStrength(false, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
     EXPECT_TRUE(observation.observeThrowTime(weapon, 10.0f));
 
-    GrenadePredictionController::captureThrowStrength(observation, true, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.5f}; });
+    observation.captureThrowStrength(true, Optional<float>{10.0f}, []() noexcept { return Optional<float>{0.5f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
 }
 
@@ -56,7 +56,7 @@ TEST(GrenadeThrowObservationParityTest, CapturesPinnedZeroStrength)
     constexpr cs2::CEntityHandle weapon{1};
     static_cast<void>(observation.observeWeapon(weapon));
 
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.0f}; });
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
@@ -72,7 +72,7 @@ TEST(GrenadeThrowObservationParityTest, ActualExecutionWithoutRetainedStrengthDo
     state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
     ASSERT_TRUE(state.throwObservation.observeThrowTime(weapon, 10.0f));
 
-    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, weapon, true, 10.1f));
+    EXPECT_TRUE(state.completeHeldThrow(weapon, true, 10.1f));
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
@@ -88,7 +88,7 @@ TEST(GrenadeThrowObservationParityTest, CommitsExpiredThrowTimeInItsFirstObserva
     state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
     ASSERT_TRUE(state.throwObservation.observeThrowTime(weapon, 10.0f));
 
-    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), true, 10.1f));
+    EXPECT_TRUE(state.completeHeldThrow(state.throwObservation.pendingWeapon(), true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
@@ -105,7 +105,7 @@ TEST(GrenadeThrowObservationParityTest, CommitsUsingPendingWeaponAcrossWeaponSwi
     state.tagTempTrajectory(oldWeapon, state.throwObservation.pendingSequence());
     ASSERT_TRUE(state.throwObservation.observeThrowTime(oldWeapon, 10.0f));
 
-    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), true, 10.1f));
+    EXPECT_TRUE(state.completeHeldThrow(state.throwObservation.pendingWeapon(), true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
     EXPECT_TRUE(state.throwObservation.observeWeapon(newWeapon));
 }
