@@ -2005,7 +2005,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeGravity.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeLaunchSelection.h">
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchSelection.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionMirror.h">
@@ -2038,7 +2038,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTracePreset.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h">
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\HeldGrenadeSimulationInput.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchFallback.h">

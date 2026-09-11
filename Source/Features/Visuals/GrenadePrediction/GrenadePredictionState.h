@@ -9,7 +9,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
-#include <Features/Visuals/GrenadePrediction/HeldGrenadeSimulationInput.h>
+#include <Features/Visuals/GrenadePrediction/Held/HeldGrenadeSimulationInput.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>

@@ -199,7 +199,7 @@
     <ClInclude Include="Features\Sound\WeaponReloadVisualizer.h" />
     <ClInclude Include="Features\Sound\WeaponScopeVisualizer.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeGravity.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeLaunchSelection.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchSelection.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionMirror.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionSnapshotBuilder.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePrediction.h" />
@@ -211,7 +211,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeSimulator.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTracePreset.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\HeldGrenadeSimulationInput.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchFallback.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadePredictionUpdateScheduler.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeThrowObservation.h" />

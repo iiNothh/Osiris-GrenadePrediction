@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <Features/Visuals/GrenadePrediction/GrenadeLaunchSelection.h>
+#include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchFallback.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Mocks/GrenadePrediction/ScriptedGrenadeTrace.h>
