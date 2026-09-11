@@ -2,24 +2,20 @@
 
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Classes/Entities/WeaponEntities.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeGravity.h>
+#include <CS2/Classes/EntitySystem/CEntityIdentity.h>
+#include <GameClient/Entities/EntityClassifier.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <GameClient/Entities/GrenadeKindMapper.h>
 #include <GameClient/Entities/GrenadeWeapon.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchFallback.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionSnapshotBuilder.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
-#include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
-#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
-#include <GameClient/Entities/GrenadeProjectile.h>
-#include <GameClient/Entities/DecoyProjectile.h>
+#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadePrediction.h>
 #include <GameClient/Entities/PlayerPawn.h>
-#include <GameClient/Entities/SmokeGrenadeProjectile.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
@@ -27,6 +23,7 @@
 #include <HookContext/HookContextMacros.h>
 #include <Platform/GrenadePredictionCapabilities.h>
 #include <Utils/Math.h>
+#include <Utils/Optional.h>
 
 template <typename HookContext>
 class GrenadePrediction {
@@ -35,44 +32,17 @@ public:
 
     void beginLiveGrenadeScan() noexcept
     {
-        auto& state = this->state();
-        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch);
-        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
+        LiveGrenadePrediction<HookContext>{hookContext, state()}.beginScan();
     }
 
     void endLiveGrenadeScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
-        auto& state = this->state();
-        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
-        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot, hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch,
-            static_cast<cs2::C_BaseEntity*>(localPawn));
+        LiveGrenadePrediction<HookContext>{hookContext, state()}.endScan(localPawn);
     }
 
     void updateLiveGrenade(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
-        GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.observe(hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch, identity);
-        if constexpr (!GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            return;
-        else {
-            const auto kind = GrenadeKindMapper::fromProjectile(type);
-            if (kind == GrenadeKind::None || !identity.entity)
-                return;
-            const auto grenade = GrenadeProjectile{hookContext, static_cast<cs2::C_BaseCSGrenadeProjectile*>(identity.entity)};
-            LiveGrenadeLifecycleState lifecycleState;
-            if (kind == GrenadeKind::SmokeGrenade) {
-                lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
-                if (!lifecycleState.smokeEffectStarted.hasValue() || lifecycleState.smokeEffectStarted.value()) {
-                    state().liveGrenadeCache.invalidate(identity.handle);
-                    return;
-                }
-            }
-            else if (kind == GrenadeKind::HEGrenade)
-                return static_cast<void>(GrenadePredictionController::updateHELiveGrenade(state().liveGrenadeCache, grenade, identity.handle));
-            else if (kind == GrenadeKind::Decoy)
-                return static_cast<void>(GrenadePredictionController::updateDecoyLiveGrenade(state().liveGrenadeCache, grenade, identity.handle,
-                    DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
-            static_cast<void>(LiveGrenadeCacheUpdater{state().liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
-        }
+        LiveGrenadePrediction<HookContext>{hookContext, state()}.observeEntity(identity, type);
     }
 
     void handleGrenadePrediction(auto&& playerPawn, auto&& activeWeapon, cs2::CEntityHandle localPawnHandle, bool enabled) noexcept
@@ -103,14 +73,7 @@ public:
             }
             if constexpr (GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction) {
                 auto& liveGrenadeTrajectoryScratch = hookContext.grenadePredictionPerHookState().liveGrenadeTrajectoryScratch;
-                if (GrenadePredictionController::acceptNewestLiveGrenade(state, liveGrenadeTrajectoryScratch, localPawnHandle, curtime, [&](const auto& projectile) noexcept {
-                    auto simulator = hookContext.template make<GrenadeSimulator>();
-                    liveGrenadeTrajectoryScratch.clear();
-                    simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-                    simulator.simulate(liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, pawn,
-                        grenade_prediction::resolveServerGravity(hookContext.cvarSystem()));
-                    return liveGrenadeTrajectoryScratch.valid && liveGrenadeTrajectoryScratch.pointsCount;
-                }))
+                if (LiveGrenadePrediction<HookContext>{hookContext, state}.attemptNewestProjectileAdoption(liveGrenadeTrajectoryScratch, localPawnHandle, curtime, pawn))
                     hideLivePrediction();
             }
             static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));

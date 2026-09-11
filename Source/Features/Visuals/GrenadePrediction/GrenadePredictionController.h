@@ -1,9 +1,8 @@
 #pragma once
 
-#include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
-#include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <Utils/Math.h>
+#include <Utils/Optional.h>
 
 class GrenadePredictionController {
 public:
@@ -129,46 +128,4 @@ public:
         return true;
     }
 
-    template <typename Simulate>
-    [[nodiscard]] static bool acceptNewestLiveGrenade(GrenadePredictionState& state, Trajectory& liveGrenadeTrajectoryScratch,
-        cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
-    {
-        if (currentTime.hasValue() && !Math::isFinite(currentTime.value()))
-            currentTime = {};
-        state.liveGrenadeAuthority.observeLocalPawn(localPawnHandle);
-        state.liveGrenadeAuthority.update(state.liveGrenadeCache);
-        if (!state.liveGrenadeCache.hasAuthoritativeScan()) {
-            return false;
-        }
-
-        const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
-        if (!projectile.hasValue() || !state.liveGrenadeAuthority.observeForSimulation(projectile.value()))
-            return false;
-        if (!state.liveGrenadeAuthority.isSimulationRetryDue(projectile.value(), state.frame)) {
-            return false;
-        }
-        if (!simulate(projectile.value())) {
-            state.liveGrenadeAuthority.recordSimulationFailure(projectile.value(), state.frame);
-            return false;
-        }
-
-        state.commitLiveGrenadeTrajectory(liveGrenadeTrajectoryScratch);
-        state.finalizeStagedTrajectory(true, currentTime.hasValue(), currentTime.valueOr(0.0f));
-        state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
-        state.invalidateTempTrajectory();
-        return true;
-    }
-
-    template <typename Projectile, typename Decoy>
-    [[nodiscard]] static bool updateDecoyLiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle, const Decoy& decoy) noexcept
-    {
-        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, GrenadeKind::Decoy, {.decoyShotTick = decoy.decoyShotTick()});
-    }
-
-    template <typename Projectile>
-    [[nodiscard]] static bool updateHELiveGrenade(LiveGrenadeCache& cache, const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
-    {
-        return LiveGrenadeCacheUpdater{cache}.update(projectile, projectileHandle, GrenadeKind::HEGrenade,
-            {.heExplodeEffectTickBegin = projectile.explodeEffectTickBegin()});
-    }
 };

@@ -2062,6 +2062,9 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeLifecycle.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadePrediction.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\Rendering\GrenadeTrajectoryRenderer.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>

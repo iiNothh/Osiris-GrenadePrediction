@@ -219,6 +219,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeCache.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeCacheUpdater.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeLifecycle.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadePrediction.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Rendering\GrenadeTrajectoryRenderer.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Rendering\TrajectoryLineSegment.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Rendering\TrajectoryRenderPlan.h" />
