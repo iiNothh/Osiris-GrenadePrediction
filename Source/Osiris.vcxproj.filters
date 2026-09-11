@@ -1459,6 +1459,9 @@
     <ClInclude Include="GameClient\Entities\GrenadeKindMapper.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="GameClient\Entities\GrenadeWeapon.h">
+      <Filter>GameClient\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="GameClient\Entities\GameRules.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
@@ -2026,6 +2029,9 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionPerHookState.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionState.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
@@ -2036,6 +2042,9 @@
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\HeldGrenadeSimulationInput.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchFallback.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadePredictionUpdateScheduler.h">
@@ -2105,6 +2114,9 @@
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunch.h">
+      <Filter>GameClient</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunchState.h">
       <Filter>GameClient</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPatterns\PatternTypes\CollisionPropertyPatternTypes.h">

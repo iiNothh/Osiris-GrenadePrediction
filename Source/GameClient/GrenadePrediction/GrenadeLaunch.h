@@ -8,10 +8,9 @@
 #include <CS2/Constants/EntityHandle.h>
 #include <MemoryPatterns/PatternTypes/ClientPatternTypes.h>
 #include <MemoryPatterns/PatternTypes/EntityPatternTypes.h>
-#include <Utils/Math.h>
 #include <Utils/Optional.h>
 
-struct GrenadeLaunchState { cs2::Vector origin; cs2::Vector velocity; };
+#include "GrenadeLaunchState.h"
 
 template <typename HookContext>
 class GrenadeLaunch {
@@ -36,16 +35,11 @@ public:
         cs2::Vector origin{nonFinite, nonFinite, nonFinite};
         cs2::Vector velocity{nonFinite, nonFinite, nonFinite};
         static_cast<void>(buildLaunch(grenade, pawn, &origin, &velocity, false));
-        if (isFinite(origin) && isFinite(velocity))
+        if (origin.isFinite() && velocity.isFinite())
             return GrenadeLaunchState{origin, velocity};
         return {};
     }
 
 private:
-    [[nodiscard]] static bool isFinite(const cs2::Vector& value) noexcept
-    {
-        return Math::isFinite(value.x) && Math::isFinite(value.y) && Math::isFinite(value.z);
-    }
-
     HookContext& hookContext;
 };

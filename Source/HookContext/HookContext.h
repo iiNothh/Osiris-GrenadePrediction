@@ -6,6 +6,7 @@
 #include <GameClient/Entities/PlantedC4.h>
 #include <GameClient/Entities/PlayerController.h>
 #include <Features/Common/InWorldPanelsPerHookState.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoPanelCachePerHookState.h>
 #include <GameClient/ConVars/CvarSystem.h>
 #include <GameClient/Entities/PlayerResource.h>
@@ -79,9 +80,15 @@ struct HookContext {
         return fullGlobalContext.playerInfoPanelCachePerHookState;
     }
 
+    [[nodiscard]] GrenadePredictionPerHookState& grenadePredictionPerHookState() const noexcept
+    {
+        return fullGlobalContext.grenadePredictionPerHookState;
+    }
+
     void clearRenderHookState() const noexcept
     {
         inWorldPanelsPerHookState() = {};
+        grenadePredictionPerHookState().clear();
         playerInfoPanelCachePerHookState() = {};
     }
 

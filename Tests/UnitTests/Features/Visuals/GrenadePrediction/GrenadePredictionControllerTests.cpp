@@ -2,6 +2,8 @@
 
 #include <limits>
 
+#include <CS2/Classes/EntitySystem/CEntityHandle.h>
+#include <CS2/Constants/EntityHandle.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Platform/GrenadePredictionCapabilities.h>
@@ -16,8 +18,6 @@ TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
     state.tempTrajectory.pointsCount = 1;
     state.lastCommittedTrajectory.valid = true;
     state.lastCommittedTrajectory.pointsCount = 1;
-    state.liveGrenadeTrajectoryScratch.valid = true;
-    state.liveGrenadeTrajectoryScratch.pointsCount = 1;
     state.hasCommitCurtime = true;
     state.hasLastValidCurtime = true;
     state.rollbackDetected = true;
@@ -28,13 +28,14 @@ TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
 
     EXPECT_FALSE(state.tempTrajectory.valid);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
-    EXPECT_FALSE(state.liveGrenadeTrajectoryScratch.valid);
     EXPECT_EQ(state.tempTrajectory.pointsCount, 0);
     EXPECT_EQ(state.lastCommittedTrajectory.pointsCount, 0);
-    EXPECT_EQ(state.liveGrenadeTrajectoryScratch.pointsCount, 0);
     EXPECT_FALSE(state.hasCommitCurtime);
     EXPECT_FALSE(state.hasLastValidCurtime);
     EXPECT_FALSE(state.rollbackDetected);
+    EXPECT_EQ(state.tempTrajectoryWeapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
+    EXPECT_EQ(state.heldSimulationInput.weapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
+    EXPECT_EQ(state.throwObservation.observedWeapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
     EXPECT_TRUE(hidLive);
     EXPECT_TRUE(hidCached);
 }
@@ -42,6 +43,7 @@ TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
 constexpr cs2::CEntityHandle localPawn{1};
 constexpr cs2::CEntityHandle firstProjectile{2};
 constexpr cs2::CEntityHandle secondProjectile{3};
+constexpr cs2::CEntityHandle heldWeapon{4};
 
 struct Projectile {
     [[nodiscard]] Optional<cs2::Vector> initialPosition() const noexcept { return cs2::Vector{1.0f, 2.0f, 3.0f}; }
@@ -61,19 +63,18 @@ struct Decoy {
 TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecution)
 {
     GrenadePredictionState state;
-    const int weapon{};
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
-    static_cast<void>(state.throwObservation.observeWeapon(&weapon));
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
     state.throwObservation.retainThrowStrength(0.5f);
-    state.tagTempTrajectory(&weapon, state.throwObservation.pendingSequence());
-    static_cast<void>(state.throwObservation.observeThrowTime(&weapon, 10.0f));
+    state.tagTempTrajectory(heldWeapon, state.throwObservation.pendingSequence());
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
     GrenadePredictionController::beginFrame(state);
     EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 10.0f));
 
-    EXPECT_FALSE(GrenadePredictionController::completeHeldThrow(state, &weapon, true, 10.0f));
+    EXPECT_FALSE(GrenadePredictionController::completeHeldThrow(state, heldWeapon, true, 10.0f));
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
-    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, &weapon, true, 10.1f));
+    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, heldWeapon, true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
     EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
                   state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 0.1f, true, 20.0f, false),
@@ -84,14 +85,13 @@ TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecut
 TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStrength)
 {
     GrenadePredictionState state;
-    const int weapon{};
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
-    static_cast<void>(state.throwObservation.observeWeapon(&weapon));
-    static_cast<void>(state.throwObservation.observePinState(&weapon, true));
-    state.tagTempTrajectory(&weapon, state.throwObservation.pendingSequence());
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observePinState(heldWeapon, true));
+    state.tagTempTrajectory(heldWeapon, state.throwObservation.pendingSequence());
 
-    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, &weapon, true, true, 10.0f));
+    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, heldWeapon, true, true, 10.0f));
     EXPECT_TRUE(state.throwObservation.isFinalized());
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
@@ -100,18 +100,19 @@ TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStren
 TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)
 {
     GrenadePredictionState state;
+    Trajectory liveGrenadeTrajectoryScratch;
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(secondProjectile)));
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
-    state.liveGrenadeTrajectoryScratch.valid = true;
-    state.liveGrenadeTrajectoryScratch.pointsCount = 1;
+    liveGrenadeTrajectoryScratch.valid = true;
+    liveGrenadeTrajectoryScratch.pointsCount = 1;
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
-    state.tagTempTrajectory(reinterpret_cast<const void*>(1), 1);
+    state.tagTempTrajectory(heldWeapon, 1);
     state.liveGrenadeCache.endScan();
 
     cs2::CEntityHandle simulatedProjectile{};
-    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [&](const auto& projectile) noexcept {
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto& projectile) noexcept {
         simulatedProjectile = projectile.projectileHandle;
         return true;
     }));
@@ -122,14 +123,54 @@ TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewes
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
+TEST(GrenadePredictionControllerTest, TreatsDifferentHeldWeaponHandleAsNewSimulationCacheOwner)
+{
+    GrenadePredictionState state;
+    HeldGrenadeSimulationInput input{.weapon = {4}, .throwSequence = 1};
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    state.cacheHeldSimulationInput(input);
+
+    EXPECT_FALSE(state.shouldSimulateHeld(input));
+
+    const HeldGrenadeSimulationInput inputForDifferentWeapon{.weapon = {5}, .throwSequence = 1};
+    EXPECT_TRUE(state.shouldSimulateHeld(inputForDifferentWeapon));
+}
+
+TEST(GrenadePredictionControllerTest, DoesNotCacheOrOwnATempTrajectoryForAnInvalidWeaponHandle)
+{
+    GrenadePredictionState state;
+    const HeldGrenadeSimulationInput validInput{.weapon = {4}, .throwSequence = 1};
+    const HeldGrenadeSimulationInput invalidInput{.weapon = {cs2::INVALID_EHANDLE_INDEX}, .throwSequence = 1};
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    state.cacheHeldSimulationInput(validInput);
+
+    EXPECT_TRUE(state.ownsTempTrajectory(validInput.weapon, validInput.throwSequence));
+    EXPECT_FALSE(state.ownsTempTrajectory(invalidInput.weapon, invalidInput.throwSequence));
+    EXPECT_FALSE(state.shouldSimulateHeld(invalidInput));
+    state.tagTempTrajectory(invalidInput.weapon, invalidInput.throwSequence);
+    EXPECT_FALSE(state.tempTrajectory.valid);
+
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    state.cacheHeldSimulationInput(invalidInput);
+
+    EXPECT_FALSE(state.hasHeldSimulationInput);
+    EXPECT_FALSE(state.tempTrajectory.valid);
+    EXPECT_FALSE(state.ownsTempTrajectory(invalidInput.weapon, invalidInput.throwSequence));
+    EXPECT_FALSE(state.stageOwnedTempTrajectory(invalidInput.weapon, invalidInput.throwSequence));
+}
+
 TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLiveProjectile)
 {
     GrenadePredictionState state;
+    Trajectory liveGrenadeTrajectoryScratch;
     state.liveGrenadeCache.beginScan();
     state.liveGrenadeCache.endScan();
     bool simulated{};
 
-    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [&](const auto&) noexcept {
+    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, liveGrenadeTrajectoryScratch, localPawn, 10.0f, [&](const auto&) noexcept {
         simulated = true;
         return true;
     }));
@@ -141,12 +182,14 @@ TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLivePro
 TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProjectile)
 {
     GrenadePredictionState state;
+    Trajectory liveGrenadeTrajectoryScratch;
     EXPECT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
-    state.liveGrenadeTrajectoryScratch.valid = true;
-    state.liveGrenadeTrajectoryScratch.pointsCount = 1;
+    liveGrenadeTrajectoryScratch.valid = true;
+    liveGrenadeTrajectoryScratch.pointsCount = 1;
     state.liveGrenadeCache.endScan();
 
-    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(
+        state, liveGrenadeTrajectoryScratch, localPawn, std::numeric_limits<float>::infinity(), [](const auto&) noexcept { return true; }));
     EXPECT_FALSE(state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(100.0f));
 }
 

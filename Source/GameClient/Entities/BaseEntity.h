@@ -45,6 +45,11 @@ public:
         return hookContext.patternSearchResults().template get<OffsetToAbsVelocity>().of(entity).toOptional();
     }
 
+    [[nodiscard]] auto viewOffset() const noexcept
+    {
+        return hookContext.patternSearchResults().template get<OffsetToViewOffset>().of(entity).toOptional();
+    }
+
     [[nodiscard]] decltype(auto) entityIdentity() const noexcept
     {
         return hookContext.template make<EntityIdentity>(entity ? entity->identity : nullptr);
@@ -93,7 +98,7 @@ public:
 
     [[nodiscard]] cs2::CEntityHandle handle() const noexcept
     {
-        if (entity)
+        if (entity && entity->identity && entity->identity->entity == entity)
             return entity->identity->handle;
         return cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
     }

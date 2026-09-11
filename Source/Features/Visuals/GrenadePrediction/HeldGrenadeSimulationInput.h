@@ -4,6 +4,7 @@
 
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
 #include <CS2/Classes/Vector.h>
+#include <CS2/Constants/EntityHandle.h>
 #include <GameClient/Entities/GrenadeKind.h>
 
 struct HeldGrenadeSimulationInput {
@@ -13,7 +14,7 @@ struct HeldGrenadeSimulationInput {
     float gravity{};
     std::uint64_t collisionSnapshotRevision{};
     cs2::CEntityHandle localPawnHandle{};
-    const void* weapon{};
+    cs2::CEntityHandle weapon{cs2::INVALID_EHANDLE_INDEX};
     std::uint32_t throwSequence{};
 
     [[nodiscard]] bool exactlyEquals(const HeldGrenadeSimulationInput& other) const noexcept

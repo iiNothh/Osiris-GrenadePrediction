@@ -15,6 +15,7 @@
 #include <Features/Sound/Details/SoundWatcher.h>
 #include <Features/Common/InWorldPanelsState.h>
 #include <Features/FeaturesStates.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Visuals/ModelGlow/Preview/PlayerModelGlowPreviewState.h>
 #include <Features/Visuals/ModelGlow/Preview/WeaponModelGlowPreviewState.h>
 #include <Features/Visuals/PlayerInfoInWorld/PlayerInfoPanelCachePerHookState.h>
@@ -76,5 +77,6 @@ struct FullGlobalContext {
     PlayerModelGlowPreviewState playerModelGlowPreviewState;
     WeaponModelGlowPreviewState weaponModelGlowPreviewState;
     InWorldPanelsPerHookState inWorldPanelsPerHookState;
+    GrenadePredictionPerHookState grenadePredictionPerHookState;
     PlayerInfoPanelCachePerHookState playerInfoPanelCachePerHookState;
 };

@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include <CS2/Classes/EntitySystem/CEntityHandle.h>
+#include <CS2/Constants/EntityHandle.h>
 #include <Utils/Math.h>
 
 enum class GrenadeThrowPhase : std::uint8_t {
@@ -11,7 +13,7 @@ enum class GrenadeThrowPhase : std::uint8_t {
 };
 
 struct GrenadeThrowObservation {
-    [[nodiscard]] bool observeWeapon(const void* weapon) noexcept
+    [[nodiscard]] bool observeWeapon(cs2::CEntityHandle weapon) noexcept
     {
         if (observedWeapon == weapon)
             return false;
@@ -22,7 +24,7 @@ struct GrenadeThrowObservation {
         return true;
     }
 
-    [[nodiscard]] bool observePinState(const void* weapon, bool pinPulled) noexcept
+    [[nodiscard]] bool observePinState(cs2::CEntityHandle weapon, bool pinPulled) noexcept
     {
         if (observedWeapon != weapon) {
             static_cast<void>(observeWeapon(weapon));
@@ -47,7 +49,7 @@ struct GrenadeThrowObservation {
         }
     }
 
-    [[nodiscard]] bool observeThrowTime(const void* weapon, float throwTime) noexcept
+    [[nodiscard]] bool observeThrowTime(cs2::CEntityHandle weapon, float throwTime) noexcept
     {
         if (weapon != observedWeapon)
             return false;
@@ -91,7 +93,10 @@ struct GrenadeThrowObservation {
     }
 
     [[nodiscard]] bool hasPendingExecution() const noexcept { return phase == GrenadeThrowPhase::PendingExecution; }
-    [[nodiscard]] const void* pendingWeapon() const noexcept { return phase == GrenadeThrowPhase::PendingExecution ? observedWeapon : nullptr; }
+    [[nodiscard]] cs2::CEntityHandle pendingWeapon() const noexcept
+    {
+        return phase == GrenadeThrowPhase::PendingExecution ? observedWeapon : cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
+    }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
     [[nodiscard]] bool canCommitActualExecution() const noexcept { return hasRetainedThrowStrength; }
     [[nodiscard]] bool isStrengthLocked() const noexcept { return phase != GrenadeThrowPhase::Observing; }
@@ -108,13 +113,13 @@ struct GrenadeThrowObservation {
 
     void reset() noexcept
     {
-        observedWeapon = nullptr;
+        observedWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
         hasPinBaseline = false;
         previousPinPulled = false;
         resetThrowSequence();
     }
 
-    const void* observedWeapon{};
+    cs2::CEntityHandle observedWeapon{cs2::INVALID_EHANDLE_INDEX};
     bool hasPinBaseline{};
     bool previousPinPulled{};
     float retainedThrowStrength{1.0f};

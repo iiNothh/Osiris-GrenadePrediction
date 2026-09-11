@@ -8,6 +8,7 @@
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePrediction.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionContext.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 
@@ -71,6 +72,33 @@ struct GrenadePredictionUnloadTestContext {
     GrenadePredictionUnloadUiEngine uiEngine;
 };
 
+TEST(GrenadePredictionPerHookStateTest, ClearsOnlyTransientScratchBetweenRenderHooks)
+{
+    GrenadePredictionPerHookState perHookState;
+    perHookState.liveGrenadeTrajectoryScratch = {.pointsCount = 1, .valid = true};
+    perHookState.playerCollisionCollectionScratch.count = 1;
+    perHookState.playerCollisionCollectionScratch.playerDataInvalid = true;
+    perHookState.playerCollisionCollectionScratch.overflowed = true;
+
+    FeaturesStates featuresStates;
+    auto& state = featuresStates.visualFeaturesStates.grenadePredictionState;
+    state.playerCollisionSnapshot = {.count = 1, .status = GrenadePlayerCollisionSnapshotStatus::Available, .revision = 7};
+    state.commitLiveGrenadeTrajectory(perHookState.liveGrenadeTrajectoryScratch);
+
+    perHookState.clear();
+
+    EXPECT_FALSE(perHookState.liveGrenadeTrajectoryScratch.valid);
+    EXPECT_EQ(perHookState.liveGrenadeTrajectoryScratch.pointsCount, 0);
+    EXPECT_EQ(perHookState.playerCollisionCollectionScratch.count, 0);
+    EXPECT_FALSE(perHookState.playerCollisionCollectionScratch.playerDataInvalid);
+    EXPECT_FALSE(perHookState.playerCollisionCollectionScratch.overflowed);
+    EXPECT_EQ(state.playerCollisionSnapshot.status, GrenadePlayerCollisionSnapshotStatus::Available);
+    EXPECT_EQ(state.playerCollisionSnapshot.count, 1);
+    EXPECT_EQ(state.playerCollisionSnapshot.revision, 7);
+    EXPECT_TRUE(state.lastCommittedTrajectory.valid);
+    EXPECT_EQ(state.lastCommittedTrajectory.pointsCount, 1);
+}
+
 TEST(GrenadePredictionTest, OnUnloadClearsStateAndDeletesPanels)
 {
     GrenadePredictionUnloadTestContext context;
@@ -83,8 +111,6 @@ TEST(GrenadePredictionTest, OnUnloadClearsStateAndDeletesPanels)
     state.tempTrajectory.pointsCount = 1;
     state.lastCommittedTrajectory.valid = true;
     state.lastCommittedTrajectory.pointsCount = 1;
-    state.liveGrenadeTrajectoryScratch.valid = true;
-    state.liveGrenadeTrajectoryScratch.pointsCount = 1;
     state.liveContainerPanelHandle = livePanel;
     state.lastCacheContainerPanelHandle = cachedPanel;
     state.livePresentationState.activePanelCount = 1;
@@ -103,7 +129,6 @@ TEST(GrenadePredictionTest, OnUnloadClearsStateAndDeletesPanels)
     EXPECT_EQ(context.uiEngine.deletedPanels[1], cachedPanel);
     EXPECT_FALSE(state.tempTrajectory.valid);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
-    EXPECT_FALSE(state.liveGrenadeTrajectoryScratch.valid);
     EXPECT_FALSE(state.liveGrenadeCache.newestForThrower(localPawn).hasValue());
     EXPECT_FALSE(state.liveContainerPanelHandle.isValid());
     EXPECT_FALSE(state.lastCacheContainerPanelHandle.isValid());
