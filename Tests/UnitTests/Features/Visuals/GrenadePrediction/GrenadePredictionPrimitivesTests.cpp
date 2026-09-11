@@ -4,7 +4,7 @@
 
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
+#include <Features/Visuals/GrenadePrediction/CachedGrenadeTrajectoryPresentation.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
@@ -127,101 +127,101 @@ TEST(GrenadePredictionThrowObservationTest, UsesDefaultStrengthBeforePinIsPulled
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
 }
 
-TEST(GrenadePredictionControllerTest, CapturesRealStrengthAfterObservingPinPull)
+TEST(GrenadeThrowObservationTest, CapturesRealStrengthAfterObservingPinPull)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle weapon{4};
     static_cast<void>(observation.observeWeapon(weapon));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, weapon, false));
-    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.25f}; });
+    static_cast<void>(observation.observePinState(weapon, false));
+    observation.captureThrowStrength(false, {}, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, weapon, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.25f}; });
+    static_cast<void>(observation.observePinState(weapon, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.25f}; });
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.25f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
-TEST(GrenadePredictionControllerTest, ResetsCompletedPartialFlashThrowWhenReacquiringFlashbang)
+TEST(GrenadeThrowObservationTest, ResetsCompletedPartialFlashThrowWhenReacquiringFlashbang)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle thrownFlashbang{4};
     constexpr cs2::CEntityHandle reacquiredFlashbang{5};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, thrownFlashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
+    static_cast<void>(observation.observePinState(thrownFlashbang, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(thrownFlashbang, 10.0f));
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, reacquiredFlashbang, false));
-    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
+    static_cast<void>(observation.observePinState(reacquiredFlashbang, false));
+    observation.captureThrowStrength(false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
     EXPECT_FALSE(observation.isFinalized());
 }
 
-TEST(GrenadePredictionControllerTest, ResetsPartialFlashThrowWhenObservingAnotherGrenadeKind)
+TEST(GrenadeThrowObservationTest, ResetsPartialFlashThrowWhenObservingAnotherGrenadeKind)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle flashbang{4};
     constexpr cs2::CEntityHandle heGrenade{5};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, flashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
+    static_cast<void>(observation.observePinState(flashbang, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(flashbang, 10.0f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, heGrenade, false));
-    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
+    static_cast<void>(observation.observePinState(heGrenade, false));
+    observation.captureThrowStrength(false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
     EXPECT_FALSE(observation.hasPendingExecution());
 }
 
-TEST(GrenadePredictionControllerTest, ResetsPendingStrengthForANewObservationOfTheSameKind)
+TEST(GrenadeThrowObservationTest, ResetsPendingStrengthForANewObservationOfTheSameKind)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle firstFlashbang{4};
     constexpr cs2::CEntityHandle secondFlashbang{5};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, firstFlashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
+    static_cast<void>(observation.observePinState(firstFlashbang, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.5f}; });
     ASSERT_TRUE(observation.observeThrowTime(firstFlashbang, 10.0f));
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, secondFlashbang, false));
-    GrenadePredictionController::captureThrowStrength(observation, false, {}, []() noexcept { return Optional<float>{0.0f}; });
+    static_cast<void>(observation.observePinState(secondFlashbang, false));
+    observation.captureThrowStrength(false, {}, []() noexcept { return Optional<float>{0.0f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
     EXPECT_FALSE(observation.hasPendingExecution());
 }
 
-TEST(GrenadePredictionControllerTest, RetainsPinnedZeroStrengthForTheCurrentThrow)
+TEST(GrenadeThrowObservationTest, RetainsPinnedZeroStrengthForTheCurrentThrow)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle flashbang{4};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, flashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.0f}; });
+    static_cast<void>(observation.observePinState(flashbang, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.0f}; });
     ASSERT_TRUE(observation.observeThrowTime(flashbang, 10.0f));
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, flashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, []() noexcept { return Optional<float>{0.5f}; });
+    static_cast<void>(observation.observePinState(flashbang, true));
+    observation.captureThrowStrength(true, {}, []() noexcept { return Optional<float>{0.5f}; });
 
     EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.0f);
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
-TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForAnUnpinnedFlashbang)
+TEST(GrenadeThrowObservationTest, DoesNotReadZeroStrengthForAnUnpinnedFlashbang)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle flashbang{4};
     bool readThrowStrength{};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, flashbang, false));
-    GrenadePredictionController::captureThrowStrength(observation, false, {}, [&]() noexcept {
+    static_cast<void>(observation.observePinState(flashbang, false));
+    observation.captureThrowStrength(false, {}, [&]() noexcept {
         readThrowStrength = true;
         return Optional<float>{0.0f};
     });
@@ -231,15 +231,15 @@ TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForAnUnpinnedFlashb
     EXPECT_FALSE(observation.hasRetainedThrowStrength);
 }
 
-TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForUnpinnedGenericGrenadeTransitions)
+TEST(GrenadeThrowObservationTest, DoesNotReadZeroStrengthForUnpinnedGenericGrenadeTransitions)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle weapons[]{{4}, {5}, {6}, {7}, {8}};
 
     for (const auto weapon : weapons) {
         bool readThrowStrength{};
-        static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, weapon, false));
-        GrenadePredictionController::captureThrowStrength(observation, false, {}, [&]() noexcept {
+        static_cast<void>(observation.observePinState(weapon, false));
+        observation.captureThrowStrength(false, {}, [&]() noexcept {
             readThrowStrength = true;
             return Optional<float>{0.0f};
         });
@@ -249,14 +249,14 @@ TEST(GrenadePredictionControllerTest, DoesNotReadZeroStrengthForUnpinnedGenericG
     }
 }
 
-TEST(GrenadePredictionControllerTest, ReadsAndRetainsPinnedZeroStrengthForCurrentCycle)
+TEST(GrenadeThrowObservationTest, ReadsAndRetainsPinnedZeroStrengthForCurrentCycle)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle flashbang{4};
     bool readThrowStrength{};
 
-    static_cast<void>(GrenadePredictionController::observeHeldThrow(observation, flashbang, true));
-    GrenadePredictionController::captureThrowStrength(observation, true, {}, [&]() noexcept {
+    static_cast<void>(observation.observePinState(flashbang, true));
+    observation.captureThrowStrength(true, {}, [&]() noexcept {
         readThrowStrength = true;
         return Optional<float>{0.0f};
     });
@@ -308,10 +308,9 @@ TEST(GrenadePredictionStateTest, HonorsVisibilityModesAndFlashExpiry)
     EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Off, 0.0f, true, 2.0f, true), LastGrenadeCacheVisibility::Invalidate);
     state.lastCommitCurtime = 1.0f;
     state.hasCommitCurtime = true;
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 2.0f));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 2.0f, true, 2.0f, false),
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(true, 2.0f));
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 2.0f, true, 2.0f, false),
         LastGrenadeCacheVisibility::Show);
 
     LiveGrenadeAuthority authority;
@@ -326,8 +325,7 @@ TEST(GrenadePredictionStateTest, HonorsVisibilityModesAndFlashExpiry)
 
     const auto earlyHideTime = acceptedTime + LiveGrenadeAuthority::flashHorizon - LiveGrenadeAuthority::flashEarlyHideLead;
     EXPECT_TRUE(authority.isFlashbangInEarlyHideWindow(earlyHideTime));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 0.0f, true, earlyHideTime, false),
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 0.0f, true, earlyHideTime, false),
         LastGrenadeCacheVisibility::Invalidate);
 
     const auto cachedProjectileAfterAcceptance = authority.newestLocalProjectile(cache);
@@ -344,20 +342,18 @@ TEST(GrenadePredictionStateTest, ClearsCommitBaselineOnceWhenTimeRollsBack)
     state.lastCommittedTrajectory.pointsCount = 1;
     state.lastCommitCurtime = 20.0f;
     state.hasCommitCurtime = true;
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 20.0f));
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_TRUE(GrenadePredictionController::observeCurrentTime(state, 10.0f));
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(true, 20.0f));
+    state.beginFrame();
+    EXPECT_TRUE(state.observeTime(true, 10.0f));
 
-    const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-        state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false);
+    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false);
     EXPECT_EQ(decision, LastGrenadeCacheVisibility::Hide);
     EXPECT_FALSE(state.hasCommitCurtime);
     EXPECT_FLOAT_EQ(state.lastValidCurtime, 10.0f);
 
-    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [] {}, [] {}, [] {});
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false),
+    CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [] {}, [] {});
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false),
         LastGrenadeCacheVisibility::Hide);
     EXPECT_FALSE(state.rollbackDetected);
 }
@@ -372,10 +368,9 @@ TEST(GrenadePredictionStateTest, TreatsNonFiniteCurrentTimeAsUnavailableForCache
     state.hasCommitCurtime = true;
     state.hasLastValidCurtime = true;
 
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, Optional<float>{std::numeric_limits<float>::quiet_NaN()}));
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 1.0f, true, std::numeric_limits<float>::quiet_NaN(), false),
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(false, 0.0f));
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 1.0f, true, std::numeric_limits<float>::quiet_NaN(), false),
         LastGrenadeCacheVisibility::Hide);
     EXPECT_FLOAT_EQ(state.lastValidCurtime, 10.0f);
 }

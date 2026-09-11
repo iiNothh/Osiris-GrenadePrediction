@@ -204,7 +204,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionSnapshotBuilder.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePrediction.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionConfigVariables.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionController.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\CachedGrenadeTrajectoryPresentation.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionPerHookState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionState.h" />

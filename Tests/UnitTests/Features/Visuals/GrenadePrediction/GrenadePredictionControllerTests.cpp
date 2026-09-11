@@ -5,7 +5,9 @@
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
 #include <CS2/Constants/EntityHandle.h>
 #include <GameClient/Entities/GrenadeKind.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
+#include <Features/Visuals/GrenadePrediction/CachedGrenadeTrajectoryPresentation.h>
+#include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadePrediction.h>
 #include <Platform/GrenadePredictionCapabilities.h>
@@ -13,7 +15,7 @@
 namespace
 {
 
-TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
+TEST(GrenadePredictionStateTest, ClearsPrediction)
 {
     GrenadePredictionState state;
     state.tempTrajectory.valid = true;
@@ -23,10 +25,7 @@ TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
     state.hasCommitCurtime = true;
     state.hasLastValidCurtime = true;
     state.rollbackDetected = true;
-    bool hidLive{};
-    bool hidCached{};
-
-    GrenadePredictionController::clearPredictionAndHidePanels(state, [&] { hidLive = true; }, [&] { hidCached = true; });
+    state.clearPrediction();
 
     EXPECT_FALSE(state.tempTrajectory.valid);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
@@ -38,8 +37,6 @@ TEST(GrenadePredictionControllerTest, ClearsPredictionAndHidesPanels)
     EXPECT_EQ(state.tempTrajectoryWeapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
     EXPECT_EQ(state.heldSimulationInput.weapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
     EXPECT_EQ(state.throwObservation.observedWeapon, (cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}));
-    EXPECT_TRUE(hidLive);
-    EXPECT_TRUE(hidCached);
 }
 
 constexpr cs2::CEntityHandle localPawn{1};
@@ -65,7 +62,7 @@ struct LiveGrenadePredictionTestContext {
     return {handle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, GrenadeKind::Flashbang};
 }
 
-TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecution)
+TEST(GrenadePredictionStateTest, CommitsHeldThrowOnlyAfterOwnedNativeExecution)
 {
     GrenadePredictionState state;
     state.tempTrajectory.valid = true;
@@ -74,20 +71,19 @@ TEST(GrenadePredictionControllerTest, CommitsHeldThrowOnlyAfterOwnedNativeExecut
     state.throwObservation.retainThrowStrength(0.5f);
     state.tagTempTrajectory(heldWeapon, state.throwObservation.pendingSequence());
     static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 10.0f));
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(true, 10.0f));
 
-    EXPECT_FALSE(GrenadePredictionController::completeHeldThrow(state, heldWeapon, true, 10.0f));
+    EXPECT_FALSE(state.completeHeldThrow(heldWeapon, true, 10.0f));
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
-    EXPECT_TRUE(GrenadePredictionController::completeHeldThrow(state, heldWeapon, true, 10.1f));
+    EXPECT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
-    EXPECT_EQ(GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-                  state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 0.1f, true, 20.0f, false),
+    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 0.1f, true, 20.0f, false),
         LastGrenadeCacheVisibility::Show);
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
-TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStrength)
+TEST(GrenadePredictionStateTest, FinalizesLegacyReleaseWithoutRetainedStrength)
 {
     GrenadePredictionState state;
     state.tempTrajectory.valid = true;
@@ -96,13 +92,13 @@ TEST(GrenadePredictionControllerTest, FinalizesLegacyReleaseWithoutRetainedStren
     static_cast<void>(state.throwObservation.observePinState(heldWeapon, true));
     state.tagTempTrajectory(heldWeapon, state.throwObservation.pendingSequence());
 
-    EXPECT_TRUE(GrenadePredictionController::completeLegacyHeldThrow(state, heldWeapon, true, true, 10.0f));
+    EXPECT_TRUE(state.completeLegacyHeldThrow(heldWeapon, true, true, 10.0f));
     EXPECT_TRUE(state.throwObservation.isFinalized());
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
-TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)
+TEST(LiveGrenadePredictionTest, CompletesScanBySimulatingAndAcceptingNewestLocalProjectile)
 {
     GrenadePredictionState state;
     LiveGrenadePredictionTestContext context;
@@ -130,7 +126,7 @@ TEST(GrenadePredictionControllerTest, CompletesScanBySimulatingAndAcceptingNewes
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
-TEST(GrenadePredictionControllerTest, TreatsDifferentHeldWeaponHandleAsNewSimulationCacheOwner)
+TEST(GrenadePredictionStateTest, TreatsDifferentHeldWeaponHandleAsNewSimulationCacheOwner)
 {
     GrenadePredictionState state;
     HeldGrenadeSimulationInput input{.weapon = {4}, .throwSequence = 1};
@@ -144,7 +140,7 @@ TEST(GrenadePredictionControllerTest, TreatsDifferentHeldWeaponHandleAsNewSimula
     EXPECT_TRUE(state.shouldSimulateHeld(inputForDifferentWeapon));
 }
 
-TEST(GrenadePredictionControllerTest, DoesNotCacheOrOwnATempTrajectoryForAnInvalidWeaponHandle)
+TEST(GrenadePredictionStateTest, DoesNotCacheOrOwnATempTrajectoryForAnInvalidWeaponHandle)
 {
     GrenadePredictionState state;
     const HeldGrenadeSimulationInput validInput{.weapon = {4}, .throwSequence = 1};
@@ -169,7 +165,7 @@ TEST(GrenadePredictionControllerTest, DoesNotCacheOrOwnATempTrajectoryForAnInval
     EXPECT_FALSE(state.stageOwnedTempTrajectory(invalidInput.weapon, invalidInput.throwSequence));
 }
 
-TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLiveProjectile)
+TEST(LiveGrenadePredictionTest, EmptyAuthoritativeScanDoesNotAcceptLiveProjectile)
 {
     GrenadePredictionState state;
     LiveGrenadePredictionTestContext context;
@@ -188,7 +184,7 @@ TEST(GrenadePredictionControllerTest, EmptyAuthoritativeScanDoesNotAcceptLivePro
     EXPECT_FALSE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 }
 
-TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProjectile)
+TEST(LiveGrenadePredictionTest, DoesNotUseNonFiniteTimeForAcceptedLiveProjectile)
 {
     GrenadePredictionState state;
     LiveGrenadePredictionTestContext context;
@@ -204,7 +200,7 @@ TEST(GrenadePredictionControllerTest, DoesNotUseNonFiniteTimeForAcceptedLiveProj
     EXPECT_FALSE(state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(100.0f));
 }
 
-TEST(GrenadePredictionControllerTest, PropagatesDecoyAccessorTickToLifecycleCacheRemoval)
+TEST(LiveGrenadeCacheUpdaterTest, PropagatesDecoyAccessorTickToLifecycleCacheRemoval)
 {
     GrenadePredictionState state;
     state.liveGrenadeCache.beginScan();
@@ -214,7 +210,7 @@ TEST(GrenadePredictionControllerTest, PropagatesDecoyAccessorTickToLifecycleCach
     EXPECT_FALSE(state.liveGrenadeCache.newestForThrower(localPawn).hasValue());
 }
 
-TEST(GrenadePredictionControllerTest, RollbackHidesBothPanelsAndClearsTheRollbackMarker)
+TEST(CachedGrenadeTrajectoryPresentationTest, RollbackHidesBothPanelsAndClearsTheRollbackMarker)
 {
     GrenadePredictionState state;
     state.lastCommittedTrajectory.valid = true;
@@ -223,16 +219,15 @@ TEST(GrenadePredictionControllerTest, RollbackHidesBothPanelsAndClearsTheRollbac
     state.tempTrajectory.pointsCount = 1;
     state.lastCommitCurtime = 10.0f;
     state.hasCommitCurtime = true;
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_FALSE(GrenadePredictionController::observeCurrentTime(state, 12.0f));
-    GrenadePredictionController::beginFrame(state);
-    EXPECT_TRUE(GrenadePredictionController::observeCurrentTime(state, 11.0f));
-    const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-        state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false);
+    state.beginFrame();
+    EXPECT_FALSE(state.observeTime(true, 12.0f));
+    state.beginFrame();
+    EXPECT_TRUE(state.observeTime(true, 11.0f));
+    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false);
     int hiddenLive{};
     int hiddenCached{};
 
-    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [] {}, [&] { ++hiddenLive; }, [&] { ++hiddenCached; });
+    CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [&] { ++hiddenLive; }, [&] { ++hiddenCached; });
 
     EXPECT_EQ(decision, LastGrenadeCacheVisibility::Hide);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
@@ -242,26 +237,26 @@ TEST(GrenadePredictionControllerTest, RollbackHidesBothPanelsAndClearsTheRollbac
     EXPECT_EQ(hiddenCached, 1);
 }
 
-TEST(GrenadePredictionControllerTest, AdvancesSchedulerBeforeAWeaponDependentExit)
+TEST(GrenadePredictionUpdateSchedulerTest, AdvancesSchedulerBeforeAWeaponDependentExit)
 {
     GrenadePredictionUpdateScheduler scheduler;
 
-    EXPECT_TRUE(GrenadePredictionController::advanceScheduler(scheduler, false, 1.0f / 240.0f));
+    EXPECT_TRUE(scheduler.shouldUpdate(false, true, 1.0f / 240.0f));
     EXPECT_TRUE(scheduler.initialized);
-    EXPECT_FALSE(GrenadePredictionController::advanceScheduler(scheduler, false, 1.0f / 240.0f));
+    EXPECT_FALSE(scheduler.shouldUpdate(false, true, 1.0f / 240.0f));
 }
 
-TEST(GrenadePredictionControllerTest, TreatsNonFiniteFrametimeAsUnavailable)
+TEST(GrenadePredictionUpdateSchedulerTest, TreatsNonFiniteFrametimeAsUnavailable)
 {
     GrenadePredictionUpdateScheduler scheduler;
 
-    EXPECT_TRUE(GrenadePredictionController::advanceScheduler(scheduler, false, 1.0f / 240.0f));
+    EXPECT_TRUE(scheduler.shouldUpdate(false, true, 1.0f / 240.0f));
     scheduler.accumulatedTime = GrenadePredictionUpdateScheduler::updateInterval * 0.5f;
-    EXPECT_TRUE(GrenadePredictionController::advanceScheduler(scheduler, false, std::numeric_limits<float>::quiet_NaN()));
+    EXPECT_TRUE(scheduler.shouldUpdate(false, false, 0.0f));
     EXPECT_FLOAT_EQ(scheduler.accumulatedTime, 0.0f);
 }
 
-TEST(GrenadePredictionControllerTest, RendersTheCachedTrajectoryOnceAfterValidityUpdate)
+TEST(CachedGrenadeTrajectoryPresentationTest, RendersTheCachedTrajectoryOnceAfterValidityUpdate)
 {
     GrenadePredictionState state;
     state.lastCommittedTrajectory.valid = true;
@@ -269,28 +264,27 @@ TEST(GrenadePredictionControllerTest, RendersTheCachedTrajectoryOnceAfterValidit
     int drawn{};
     int hidden{};
 
-    const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(
-        state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false);
-    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [] {}, [] {}, [] {});
-    GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision, [&] { ++drawn; }, [] {}, [&] { ++hidden; });
+    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false);
+    CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [] {}, [] {});
+    CachedGrenadeTrajectoryPresentation::apply(state, decision, [&] { ++drawn; }, [] {}, [&] { ++hidden; });
 
     EXPECT_EQ(drawn, 1);
     EXPECT_EQ(hidden, 0);
 }
 
-TEST(GrenadePredictionControllerTest, ResetsPresentationStateOnUnload)
+TEST(GrenadePredictionStateTest, ResetsPresentationStateOnUnload)
 {
     GrenadePredictionState state;
     state.livePresentationState = {.activePanelCount = 1};
     state.lastCachePresentationState = {.activePanelCount = 1};
 
-    GrenadePredictionController::resetPresentationState(state);
+    state.resetPresentationState();
 
     EXPECT_EQ(state.livePresentationState.activePanelCount, 0);
     EXPECT_EQ(state.lastCachePresentationState.activePanelCount, 0);
 }
 
-TEST(GrenadePredictionControllerTest, ReportsLiveProjectileSupportThroughPlatformCapabilities)
+TEST(GrenadePredictionPlatformCapabilitiesTest, ReportsLiveProjectileSupportThroughPlatformCapabilities)
 {
     EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction, IS_WIN64());
     EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsHeldPrediction, IS_WIN64());

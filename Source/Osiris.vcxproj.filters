@@ -2020,7 +2020,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionConfigVariables.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
-    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionController.h">
+    <ClInclude Include="Features\Visuals\GrenadePrediction\CachedGrenadeTrajectoryPresentation.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionParams.h">

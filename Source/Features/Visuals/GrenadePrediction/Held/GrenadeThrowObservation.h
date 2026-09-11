@@ -5,6 +5,7 @@
 #include <CS2/Classes/EntitySystem/CEntityHandle.h>
 #include <CS2/Constants/EntityHandle.h>
 #include <Utils/Math.h>
+#include <Utils/Optional.h>
 
 enum class GrenadeThrowPhase : std::uint8_t {
     Observing,
@@ -96,6 +97,17 @@ struct GrenadeThrowObservation {
     [[nodiscard]] cs2::CEntityHandle pendingWeapon() const noexcept
     {
         return phase == GrenadeThrowPhase::PendingExecution ? observedWeapon : cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
+    }
+
+    template <typename ReadThrowStrength>
+    void captureThrowStrength(bool pinPulled, Optional<float> throwTime, ReadThrowStrength&& readThrowStrength) noexcept
+    {
+        const bool hasPositiveThrowTime = throwTime.hasValue() && Math::isFinite(throwTime.value()) && throwTime.value() > 0.0f;
+        if (isStrengthLocked() || (!pinPulled && !hasPositiveThrowTime))
+            return;
+        const auto throwStrength = readThrowStrength();
+        if (throwStrength.hasValue())
+            retainThrowStrength(throwStrength.value());
     }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
     [[nodiscard]] bool canCommitActualExecution() const noexcept { return hasRetainedThrowStrength; }

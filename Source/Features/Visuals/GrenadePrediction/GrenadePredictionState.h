@@ -94,6 +94,20 @@ struct GrenadePredictionState {
         tempTrajectorySequence = 0;
         invalidateHeldSimulationInput();
     }
+
+    void clearPrediction() noexcept
+    {
+        throwObservation.reset();
+        updateScheduler.reset();
+        liveGrenadeAuthority.reset();
+        lastCommitCurtime = 0.0f;
+        lastValidCurtime = 0.0f;
+        hasCommitCurtime = false;
+        hasLastValidCurtime = false;
+        rollbackDetected = false;
+        invalidateTempTrajectory();
+        invalidateCommittedTrajectory();
+    }
     void invalidateCommittedTrajectory() noexcept { lastCommittedTrajectory.clear(); }
     void tagTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
     {
@@ -124,6 +138,13 @@ struct GrenadePredictionState {
         return weapon != cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}
             && tempTrajectory.valid && tempTrajectory.pointsCount && tempTrajectoryWeapon == weapon && tempTrajectorySequence == sequence;
     }
+    void recordHeldSimulationResult(const HeldGrenadeSimulationInput& input, bool succeeded) noexcept
+    {
+        if (succeeded && tempTrajectory.valid && tempTrajectory.pointsCount)
+            cacheHeldSimulationInput(input);
+        else
+            invalidateTempTrajectory();
+    }
     void commitLiveGrenadeTrajectory(const Trajectory& trajectory) noexcept { copyTrajectory(lastCommittedTrajectory, trajectory); }
     [[nodiscard]] bool stageOwnedTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
     {
@@ -139,6 +160,33 @@ struct GrenadePredictionState {
         if (hasCurtime && Math::isFinite(curtime)) { lastCommitCurtime = curtime; hasCommitCurtime = true; }
         else if (hasLastValidCurtime) { lastCommitCurtime = lastValidCurtime; hasCommitCurtime = true; }
         frameCommitMarker = frame;
+    }
+    [[nodiscard]] bool completeHeldThrow(cs2::CEntityHandle weapon, bool hasCurtime, float curtime) noexcept
+    {
+        if (!throwObservation.consumeActualExecution(hasCurtime, curtime))
+            return false;
+
+        const bool stagedTrajectoryReady = throwObservation.canCommitActualExecution()
+            && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
+        finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
+        invalidateTempTrajectory();
+        return true;
+    }
+    [[nodiscard]] bool completeLegacyHeldThrow(cs2::CEntityHandle weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
+    {
+        if (!throwObservation.consumeLegacyRelease(releaseEdge))
+            return false;
+
+        const bool stagedTrajectoryReady = throwObservation.canCommitActualExecution()
+            && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
+        finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
+        invalidateTempTrajectory();
+        return true;
+    }
+    void resetPresentationState() noexcept
+    {
+        livePresentationState = {};
+        lastCachePresentationState = {};
     }
     void resetForRollback() noexcept
     {

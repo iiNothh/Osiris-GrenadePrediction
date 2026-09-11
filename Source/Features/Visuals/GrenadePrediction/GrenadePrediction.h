@@ -9,8 +9,8 @@
 #include <GameClient/Entities/GrenadeWeapon.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchSelection.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeLaunchFallback.h>
+#include <Features/Visuals/GrenadePrediction/CachedGrenadeTrajectoryPresentation.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
@@ -50,7 +50,7 @@ public:
         if (!playerPawn.isControlledByLocalPlayer())
             return;
         auto& state = this->state();
-        GrenadePredictionController::beginFrame(state);
+        state.beginFrame();
         const auto rawCurtime = hookContext.globalVars().curtime();
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
         const bool hasCurtime = curtime.hasValue();
@@ -76,12 +76,12 @@ public:
                 if (LiveGrenadePrediction<HookContext>{hookContext, state}.attemptNewestProjectileAdoption(liveGrenadeTrajectoryScratch, localPawnHandle, curtime, pawn))
                     hideLivePrediction();
             }
-            static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
+            static_cast<void>(state.observeTime(hasCurtime, time));
             const auto rawFrametime = hookContext.globalVars().frametime();
             const Optional<float> frametime = rawFrametime.hasValue() && Math::isFinite(rawFrametime.value()) ? rawFrametime : Optional<float>{};
-            bool shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, false, frametime);
+            bool shouldUpdate = state.updateScheduler.shouldUpdate(false, frametime.hasValue(), frametime.valueOr(0.0f));
             const auto pendingWeapon = state.throwObservation.pendingWeapon();
-            if (GrenadePredictionController::completeHeldThrow(state, pendingWeapon, hasCurtime, time)) {
+            if (state.completeHeldThrow(pendingWeapon, hasCurtime, time)) {
                 hideLivePrediction();
                 presentCachedTrajectory();
                 return;
@@ -101,14 +101,14 @@ public:
             const Optional<float> throwTime = rawThrowTime.hasValue() && Math::isFinite(rawThrowTime.value()) ? rawThrowTime : Optional<float>{};
             const bool releaseEdge = observeHeldThrow(weapon, weaponHandle, throwTime);
             const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weaponHandle, throwTime.value());
-            if (GrenadePredictionController::completeHeldThrow(state, state.throwObservation.pendingWeapon(), hasCurtime, time)
-                || (!throwTime.hasValue() && GrenadePredictionController::completeLegacyHeldThrow(state, weaponHandle, releaseEdge, hasCurtime, time))) {
+            if (state.completeHeldThrow(state.throwObservation.pendingWeapon(), hasCurtime, time)
+                || (!throwTime.hasValue() && state.completeLegacyHeldThrow(weaponHandle, releaseEdge, hasCurtime, time))) {
                 hideLivePrediction();
                 presentCachedTrajectory();
                 return;
             }
             if (scheduledTransition)
-                shouldUpdate = GrenadePredictionController::advanceScheduler(state.updateScheduler, true, frametime);
+                shouldUpdate = state.updateScheduler.shouldUpdate(true, frametime.hasValue(), frametime.valueOr(0.0f));
             if (!shouldUpdate) {
                 if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.ownsTempTrajectory(weaponHandle, state.throwObservation.sequence))
                     drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
@@ -132,11 +132,11 @@ public:
             const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
             const HeldGrenadeSimulationInput input{launch.value().origin, launch.value().velocity, kind, gravity, state.playerCollisionSnapshot.revision,
                 localPawnHandle, weaponHandle, state.throwObservation.sequence};
-            if (GrenadePredictionController::isHeldSimulationNecessary(state, input, shouldUpdate)) {
+            if (shouldUpdate && !state.liveGrenadeAuthority.blocksHeldPrediction() && state.shouldSimulateHeld(input)) {
                 simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
                 simulator.simulate(state.tempTrajectory, launch.value(), kind, pawn, gravity);
                 const bool succeeded = state.tempTrajectory.valid && state.tempTrajectory.pointsCount;
-                GrenadePredictionController::recordHeldSimulationResult(state, input, succeeded);
+                state.recordHeldSimulationResult(input, succeeded);
                 if (!succeeded)
                     hideLivePrediction(state.throwObservation.hasPendingExecution());
             }
@@ -151,7 +151,7 @@ public:
     void handleNoLocalPawn() noexcept
     {
         auto& state = this->state();
-        GrenadePredictionController::beginFrame(state);
+        state.beginFrame();
         if constexpr (GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
             if (!grenade_trace_preset::isInFlightTraceAvailable(hookContext.template make<EngineTrace>())) {
                 clearPrediction();
@@ -160,7 +160,7 @@ public:
         }
         const auto rawCurtime = hookContext.globalVars().curtime();
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
-        static_cast<void>(GrenadePredictionController::observeCurrentTime(state, curtime));
+        static_cast<void>(state.observeTime(curtime.hasValue(), curtime.valueOr(0.0f)));
         clearPrediction();
         applyCachedTrajectoryPresentation(curtime.hasValue(), curtime.valueOr(0.0f));
     }
@@ -168,8 +168,9 @@ public:
     void clearPrediction() noexcept
     {
         auto& state = this->state();
-        GrenadePredictionController::clearPredictionAndHidePanels(state,
-            [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
+        state.clearPrediction();
+        hideLivePrediction();
+        renderer().hide(state.lastCacheContainerPanelHandle);
     }
 
     void onUnload() noexcept
@@ -182,7 +183,7 @@ public:
         uiEngine.deletePanelByHandle(state.lastCacheContainerPanelHandle);
         state.liveContainerPanelHandle = {};
         state.lastCacheContainerPanelHandle = {};
-        GrenadePredictionController::resetPresentationState(state);
+        state.resetPresentationState();
     }
 
 private:
@@ -205,9 +206,9 @@ private:
         const auto grenadeWeapon = hookContext.template make<GrenadeWeapon>(weapon);
         if (const auto pinState = grenadeWeapon.pinPulled(); pinState.hasValue()) {
             pinPulled = pinState.value();
-            releaseEdge = GrenadePredictionController::observeHeldThrow(observation, weaponHandle, pinPulled);
+            releaseEdge = observation.observePinState(weaponHandle, pinPulled);
         }
-        GrenadePredictionController::captureThrowStrength(observation, pinPulled, throwTime, [&]() noexcept {
+        observation.captureThrowStrength(pinPulled, throwTime, [&]() noexcept {
             return grenadeWeapon.throwStrength();
         });
         return releaseEdge;
@@ -221,10 +222,9 @@ private:
     void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept
     {
         auto& state = this->state();
-        const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(state,
-            GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), hasCurtime, curtime,
-            acceptedProjectilePresent(state, hasCurtime, curtime));
-        GrenadePredictionController::applyCachedTrajectoryPresentationDecision(state, decision,
+        const auto decision = state.cacheVisibility(GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration),
+            hasCurtime, curtime, acceptedProjectilePresent(state, hasCurtime, curtime));
+        CachedGrenadeTrajectoryPresentation::apply(state, decision,
             [this, &state] { drawTrajectory(state.lastCommittedTrajectory, state.lastCacheContainerPanelHandle, state.lastCachePresentationState); },
             [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
     }
