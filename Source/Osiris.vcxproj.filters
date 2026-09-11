@@ -1429,6 +1429,9 @@
     <ClInclude Include="GameClient\Entities\GrenadeKindMapper.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="GameClient\Entities\GrenadeWeapon.h">
+      <Filter>GameClient\Entities</Filter>
+    </ClInclude>
     <ClInclude Include="GameClient\Entities\GameRules.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>

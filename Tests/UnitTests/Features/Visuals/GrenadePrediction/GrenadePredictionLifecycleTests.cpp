@@ -27,16 +27,19 @@ TEST(GrenadePredictionLifecycleTest, KeepsHEGrenadeWhenExplodeEffectTickIsUnavai
 TEST(GrenadePredictionLifecycleTest, PositiveHEExplodeEffectTickInvalidatesAcceptedTrajectory)
 {
     GrenadePredictionState state;
+    Trajectory liveGrenadeTrajectoryScratch{.pointsCount = 1, .valid = true};
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(state.liveGrenadeCache.upsert({projectileHandle, localPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, GrenadeKind::HEGrenade}));
     state.liveGrenadeCache.endScan();
-    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.0f, [](const auto&) noexcept { return true; }));
+    EXPECT_TRUE(GrenadePredictionController::acceptNewestLiveGrenade(
+        state, liveGrenadeTrajectoryScratch, localPawn, 10.0f, [](const auto&) noexcept { return true; }));
     ASSERT_TRUE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 
     state.liveGrenadeCache.beginScan();
     EXPECT_TRUE(GrenadePredictionController::updateHELiveGrenade(state.liveGrenadeCache, HEProjectile{}, projectileHandle));
     state.liveGrenadeCache.endScan();
-    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(state, localPawn, 10.1f, [](const auto&) noexcept { return true; }));
+    EXPECT_FALSE(GrenadePredictionController::acceptNewestLiveGrenade(
+        state, liveGrenadeTrajectoryScratch, localPawn, 10.1f, [](const auto&) noexcept { return true; }));
     EXPECT_FALSE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 }
 

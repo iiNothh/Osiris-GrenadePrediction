@@ -11,7 +11,7 @@
 #include <GameClient/EntitySystem/EntitySystem.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/EngineTrace/TraceResult.h>
-#include <GameClient/GrenadePrediction/GrenadeLaunch.h>
+#include <GameClient/GrenadePrediction/GrenadeLaunchState.h>
 #include <Utils/Math.h>
 
 struct StepResult {

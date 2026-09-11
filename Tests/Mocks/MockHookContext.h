@@ -40,6 +40,7 @@ struct MockHookContext {
     MOCK_METHOD(OsirisDirectoryPath&, osirisDirectoryPath, ());
     MOCK_METHOD(MockGui&, gui, ());
     MOCK_METHOD(FeaturesStates&, featuresStates, ());
+    MOCK_METHOD(GrenadePredictionPerHookState&, grenadePredictionPerHookState, ());
     MOCK_METHOD(MockPlayerController&, localPlayerController, ());
     MOCK_METHOD(MockPanelHandle&, makePanelHandle, (cs2::PanelHandle& panelHandle));
     MOCK_METHOD(MockViewToProjectionMatrix&, makeViewToProjectionMatrix, ());

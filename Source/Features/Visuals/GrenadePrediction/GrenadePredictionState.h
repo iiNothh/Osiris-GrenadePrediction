@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include <CS2/Classes/EntitySystem/CEntityHandle.h>
+#include <CS2/Constants/EntityHandle.h>
 #include <CS2/Panorama/PanelHandle.h>
 
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
@@ -20,9 +22,8 @@ enum class LastGrenadeCacheVisibility { Hide, Show, Invalidate };
 struct GrenadePredictionState {
     Trajectory lastCommittedTrajectory{};
     Trajectory tempTrajectory{};
-    Trajectory liveGrenadeTrajectoryScratch{};
 
-    const void* tempTrajectoryWeapon{};
+    cs2::CEntityHandle tempTrajectoryWeapon{cs2::INVALID_EHANDLE_INDEX};
     std::uint32_t tempTrajectorySequence{};
     HeldGrenadeSimulationInput heldSimulationInput{};
     bool hasHeldSimulationInput{};
@@ -32,7 +33,6 @@ struct GrenadePredictionState {
     LiveGrenadeCache liveGrenadeCache{};
     LiveGrenadeAuthority liveGrenadeAuthority{};
     GrenadePlayerCollisionSnapshot playerCollisionSnapshot{};
-    GrenadePlayerCollisionCollectionScratch playerCollisionCollectionScratch{};
 
     cs2::PanelHandle liveContainerPanelHandle{};
     cs2::PanelHandle lastCacheContainerPanelHandle{};
@@ -83,35 +83,49 @@ struct GrenadePredictionState {
 
     void invalidateHeldSimulationInput() noexcept
     {
-        heldSimulationInput = {};
+        heldSimulationInput = {.weapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}};
         hasHeldSimulationInput = false;
     }
 
     void invalidateTempTrajectory() noexcept
     {
         tempTrajectory.clear();
-        tempTrajectoryWeapon = nullptr;
+        tempTrajectoryWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
         tempTrajectorySequence = 0;
         invalidateHeldSimulationInput();
     }
     void invalidateCommittedTrajectory() noexcept { lastCommittedTrajectory.clear(); }
-    void tagTempTrajectory(const void* weapon, std::uint32_t sequence) noexcept { tempTrajectoryWeapon = weapon; tempTrajectorySequence = sequence; }
+    void tagTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
+    {
+        if (weapon == cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}) {
+            invalidateTempTrajectory();
+            return;
+        }
+        tempTrajectoryWeapon = weapon;
+        tempTrajectorySequence = sequence;
+    }
     void cacheHeldSimulationInput(const HeldGrenadeSimulationInput& input) noexcept
     {
+        if (input.weapon == cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}) {
+            invalidateTempTrajectory();
+            return;
+        }
         heldSimulationInput = input;
         hasHeldSimulationInput = true;
         tagTempTrajectory(input.weapon, input.throwSequence);
     }
     [[nodiscard]] bool shouldSimulateHeld(const HeldGrenadeSimulationInput& input) const noexcept
     {
-        return !hasHeldSimulationInput || !heldSimulationInput.exactlyEquals(input) || !ownsTempTrajectory(input.weapon, input.throwSequence);
+        return input.weapon != cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}
+            && (!hasHeldSimulationInput || !heldSimulationInput.exactlyEquals(input) || !ownsTempTrajectory(input.weapon, input.throwSequence));
     }
-    [[nodiscard]] bool ownsTempTrajectory(const void* weapon, std::uint32_t sequence) const noexcept
+    [[nodiscard]] bool ownsTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) const noexcept
     {
-        return tempTrajectory.valid && tempTrajectory.pointsCount && tempTrajectoryWeapon == weapon && tempTrajectorySequence == sequence;
+        return weapon != cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}
+            && tempTrajectory.valid && tempTrajectory.pointsCount && tempTrajectoryWeapon == weapon && tempTrajectorySequence == sequence;
     }
-    void commitLiveGrenadeTrajectory() noexcept { copyTrajectory(lastCommittedTrajectory, liveGrenadeTrajectoryScratch); }
-    [[nodiscard]] bool stageOwnedTempTrajectory(const void* weapon, std::uint32_t sequence) noexcept
+    void commitLiveGrenadeTrajectory(const Trajectory& trajectory) noexcept { copyTrajectory(lastCommittedTrajectory, trajectory); }
+    [[nodiscard]] bool stageOwnedTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
     {
         if (liveGrenadeAuthority.hasObservedLiveProjectile() || !ownsTempTrajectory(weapon, sequence))
             return false;
@@ -131,7 +145,6 @@ struct GrenadePredictionState {
         throwObservation.reset();
         invalidateTempTrajectory();
         invalidateCommittedTrajectory();
-        liveGrenadeTrajectoryScratch.clear();
         updateScheduler.reset();
         liveGrenadeAuthority.reset();
         lastCommitCurtime = 0.0f;

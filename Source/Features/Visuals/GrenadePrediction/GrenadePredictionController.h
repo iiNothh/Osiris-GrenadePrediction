@@ -24,7 +24,6 @@ public:
         state.rollbackDetected = false;
         state.invalidateTempTrajectory();
         state.invalidateCommittedTrajectory();
-        state.liveGrenadeTrajectoryScratch.clear();
     }
 
     template <typename HideLive, typename HideCached>
@@ -91,7 +90,7 @@ public:
         state.lastCachePresentationState = {};
     }
 
-    [[nodiscard]] static bool observeHeldThrow(GrenadeThrowObservation& observation, const void* weapon, bool pinPulled) noexcept
+    [[nodiscard]] static bool observeHeldThrow(GrenadeThrowObservation& observation, cs2::CEntityHandle weapon, bool pinPulled) noexcept
     {
         return observation.observePinState(weapon, pinPulled);
     }
@@ -106,7 +105,7 @@ public:
             observation.retainThrowStrength(throwStrength.value());
     }
 
-    [[nodiscard]] static bool completeHeldThrow(GrenadePredictionState& state, const void* weapon, bool hasCurtime, float curtime) noexcept
+    [[nodiscard]] static bool completeHeldThrow(GrenadePredictionState& state, cs2::CEntityHandle weapon, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeActualExecution(hasCurtime, curtime))
             return false;
@@ -118,7 +117,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] static bool completeLegacyHeldThrow(GrenadePredictionState& state, const void* weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
+    [[nodiscard]] static bool completeLegacyHeldThrow(GrenadePredictionState& state, cs2::CEntityHandle weapon, bool releaseEdge, bool hasCurtime, float curtime) noexcept
     {
         if (!state.throwObservation.consumeLegacyRelease(releaseEdge))
             return false;
@@ -131,7 +130,8 @@ public:
     }
 
     template <typename Simulate>
-    [[nodiscard]] static bool acceptNewestLiveGrenade(GrenadePredictionState& state, cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
+    [[nodiscard]] static bool acceptNewestLiveGrenade(GrenadePredictionState& state, Trajectory& liveGrenadeTrajectoryScratch,
+        cs2::CEntityHandle localPawnHandle, Optional<float> currentTime, Simulate&& simulate) noexcept
     {
         if (currentTime.hasValue() && !Math::isFinite(currentTime.value()))
             currentTime = {};
@@ -152,7 +152,7 @@ public:
             return false;
         }
 
-        state.commitLiveGrenadeTrajectory();
+        state.commitLiveGrenadeTrajectory(liveGrenadeTrajectoryScratch);
         state.finalizeStagedTrajectory(true, currentTime.hasValue(), currentTime.valueOr(0.0f));
         state.liveGrenadeAuthority.accept(projectile.value(), currentTime);
         state.invalidateTempTrajectory();

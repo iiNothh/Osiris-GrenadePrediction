@@ -23,8 +23,8 @@ constexpr cs2::CEntityHandle localPawn{7};
 TEST(GrenadePredictionAuthorityParityTest, PendingWeaponHandoffUsesStoredWeaponAndDeadline)
 {
     GrenadeThrowObservation observation;
-    const auto oldWeapon = reinterpret_cast<const void*>(1);
-    const auto newWeapon = reinterpret_cast<const void*>(2);
+    constexpr cs2::CEntityHandle oldWeapon{1};
+    constexpr cs2::CEntityHandle newWeapon{2};
     ASSERT_TRUE(observation.observeWeapon(oldWeapon));
     ASSERT_TRUE(observation.observeThrowTime(oldWeapon, 5.0f));
     EXPECT_EQ(observation.pendingWeapon(), oldWeapon);
@@ -36,7 +36,7 @@ TEST(GrenadePredictionAuthorityParityTest, PendingWeaponHandoffUsesStoredWeaponA
 TEST(GrenadePredictionAuthorityParityTest, NewerFailedProjectileBlocksHeldAndOlderRetries)
 {
     GrenadePredictionState state;
-    const auto weapon = reinterpret_cast<const void*>(1);
+    constexpr cs2::CEntityHandle weapon{1};
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
     state.tagTempTrajectory(weapon, 1);

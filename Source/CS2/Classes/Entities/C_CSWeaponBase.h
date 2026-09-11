@@ -13,6 +13,8 @@ enum class CSWeaponMode : std::int32_t {
     Secondary,
     Max
 };
+struct C_CSPlayerPawn;
+struct Vector;
 
 struct C_CSWeaponBase : C_BaseModelEntity {
     using m_iClip1 = std::int32_t;
