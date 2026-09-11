@@ -7,7 +7,6 @@
 #include <Features/FeaturesStates.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePrediction.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionContext.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
@@ -45,8 +44,7 @@ struct GrenadePredictionUnloadUiEngine {
 
 struct GrenadePredictionUnloadTestContext {
     GrenadePredictionUnloadTestContext() noexcept
-        : grenadePredictionContext{*this}
-        , renderer{rendererRecorder}
+        : renderer{rendererRecorder}
     {
     }
 
@@ -55,9 +53,7 @@ struct GrenadePredictionUnloadTestContext {
     template <template <typename> typename T, typename... Args>
     [[nodiscard]] decltype(auto) make(Args&&...) noexcept
     {
-        if constexpr (std::is_same_v<T<GrenadePredictionUnloadTestContext>, GrenadePredictionContext<GrenadePredictionUnloadTestContext>>) {
-            return (grenadePredictionContext);
-        } else if constexpr (std::is_same_v<T<GrenadePredictionUnloadTestContext>, GrenadeTrajectoryRenderer<GrenadePredictionUnloadTestContext>>) {
+        if constexpr (std::is_same_v<T<GrenadePredictionUnloadTestContext>, GrenadeTrajectoryRenderer<GrenadePredictionUnloadTestContext>>) {
             return (renderer);
         } else {
             static_assert(std::is_same_v<T<GrenadePredictionUnloadTestContext>, PanoramaUiEngine<GrenadePredictionUnloadTestContext>>);
@@ -66,7 +62,6 @@ struct GrenadePredictionUnloadTestContext {
     }
 
     FeaturesStates featuresStatesStorage{};
-    GrenadePredictionContext<GrenadePredictionUnloadTestContext> grenadePredictionContext;
     GrenadePredictionUnloadRendererRecorder rendererRecorder;
     GrenadePredictionUnloadRenderer renderer;
     GrenadePredictionUnloadUiEngine uiEngine;

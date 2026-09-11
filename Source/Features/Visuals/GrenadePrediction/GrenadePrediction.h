@@ -11,7 +11,6 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionSnapshotBuilder.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionController.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionContext.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
 #include <Features/Visuals/GrenadePrediction/Rendering/GrenadeTrajectoryRenderer.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
@@ -36,14 +35,14 @@ public:
 
     void beginLiveGrenadeScan() noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch);
         LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
     }
 
     void endLiveGrenadeScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot, hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch,
             static_cast<cs2::C_BaseEntity*>(localPawn));
@@ -63,16 +62,16 @@ public:
             if (kind == GrenadeKind::SmokeGrenade) {
                 lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
                 if (!lifecycleState.smokeEffectStarted.hasValue() || lifecycleState.smokeEffectStarted.value()) {
-                    context().state().liveGrenadeCache.invalidate(identity.handle);
+                    state().liveGrenadeCache.invalidate(identity.handle);
                     return;
                 }
             }
             else if (kind == GrenadeKind::HEGrenade)
-                return static_cast<void>(GrenadePredictionController::updateHELiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle));
+                return static_cast<void>(GrenadePredictionController::updateHELiveGrenade(state().liveGrenadeCache, grenade, identity.handle));
             else if (kind == GrenadeKind::Decoy)
-                return static_cast<void>(GrenadePredictionController::updateDecoyLiveGrenade(context().state().liveGrenadeCache, grenade, identity.handle,
+                return static_cast<void>(GrenadePredictionController::updateDecoyLiveGrenade(state().liveGrenadeCache, grenade, identity.handle,
                     DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
-            static_cast<void>(LiveGrenadeCacheUpdater{context().state().liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
+            static_cast<void>(LiveGrenadeCacheUpdater{state().liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
         }
     }
 
@@ -80,7 +79,7 @@ public:
     {
         if (!playerPawn.isControlledByLocalPlayer())
             return;
-        auto& state = context().state();
+        auto& state = this->state();
         GrenadePredictionController::beginFrame(state);
         const auto rawCurtime = hookContext.globalVars().curtime();
         const Optional<float> curtime = rawCurtime.hasValue() && Math::isFinite(rawCurtime.value()) ? rawCurtime : Optional<float>{};
@@ -188,7 +187,7 @@ public:
 
     void handleNoLocalPawn() noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         GrenadePredictionController::beginFrame(state);
         if constexpr (GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
             if (!grenade_trace_preset::isInFlightTraceAvailable(hookContext.template make<EngineTrace>())) {
@@ -205,7 +204,7 @@ public:
 
     void clearPrediction() noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         GrenadePredictionController::clearPredictionAndHidePanels(state,
             [this] { hideLivePrediction(); }, [this, &state] { renderer().hide(state.lastCacheContainerPanelHandle); });
     }
@@ -213,7 +212,7 @@ public:
     void onUnload() noexcept
     {
         clearPrediction();
-        auto& state = context().state();
+        auto& state = this->state();
         state.liveGrenadeCache.clear();
         auto&& uiEngine = hookContext.template make<PanoramaUiEngine>();
         uiEngine.deletePanelByHandle(state.liveContainerPanelHandle);
@@ -224,20 +223,20 @@ public:
     }
 
 private:
-    [[nodiscard]] decltype(auto) context() const noexcept { return hookContext.template make<GrenadePredictionContext>(); }
+    [[nodiscard]] auto& state() const noexcept { return hookContext.featuresStates().visualFeaturesStates.grenadePredictionState; }
     [[nodiscard]] auto renderer() noexcept { return hookContext.template make<GrenadeTrajectoryRenderer>(); }
     void hideLivePrediction(bool preserve = false) noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         renderer().hide(state.liveContainerPanelHandle);
         if (!preserve)
             state.invalidateTempTrajectory();
     }
     [[nodiscard]] bool observeHeldThrow(cs2::C_BaseCSGrenade* weapon, cs2::CEntityHandle weaponHandle, Optional<float> throwTime) noexcept
     {
-        auto& observation = context().state().throwObservation;
+        auto& observation = state().throwObservation;
         if (observation.observeWeapon(weaponHandle))
-            context().state().invalidateTempTrajectory();
+            state().invalidateTempTrajectory();
         bool pinPulled{};
         bool releaseEdge{};
         const auto grenadeWeapon = hookContext.template make<GrenadeWeapon>(weapon);
@@ -258,7 +257,7 @@ private:
     }
     void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept
     {
-        auto& state = context().state();
+        auto& state = this->state();
         const auto decision = GrenadePredictionController::makeCachedTrajectoryPresentationDecision(state,
             GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), hasCurtime, curtime,
             acceptedProjectilePresent(state, hasCurtime, curtime));
