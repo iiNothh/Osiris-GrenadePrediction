@@ -34,44 +34,18 @@ public:
     {
         auto& scratch = hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch;
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(scratch);
-        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.beginScan();
+        state.liveGrenadeCache.beginScan();
     }
 
     void observeEntity(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.observe(hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch, identity);
-        if constexpr (!GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
-            return;
-        else {
-            const auto kind = GrenadeKindMapper::fromProjectile(type);
-            if (kind == GrenadeKind::None || !identity.entity)
-                return;
-
-            const auto grenade = GrenadeProjectile{hookContext, static_cast<cs2::C_BaseCSGrenadeProjectile*>(identity.entity)};
-            LiveGrenadeLifecycleState lifecycleState;
-            if (kind == GrenadeKind::SmokeGrenade) {
-                lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
-                if (!lifecycleState.smokeEffectStarted.hasValue() || lifecycleState.smokeEffectStarted.value()) {
-                    state.liveGrenadeCache.invalidate(identity.handle);
-                    return;
-                }
-            }
-            else if (kind == GrenadeKind::HEGrenade) {
-                static_cast<void>(updateHELiveGrenade(grenade, identity.handle));
-                return;
-            }
-            else if (kind == GrenadeKind::Decoy) {
-                static_cast<void>(updateDecoyLiveGrenade(grenade, identity.handle,
-                    DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
-                return;
-            }
-            static_cast<void>(LiveGrenadeCacheUpdater{state.liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
-        }
+        observeLiveProjectile(identity, type);
     }
 
     void endScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
-        LiveGrenadeCacheUpdater{state.liveGrenadeCache}.endScan();
+        state.liveGrenadeCache.endScan();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot,
             hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch, static_cast<cs2::C_BaseEntity*>(localPawn));
     }
@@ -108,16 +82,53 @@ public:
         Optional<float> currentTime, cs2::C_CSPlayerPawn* pawn) noexcept
     {
         return attemptNewestProjectileAdoption(liveGrenadeTrajectoryScratch, localPawnHandle, currentTime, [&](const auto& projectile) noexcept {
-            auto simulator = hookContext.template make<GrenadeSimulator>();
-            liveGrenadeTrajectoryScratch.clear();
-            simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
-            simulator.simulate(liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, pawn,
-                grenade_prediction::resolveServerGravity(hookContext.cvarSystem()));
-            return liveGrenadeTrajectoryScratch.valid && liveGrenadeTrajectoryScratch.pointsCount;
+            return simulateProjectileTrajectory(liveGrenadeTrajectoryScratch, projectile, pawn);
         });
     }
 
 private:
+    void observeLiveProjectile(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
+    {
+        if constexpr (!GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
+            return;
+        else {
+            const auto kind = GrenadeKindMapper::fromProjectile(type);
+            if (kind == GrenadeKind::None || !identity.entity)
+                return;
+
+            const auto grenade = GrenadeProjectile{hookContext, static_cast<cs2::C_BaseCSGrenadeProjectile*>(identity.entity)};
+            LiveGrenadeLifecycleState lifecycleState;
+            if (kind == GrenadeKind::SmokeGrenade) {
+                lifecycleState.smokeEffectStarted = SmokeGrenadeProjectile{hookContext, static_cast<cs2::C_SmokeGrenadeProjectile*>(identity.entity)}.didSmokeEffect();
+                if (!lifecycleState.smokeEffectStarted.hasValue() || lifecycleState.smokeEffectStarted.value()) {
+                    state.liveGrenadeCache.invalidate(identity.handle);
+                    return;
+                }
+            }
+            else if (kind == GrenadeKind::HEGrenade) {
+                static_cast<void>(updateHELiveGrenade(grenade, identity.handle));
+                return;
+            }
+            else if (kind == GrenadeKind::Decoy) {
+                static_cast<void>(updateDecoyLiveGrenade(grenade, identity.handle,
+                    DecoyProjectile{hookContext, static_cast<cs2::C_DecoyProjectile*>(identity.entity)}));
+                return;
+            }
+            static_cast<void>(LiveGrenadeCacheUpdater{state.liveGrenadeCache}.update(grenade, identity.handle, kind, lifecycleState));
+        }
+    }
+
+    [[nodiscard]] bool simulateProjectileTrajectory(Trajectory& liveGrenadeTrajectoryScratch, const LiveGrenadeSnapshot& projectile,
+        cs2::C_CSPlayerPawn* pawn) noexcept
+    {
+        auto simulator = hookContext.template make<GrenadeSimulator>();
+        liveGrenadeTrajectoryScratch.clear();
+        simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+        const auto serverGravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
+        simulator.simulate(liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, pawn, serverGravity);
+        return liveGrenadeTrajectoryScratch.valid && liveGrenadeTrajectoryScratch.pointsCount;
+    }
+
     template <typename Projectile>
     [[nodiscard]] bool updateHELiveGrenade(const Projectile& projectile, cs2::CEntityHandle projectileHandle) noexcept
     {

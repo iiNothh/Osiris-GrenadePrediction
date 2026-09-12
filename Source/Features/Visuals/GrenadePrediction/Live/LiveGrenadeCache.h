@@ -67,7 +67,7 @@ public:
     {
         for (std::size_t i = 0; i < grenadeCount;) {
             if (!grenades[i].seen)
-                grenades[i] = grenades[--grenadeCount];
+                removeAt(i);
             else
                 ++i;
         }
@@ -86,7 +86,7 @@ public:
     {
         for (std::size_t i = 0; i < grenadeCount;) {
             if (grenades[i].projectileHandle == projectileHandle)
-                grenades[i] = grenades[--grenadeCount];
+                removeAt(i);
             else
                 ++i;
         }
@@ -138,11 +138,20 @@ public:
     }
 
 private:
+    void removeAt(std::size_t index) noexcept
+    {
+        grenades[index] = grenades[--grenadeCount];
+    }
+
+    [[nodiscard]] static bool isFiniteVector(cs2::Vector vector) noexcept
+    {
+        return Math::isFinite(vector.x) && Math::isFinite(vector.y) && Math::isFinite(vector.z);
+    }
+
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
     {
         return isValidHandle(grenade.projectileHandle) && isValidHandle(grenade.throwerHandle) && grenade.kind != GrenadeKind::None
-            && Math::isFinite(grenade.initialPosition.x) && Math::isFinite(grenade.initialPosition.y) && Math::isFinite(grenade.initialPosition.z)
-            && Math::isFinite(grenade.initialVelocity.x) && Math::isFinite(grenade.initialVelocity.y) && Math::isFinite(grenade.initialVelocity.z);
+            && isFiniteVector(grenade.initialPosition) && isFiniteVector(grenade.initialVelocity);
     }
 
     [[nodiscard]] static bool isValidHandle(cs2::CEntityHandle handle) noexcept

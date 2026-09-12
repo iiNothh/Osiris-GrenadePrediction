@@ -11,16 +11,6 @@ public:
     {
     }
 
-    void beginScan() noexcept
-    {
-        cache.beginScan();
-    }
-
-    void endScan() noexcept
-    {
-        cache.endScan();
-    }
-
     template <typename Projectile>
     [[nodiscard]] bool update(const Projectile& projectile, cs2::CEntityHandle projectileHandle, GrenadeKind kind,
         const LiveGrenadeLifecycleState& lifecycleState = {}) noexcept
@@ -31,8 +21,14 @@ public:
         if (!initialPosition.hasValue() || !initialVelocity.hasValue() || !thrower.hasValue())
             return false;
 
-        return cache.upsert({projectileHandle, thrower.value(), initialPosition.value(), initialVelocity.value(), kind, 0, false,
-            getLiveGrenadeLifecycle(kind, lifecycleState) == LiveGrenadeLifecycle::Remove});
+        return cache.upsert({
+            .projectileHandle = projectileHandle,
+            .throwerHandle = thrower.value(),
+            .initialPosition = initialPosition.value(),
+            .initialVelocity = initialVelocity.value(),
+            .kind = kind,
+            .lifecycleEnded = getLiveGrenadeLifecycle(kind, lifecycleState) == LiveGrenadeLifecycle::Remove
+        });
     }
 
 private:

@@ -3,11 +3,12 @@
 #include <cstdint>
 
 #include <GameClient/Entities/GrenadeKind.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
 
 class LiveGrenadeAuthority {
 public:
-    static constexpr float flashHorizon{1.5f + 0.125f};
+    static constexpr float flashHorizon{grenade_prediction_params::kDetonateTimeHeFlash + grenade_prediction_params::kClientTracerHorizonPadding};
     static constexpr float flashEarlyHideLead{0.020f};
     static constexpr std::uint32_t maxSimulationRetryDelayFrames{32};
 
@@ -81,7 +82,7 @@ public:
     [[nodiscard]] bool isSimulationRetryDue(const LiveGrenadeSnapshot& snapshot, std::uint32_t frame) const noexcept
     {
         return !hasRetryObservationSequence || snapshot.observationSequence != retryObservationSequence || !hasScheduledRetry
-            || frame - nextSimulationRetryFrame < (std::uint32_t{1} << 31);
+            || hasReachedFrame(frame, nextSimulationRetryFrame);
     }
 
     void recordSimulationFailure(const LiveGrenadeSnapshot& snapshot, std::uint32_t frame) noexcept
@@ -106,17 +107,23 @@ public:
             reset();
             return;
         }
-
     }
+
     [[nodiscard]] bool isFlashbangInEarlyHideWindow(Optional<float> currentTime) const noexcept
     {
         return acceptedSnapshot.kind == GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
             && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
     }
     [[nodiscard]] bool hasObservedLiveProjectile() const noexcept { return hasHighestObserved; }
+
     [[nodiscard]] bool blocksHeldPrediction() const noexcept { return hasHighestObserved && !accepted; }
 
 private:
+    [[nodiscard]] static bool hasReachedFrame(std::uint32_t frame, std::uint32_t targetFrame) noexcept
+    {
+        return frame - targetFrame < (std::uint32_t{1} << 31);
+    }
+
     void resetSimulationRetryBackoff() noexcept
     {
         nextSimulationRetryDelayFrames = 1;
