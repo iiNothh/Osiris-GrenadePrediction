@@ -59,7 +59,10 @@ private:
 
         if (entityTypeInfo.template is<cs2::C_CSPlayerPawn>()) {
             auto&& playerPawn = baseEntity.template as<PlayerPawn>();
-            if (playerPawn.isControlledByLocalPlayer()) { localPawn = static_cast<cs2::C_CSPlayerPawn*>(entityIdentity.entity); localPawnHandle = entityIdentity.handle; }
+            if (playerPawn.isControlledByLocalPlayer()) {
+                localPawn = static_cast<cs2::C_CSPlayerPawn*>(entityIdentity.entity);
+                localPawnHandle = entityIdentity.handle;
+            }
             hookContext.template make<PlayerInfoInWorld>().drawPlayerInformation(playerPawn);
             updateModelGlow<PlayerModelGlow>(playerPawn, entityTypeInfo);
             applyOutlineGlow<PlayerOutlineGlow>(playerPawn, entityTypeInfo);
@@ -74,7 +77,7 @@ private:
         } else if (entityTypeInfo.template is<cs2::CPlantedC4>()) {
             updateModelGlow<TickingBombModelGlow>(baseEntity.template as<PlantedC4>(), entityTypeInfo);
             applyOutlineGlow<TickingBombOutlineGlow>(baseEntity.template as<PlantedC4>(), entityTypeInfo);
-        }  else if (entityTypeInfo.template is<cs2::C_Hostage>()) {
+        } else if (entityTypeInfo.template is<cs2::C_Hostage>()) {
             applyOutlineGlow<HostageOutlineGlow>(baseEntity, entityTypeInfo);
         } else if (entityTypeInfo.isGrenadeProjectile()) {
             updateModelGlow<GrenadeProjectileModelGlow>(baseEntity, entityTypeInfo);
