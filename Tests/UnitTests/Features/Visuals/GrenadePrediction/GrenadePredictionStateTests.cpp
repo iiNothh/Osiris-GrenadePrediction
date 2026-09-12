@@ -63,8 +63,8 @@ TEST(GrenadePredictionStateTest, CommitsHeldThrowOnlyAfterOwnedNativeExecution)
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
     EXPECT_TRUE(state.lastCommittedTrajectory.valid);
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 0.1f, true, 20.0f, false),
-        LastGrenadeCacheVisibility::Show);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 0.1f, true, 20.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Show);
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
@@ -139,14 +139,14 @@ TEST(GrenadePredictionStateTest, HonorsVisibilityModesAndFlashExpiry)
     GrenadePredictionState state;
     state.lastCommittedTrajectory.valid = true;
     state.lastCommittedTrajectory.pointsCount = 1;
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 2.0f, false), LastGrenadeCacheVisibility::Show);
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Off, 0.0f, true, 2.0f, true), LastGrenadeCacheVisibility::Invalidate);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 2.0f, false), CachedGrenadeTrajectoryPresentation::Decision::Show);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Off, 0.0f, true, 2.0f, true), CachedGrenadeTrajectoryPresentation::Decision::Invalidate);
     state.lastCommitCurtime = 1.0f;
     state.hasCommitCurtime = true;
     state.beginFrame();
     EXPECT_FALSE(state.observeTime(true, 2.0f));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 2.0f, true, 2.0f, false),
-        LastGrenadeCacheVisibility::Show);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 2.0f, true, 2.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Show);
 
     LiveGrenadeAuthority authority;
     authority.observeLocalPawn(localPawn);
@@ -160,8 +160,8 @@ TEST(GrenadePredictionStateTest, HonorsVisibilityModesAndFlashExpiry)
 
     const auto earlyHideTime = acceptedTime + LiveGrenadeAuthority::flashHorizon - LiveGrenadeAuthority::flashEarlyHideLead;
     EXPECT_TRUE(authority.isFlashbangInEarlyHideWindow(earlyHideTime));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 0.0f, true, earlyHideTime, false),
-        LastGrenadeCacheVisibility::Invalidate);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 0.0f, true, earlyHideTime, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Invalidate);
 
     const auto cachedProjectileAfterAcceptance = authority.newestLocalProjectile(cache);
     ASSERT_TRUE(cachedProjectileAfterAcceptance.hasValue());
@@ -182,14 +182,14 @@ TEST(GrenadePredictionStateTest, ClearsCommitBaselineOnceWhenTimeRollsBack)
     state.beginFrame();
     EXPECT_TRUE(state.observeTime(true, 10.0f));
 
-    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false);
-    EXPECT_EQ(decision, LastGrenadeCacheVisibility::Hide);
+    const auto decision = CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false);
+    EXPECT_EQ(decision, CachedGrenadeTrajectoryPresentation::Decision::Hide);
     EXPECT_FALSE(state.hasCommitCurtime);
     EXPECT_FLOAT_EQ(state.lastValidCurtime, 10.0f);
 
     CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [] {}, [] {});
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false),
-        LastGrenadeCacheVisibility::Hide);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 10.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Hide);
     EXPECT_FALSE(state.rollbackDetected);
 }
 
@@ -205,8 +205,8 @@ TEST(GrenadePredictionStateTest, TreatsNonFiniteCurrentTimeAsUnavailableForCache
 
     state.beginFrame();
     EXPECT_FALSE(state.observeTime(false, 0.0f));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 1.0f, true, std::numeric_limits<float>::quiet_NaN(), false),
-        LastGrenadeCacheVisibility::Hide);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 1.0f, true, std::numeric_limits<float>::quiet_NaN(), false),
+        CachedGrenadeTrajectoryPresentation::Decision::Hide);
     EXPECT_FLOAT_EQ(state.lastValidCurtime, 10.0f);
 }
 
@@ -219,16 +219,16 @@ TEST(GrenadePredictionAuthorityParityTest, RollbackAndMissingCustomTimeFollowRef
     state.hasCommitCurtime = true;
     state.beginFrame();
     EXPECT_FALSE(state.observeTime(false, 0.0f));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, false, 0.0f, false),
-        LastGrenadeCacheVisibility::Hide);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, false, 0.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Hide);
     state.beginFrame();
     EXPECT_FALSE(state.observeTime(true, 12.0f));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 12.0f, false),
-        LastGrenadeCacheVisibility::Show);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 12.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Show);
     state.beginFrame();
     EXPECT_TRUE(state.observeTime(true, 11.0f));
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false),
-        LastGrenadeCacheVisibility::Hide);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false),
+        CachedGrenadeTrajectoryPresentation::Decision::Hide);
     EXPECT_TRUE(state.rollbackDetected);
 }
 
@@ -238,7 +238,7 @@ TEST(GrenadePredictionAuthorityParityTest, SmokeAndExplodeVisibilityInvalidateAu
     GrenadePredictionState state;
     state.lastCommittedTrajectory.valid = true;
     state.lastCommittedTrajectory.pointsCount = 1;
-    EXPECT_EQ(state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 60.0f, true, 10.0f, false), LastGrenadeCacheVisibility::Invalidate);
+    EXPECT_EQ(CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode, 60.0f, true, 10.0f, false), CachedGrenadeTrajectoryPresentation::Decision::Invalidate);
 }
 
 }

@@ -7,7 +7,6 @@
 #include <CS2/Panorama/PanelHandle.h>
 
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
-#include <Features/Visuals/GrenadePrediction/GrenadePredictionConfigVariables.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
 #include <Features/Visuals/GrenadePrediction/Held/HeldGrenadeSimulationInput.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
@@ -16,8 +15,6 @@
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <Utils/Math.h>
-
-enum class LastGrenadeCacheVisibility { Hide, Show, Invalidate };
 
 struct GrenadePredictionState {
     Trajectory lastCommittedTrajectory{};
@@ -145,12 +142,16 @@ struct GrenadePredictionState {
         else
             invalidateTempTrajectory();
     }
-    void commitLiveGrenadeTrajectory(const Trajectory& trajectory) noexcept { copyTrajectory(lastCommittedTrajectory, trajectory); }
+    void commitLiveGrenadeTrajectory(const Trajectory& trajectory) noexcept
+    {
+        lastCommittedTrajectory.copyFrom(trajectory);
+    }
+
     [[nodiscard]] bool stageOwnedTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
     {
         if (liveGrenadeAuthority.hasObservedLiveProjectile() || !ownsTempTrajectory(weapon, sequence))
             return false;
-        copyTrajectory(lastCommittedTrajectory, tempTrajectory);
+        lastCommittedTrajectory.copyFrom(tempTrajectory);
         return true;
     }
     void finalizeStagedTrajectory(bool hasCandidate, bool hasCurtime, float curtime) noexcept
@@ -201,37 +202,5 @@ struct GrenadePredictionState {
         hasLastValidCurtime = false;
         frameCommitMarker = 0;
         rollbackDetected = true;
-    }
-    [[nodiscard]] LastGrenadeCacheVisibility cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode mode, float duration, bool hasCurtime, float curtime, bool projectilePresent) const noexcept
-    {
-        hasCurtime = hasCurtime && Math::isFinite(curtime);
-        mode = grenade_prediction_vars::normalizeLastTrajectoryVisibilityMode(static_cast<std::uint8_t>(mode));
-        if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Off)
-            return LastGrenadeCacheVisibility::Invalidate;
-        if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Always)
-            return lastCommittedTrajectory.valid && lastCommittedTrajectory.pointsCount ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Hide;
-        if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode)
-            return lastCommittedTrajectory.valid && lastCommittedTrajectory.pointsCount && projectilePresent ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
-        duration = grenade_prediction_vars::normalizeCacheDuration(duration);
-        if (!(duration > 0.0f))
-            return LastGrenadeCacheVisibility::Invalidate;
-        if (!lastCommittedTrajectory.valid || !lastCommittedTrajectory.pointsCount || !hasCurtime || !hasCommitCurtime)
-            return LastGrenadeCacheVisibility::Hide;
-        if (frameCommitMarker == frame)
-            return LastGrenadeCacheVisibility::Show;
-        return curtime - lastCommitCurtime <= duration ? LastGrenadeCacheVisibility::Show : LastGrenadeCacheVisibility::Invalidate;
-    }
-
-private:
-    static void copyTrajectory(Trajectory& destination, const Trajectory& source) noexcept
-    {
-        destination.pointsCount = source.pointsCount;
-        for (int i{}; i < source.pointsCount; ++i) destination.points[i] = source.points[i];
-        destination.markersCount = source.markersCount;
-        destination.worldContactMarkersCount = source.worldContactMarkersCount;
-        for (int i{}; i < source.markersCount; ++i) destination.markers[i] = source.markers[i];
-        destination.endPos = source.endPos;
-        destination.valid = source.valid;
-        destination.validLanding = source.validLanding;
     }
 };

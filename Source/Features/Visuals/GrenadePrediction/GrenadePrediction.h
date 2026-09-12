@@ -222,7 +222,7 @@ private:
     void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept
     {
         auto& state = this->state();
-        const auto decision = state.cacheVisibility(GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration),
+        const auto decision = CachedGrenadeTrajectoryPresentation::decide(state, GET_CONFIG_VAR(grenade_prediction_vars::LastTrajectoryVisibility), GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration),
             hasCurtime, curtime, acceptedProjectilePresent(state, hasCurtime, curtime));
         CachedGrenadeTrajectoryPresentation::apply(state, decision,
             [this, &state] { drawTrajectory(state.lastCommittedTrajectory, state.lastCacheContainerPanelHandle, state.lastCachePresentationState); },
