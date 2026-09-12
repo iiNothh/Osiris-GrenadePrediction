@@ -1,53 +1,7 @@
 #pragma once
 
-#include <cstdint>
-
-#include <CS2/Classes/Vector.h>
-#include <GameClient/Entities/TeamNumber.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Utils/Math.h>
-
-struct GrenadePlayerCollisionCandidate {
-    std::uint32_t rawHandle{};
-    cs2::Vector mins{};
-    cs2::Vector maxs{};
-    bool relationshipEligible{};
-};
-
-enum class GrenadePlayerCollisionSnapshotStatus : std::uint8_t {
-    Unavailable,
-    Available
-};
-
-struct GrenadePlayerCollisionCollectedCandidate {
-    std::uint32_t rawHandle{};
-    cs2::Vector mins{};
-    cs2::Vector maxs{};
-    TeamNumber team{};
-};
-
-struct GrenadePlayerCollisionCollectionScratch {
-    static constexpr int kCapacity = 48;
-
-    GrenadePlayerCollisionCollectedCandidate candidates[kCapacity]{};
-    int count{};
-    bool playerDataInvalid{};
-    bool overflowed{};
-
-    void reset() noexcept
-    {
-        count = 0;
-        playerDataInvalid = false;
-        overflowed = false;
-    }
-};
-
-struct GrenadePlayerCollisionSnapshot {
-    static constexpr int kCapacity = GrenadePlayerCollisionCollectionScratch::kCapacity;
-    GrenadePlayerCollisionCandidate candidates[kCapacity]{};
-    int count{};
-    GrenadePlayerCollisionSnapshotStatus status{GrenadePlayerCollisionSnapshotStatus::Unavailable};
-    std::uint64_t revision{};
-};
 
 namespace grenade_player_collision_mirror
 {
@@ -64,24 +18,6 @@ namespace grenade_player_collision_mirror
             && candidate.mins.x <= candidate.maxs.x && candidate.mins.y <= candidate.maxs.y && candidate.mins.z <= candidate.maxs.z;
     }
 
-    [[nodiscard]] inline bool intersectsSphere(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
-    {
-        if (!finite(origin) || !validBounds(candidate))
-            return false;
-
-        const float x = origin.x < candidate.mins.x ? candidate.mins.x - origin.x
-            : origin.x > candidate.maxs.x ? origin.x - candidate.maxs.x
-            : 0.0f;
-        const float y = origin.y < candidate.mins.y ? candidate.mins.y - origin.y
-            : origin.y > candidate.maxs.y ? origin.y - candidate.maxs.y
-            : 0.0f;
-        const float z = origin.z < candidate.mins.z ? candidate.mins.z - origin.z
-            : origin.z > candidate.maxs.z ? origin.z - candidate.maxs.z
-            : 0.0f;
-
-        return x * x + y * y + z * z <= kRadius * kRadius;
-    }
-
     [[nodiscard]] inline float pointToAabbDistanceSquared(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
     {
         const float x = origin.x < candidate.mins.x ? candidate.mins.x - origin.x
@@ -94,6 +30,14 @@ namespace grenade_player_collision_mirror
             : origin.z > candidate.maxs.z ? origin.z - candidate.maxs.z
             : 0.0f;
         return x * x + y * y + z * z;
+    }
+
+    [[nodiscard]] inline bool intersectsSphere(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
+    {
+        if (!finite(origin) || !validBounds(candidate))
+            return false;
+
+        return pointToAabbDistanceSquared(origin, candidate) <= kRadius * kRadius;
     }
 
     struct ScaledSquaredDistance {

@@ -2014,6 +2014,9 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionSnapshotBuilder.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>
+    <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePlayerCollisionState.h">
+      <Filter>Features\Visuals</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePrediction.h">
       <Filter>Features\Visuals</Filter>
     </ClInclude>

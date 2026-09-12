@@ -6,7 +6,7 @@
 #include <CS2/Constants/EntityHandle.h>
 #include <CS2/Panorama/PanelHandle.h>
 
-#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
 #include <Features/Visuals/GrenadePrediction/Held/HeldGrenadeSimulationInput.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
