@@ -7,14 +7,9 @@ namespace grenade_player_collision_mirror
 {
     constexpr float kRadius = 3.0f;
 
-    [[nodiscard]] inline bool finite(cs2::Vector value) noexcept
-    {
-        return Math::isFinite(value.x) && Math::isFinite(value.y) && Math::isFinite(value.z);
-    }
-
     [[nodiscard]] inline bool validBounds(const GrenadePlayerCollisionCandidate& candidate) noexcept
     {
-        return finite(candidate.mins) && finite(candidate.maxs)
+        return candidate.mins.isFinite() && candidate.maxs.isFinite()
             && candidate.mins.x <= candidate.maxs.x && candidate.mins.y <= candidate.maxs.y && candidate.mins.z <= candidate.maxs.z;
     }
 
@@ -34,7 +29,7 @@ namespace grenade_player_collision_mirror
 
     [[nodiscard]] inline bool intersectsSphere(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate) noexcept
     {
-        if (!finite(origin) || !validBounds(candidate))
+        if (!origin.isFinite() || !validBounds(candidate))
             return false;
 
         return pointToAabbDistanceSquared(origin, candidate) <= kRadius * kRadius;
@@ -50,7 +45,7 @@ namespace grenade_player_collision_mirror
     {
         const auto center = candidate.mins * 0.5f + candidate.maxs * 0.5f;
         const auto halfDifference = origin * 0.5f - center * 0.5f;
-        if (!finite(center) || !finite(halfDifference))
+        if (!center.isFinite() || !halfDifference.isFinite())
             return {};
         const auto absolute = [](float value) noexcept { return value < 0.0f ? -value : value; };
         float scale = absolute(halfDifference.x);
@@ -64,7 +59,7 @@ namespace grenade_player_collision_mirror
         const float inverseScale = 1.0f / scale;
         const auto normalized = halfDifference * inverseScale;
         const float normalizedSquared = normalized.squareLength();
-        return Math::isFinite(scale) && finite(normalized) && Math::isFinite(normalizedSquared)
+        return Math::isFinite(scale) && normalized.isFinite() && Math::isFinite(normalizedSquared)
             ? ScaledSquaredDistance{scale, normalizedSquared, true}
             : ScaledSquaredDistance{};
     }
@@ -96,7 +91,7 @@ namespace grenade_player_collision_mirror
     [[nodiscard]] inline const GrenadePlayerCollisionCandidate* select(const GrenadePlayerCollisionSnapshot& snapshot, cs2::Vector origin) noexcept
     {
         if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Available || snapshot.count < 0 || snapshot.count > GrenadePlayerCollisionSnapshot::kCapacity
-            || !finite(origin))
+            || !origin.isFinite())
             return nullptr;
 
         const GrenadePlayerCollisionCandidate* selected{};
@@ -126,7 +121,7 @@ namespace grenade_player_collision_mirror
 
     [[nodiscard]] inline bool apply(cs2::Vector origin, const GrenadePlayerCollisionCandidate& candidate, cs2::Vector& velocity) noexcept
     {
-        if (!finite(origin) || !finite(velocity) || !validBounds(candidate))
+        if (!origin.isFinite() || !velocity.isFinite() || !validBounds(candidate))
             return false;
 
         const auto normal = origin - (candidate.mins + candidate.maxs) * 0.5f;
@@ -143,10 +138,10 @@ namespace grenade_player_collision_mirror
         const auto unitNormal = normal * (1.0f / Math::sqrt(normalSq));
         const auto reflected = velocity - unitNormal * (2.0f * velocity.dot(unitNormal));
         const float reflectedSq = reflected.squareLength();
-        if (!(reflectedSq > 0.0f) || !finite(reflected) || !Math::isFinite(reflectedSq))
+        if (!(reflectedSq > 0.0f) || !reflected.isFinite() || !Math::isFinite(reflectedSq))
             return false;
 
         velocity = reflected * (Math::sqrt(speedSq) * 0.3f / Math::sqrt(reflectedSq));
-        return finite(velocity);
+        return velocity.isFinite();
     }
 }

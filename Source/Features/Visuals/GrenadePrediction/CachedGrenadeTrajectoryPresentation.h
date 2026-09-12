@@ -12,6 +12,7 @@ public:
         bool hasCurtime, float curtime, bool projectilePresent) noexcept
     {
         hasCurtime = hasCurtime && Math::isFinite(curtime);
+
         mode = grenade_prediction_vars::normalizeLastTrajectoryVisibilityMode(static_cast<std::uint8_t>(mode));
         if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Off)
             return Decision::Invalidate;
@@ -19,6 +20,7 @@ public:
             return state.lastCommittedTrajectory.valid && state.lastCommittedTrajectory.pointsCount ? Decision::Show : Decision::Hide;
         if (mode == grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode)
             return state.lastCommittedTrajectory.valid && state.lastCommittedTrajectory.pointsCount && projectilePresent ? Decision::Show : Decision::Invalidate;
+
         duration = grenade_prediction_vars::normalizeCacheDuration(duration);
         if (!(duration > 0.0f))
             return Decision::Invalidate;
@@ -26,6 +28,7 @@ public:
             return Decision::Hide;
         if (state.frameCommitMarker == state.frame)
             return Decision::Show;
+
         return curtime - state.lastCommitCurtime <= duration ? Decision::Show : Decision::Invalidate;
     }
 

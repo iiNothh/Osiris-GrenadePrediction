@@ -74,7 +74,7 @@ private:
         const auto collision = hookContext.template make<BaseModelEntity>(static_cast<cs2::C_BaseModelEntity*>(player)).collisionProperty();
         const auto mins = collision.mins();
         const auto maxs = collision.maxs();
-        if (!team.hasValue() || !origin.hasValue() || !grenade_player_collision_mirror::finite(origin.value()) || !mins.hasValue() || !maxs.hasValue()) {
+        if (!team.hasValue() || !origin.hasValue() || !origin.value().isFinite() || !mins.hasValue() || !maxs.hasValue()) {
             scratch.playerDataInvalid = true;
             return;
         }

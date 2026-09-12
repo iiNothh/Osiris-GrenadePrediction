@@ -35,11 +35,11 @@ public:
 
     [[nodiscard]] Optional<cs2::Vector> computeSpawnPosition(cs2::Vector eyePos, cs2::Vector viewAngles, float throwStrength, void* skipEntity) noexcept
     {
-        if (!finite(eyePos) || !finite(viewAngles))
+        if (!eyePos.isFinite() || !viewAngles.isFinite())
             return {};
         const float strength = normalizeThrowStrength(throwStrength);
         const auto forward = forwardFromAngles(adjustedThrowPitch(viewAngles.x), viewAngles.y);
-        if (!finite(forward))
+        if (!forward.isFinite())
             return {};
         eyePos.z += strength * grenade_prediction_params::kThrowZOffsetScale - grenade_prediction_params::kThrowZOffsetScale;
         const auto traceEnd = eyePos + forward * grenade_prediction_params::kSpawnTraceForward;
@@ -50,7 +50,7 @@ public:
         auto spawnPos = hitPos - forward * grenade_prediction_params::kSpawnPullBack;
         if ((spawnPos - eyePos).dot(forward) < 0.0f)
             spawnPos = eyePos;
-        return finite(spawnPos) ? Optional<cs2::Vector>{spawnPos} : Optional<cs2::Vector>{};
+        return spawnPos.isFinite() ? Optional<cs2::Vector>{spawnPos} : Optional<cs2::Vector>{};
     }
 
     void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
@@ -72,7 +72,7 @@ public:
                 static_cast<void>(trajectory.appendPoint(position));
             const auto previousPosition = position;
             const auto result = step(scratch, position, velocity, kind, skipEntity, serverGravity);
-            if (!result.traceSucceeded || !finite(position) || !finite(velocity)) {
+            if (!result.traceSucceeded || !position.isFinite() || !velocity.isFinite()) {
                 invalidate(trajectory, launch.origin);
                 return;
             }
@@ -129,10 +129,9 @@ private:
         bool hasPassedPane{};
     };
 
-    [[nodiscard]] static bool finite(cs2::Vector value) noexcept { return grenade_player_collision_mirror::finite(value); }
     [[nodiscard]] static bool isValidSimulationInput(const GrenadeLaunchState& launch, GrenadeKind kind, float serverGravity) noexcept
     {
-        return !(kind == GrenadeKind::None || !finite(launch.origin) || !finite(launch.velocity) || !Math::isFinite(serverGravity) || serverGravity <= 0.0f);
+        return !(kind == GrenadeKind::None || !launch.origin.isFinite() || !launch.velocity.isFinite() || !Math::isFinite(serverGravity) || serverGravity <= 0.0f);
     }
     static void markTrajectoryComplete(Trajectory& trajectory, cs2::Vector position, GrenadeKind kind, bool landedOnSurface) noexcept
     {
@@ -150,7 +149,7 @@ private:
     [[nodiscard]] static bool validTrace(const Optional<TraceResult>& trace) noexcept
     {
         return trace.hasValue() && Math::isFinite(trace.value().fraction) && trace.value().fraction >= 0.0f && trace.value().fraction <= 1.0f
-            && finite(trace.value().endPos) && finite(trace.value().normal);
+            && trace.value().endPos.isFinite() && trace.value().normal.isFinite();
     }
     void invalidate(Trajectory& trajectory, cs2::Vector start) noexcept
     {
@@ -209,7 +208,7 @@ private:
         velocity.z -= serverGravity * grenade_prediction_params::kGravityScale * grenade_prediction_params::kMovementSubstepDt;
         const auto movement = cs2::Vector{velocity.x * grenade_prediction_params::kMovementSubstepDt, velocity.y * grenade_prediction_params::kMovementSubstepDt,
             (oldZ + velocity.z) * 0.5f * grenade_prediction_params::kMovementSubstepDt};
-        if (!finite(movement))
+        if (!movement.isFinite())
             return {.traceSucceeded = false};
         const auto trace = traceInFlight(scratch, position, position + movement, skipEntity);
         if (!validTrace(trace))
@@ -271,7 +270,7 @@ private:
     {
         auto bounce = clipVelocity(velocity, trace.normal, 2.0f) * grenade_prediction_params::kElasticity;
         const float speedSq = bounce.squareLength();
-        if (!finite(bounce) || !Math::isFinite(speedSq))
+        if (!bounce.isFinite() || !Math::isFinite(speedSq))
             return {.traceSucceeded = false};
         if (trace.rawEntityHandle.hasValue() && trace.rawEntityHandle.value() == cs2::engine_trace::kWorldEntityHandle && trace.normal.z > grenade_prediction_params::kSteepFloorDampingNormalZ
             && speedSq > grenade_prediction_params::kSteepFloorDampingSpeedSq) {
