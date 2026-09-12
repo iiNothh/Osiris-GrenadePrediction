@@ -83,6 +83,130 @@ TEST(GrenadePredictionStateTest, FinalizesLegacyReleaseWithoutRetainedStrength)
     EXPECT_FALSE(state.tempTrajectory.valid);
 }
 
+TEST(GrenadePredictionStateTest, SuppressesTheCompletedWeaponUntilTheActualThrowTimeWindowExpires)
+{
+    GrenadePredictionState state;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+    const auto finalizedSequence = state.throwObservation.pendingSequence();
+    EXPECT_TRUE(state.throwObservation.hasActivePostThrowSuppression());
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 10.999f));
+    EXPECT_TRUE(state.throwObservation.isFinalized());
+
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(heldWeapon, true, 11.0f));
+    EXPECT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
+    EXPECT_FALSE(state.throwObservation.isFinalized());
+    EXPECT_NE(state.throwObservation.pendingSequence(), finalizedSequence);
+}
+
+TEST(GrenadePredictionStateTest, DifferentFullWeaponHandleImmediatelyClearsPostThrowSuppression)
+{
+    GrenadePredictionState state;
+    constexpr cs2::CEntityHandle sameIndexDifferentSerial{0x80000004};
+    static_assert(heldWeapon != sameIndexDifferentSerial);
+    EXPECT_EQ(heldWeapon.index().value, sameIndexDifferentSerial.index().value);
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(sameIndexDifferentSerial, true, 10.2f));
+    EXPECT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
+}
+
+TEST(GrenadePredictionStateTest, InvalidWeaponIdentityDoesNotClearOrExpirePostThrowSuppression)
+{
+    GrenadePredictionState state;
+    constexpr cs2::CEntityHandle invalidWeapon{cs2::INVALID_EHANDLE_INDEX};
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(invalidWeapon, true, 100.0f));
+    EXPECT_TRUE(state.throwObservation.hasActivePostThrowSuppression());
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 10.5f));
+}
+
+TEST(GrenadePredictionStateTest, UnavailableTimeDoesNotExpirePostThrowSuppression)
+{
+    GrenadePredictionState state;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, false, 0.0f));
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, std::numeric_limits<float>::quiet_NaN()));
+    EXPECT_TRUE(state.throwObservation.hasActivePostThrowSuppression());
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(heldWeapon, true, 11.0f));
+}
+
+TEST(GrenadePredictionStateTest, LegacyCompletionUsesTheLastValidTimeWhenCurrentTimeIsUnavailable)
+{
+    GrenadePredictionState state;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    state.beginFrame();
+    ASSERT_FALSE(state.observeTime(true, 10.0f));
+
+    ASSERT_TRUE(state.completeLegacyHeldThrow(heldWeapon, true, false, 0.0f));
+    EXPECT_TRUE(state.throwObservation.hasActivePostThrowSuppression());
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 10.999f));
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(heldWeapon, true, 11.0f));
+}
+
+TEST(GrenadePredictionStateTest, LegacyCompletionWithoutATimeBaselineStaysSuppressedUntilOneIsObserved)
+{
+    GrenadePredictionState state;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+
+    ASSERT_TRUE(state.completeLegacyHeldThrow(heldWeapon, true, false, 0.0f));
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, false, 0.0f));
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 20.0f));
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 20.999f));
+    EXPECT_FALSE(state.shouldSuppressHeldPrediction(heldWeapon, true, 21.0f));
+}
+
+TEST(GrenadePredictionStateTest, ClearsPostThrowSuppressionWithPredictionAndTimeRollbackResets)
+{
+    GrenadePredictionState state;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+
+    state.clearPrediction();
+    EXPECT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
+
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 20.0f));
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 20.1f));
+    state.beginFrame();
+    ASSERT_FALSE(state.observeTime(true, 20.1f));
+    state.beginFrame();
+    EXPECT_TRUE(state.observeTime(true, 20.0f));
+    EXPECT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
+}
+
+TEST(GrenadePredictionStateTest, SuppressionPreservesCommittedTrajectoryAndLiveAuthority)
+{
+    GrenadePredictionState state;
+    state.lastCommittedTrajectory.valid = true;
+    state.lastCommittedTrajectory.pointsCount = 1;
+    state.liveGrenadeAuthority.observeLocalPawn(localPawn);
+    ASSERT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile)));
+    const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
+    ASSERT_TRUE(projectile.hasValue());
+    ASSERT_TRUE(state.liveGrenadeAuthority.observeForSimulation(projectile.value()));
+    state.liveGrenadeAuthority.accept(projectile.value(), 1.0f);
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+
+    EXPECT_TRUE(state.shouldSuppressHeldPrediction(heldWeapon, true, 10.5f));
+    EXPECT_TRUE(state.lastCommittedTrajectory.valid);
+    EXPECT_TRUE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
+    EXPECT_TRUE(state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile()));
+}
+
 TEST(GrenadePredictionStateTest, TreatsDifferentHeldWeaponHandleAsNewSimulationCacheOwner)
 {
     GrenadePredictionState state;

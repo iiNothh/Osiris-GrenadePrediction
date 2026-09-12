@@ -57,10 +57,6 @@ struct GrenadeThrowObservation {
         if (!Math::isFinite(throwTime))
             return false;
         if (!(throwTime > 0.0f)) {
-            if (phase == GrenadeThrowPhase::Finalized) {
-                startNewThrowSequence();
-                return true;
-            }
             if (phase != GrenadeThrowPhase::PendingExecution)
                 return false;
             pendingThrowTime = 0.0f;
@@ -114,6 +110,48 @@ struct GrenadeThrowObservation {
     [[nodiscard]] bool isStrengthLocked() const noexcept { return phase != GrenadeThrowPhase::Observing; }
     [[nodiscard]] bool isFinalized() const noexcept { return phase == GrenadeThrowPhase::Finalized; }
 
+    void beginPostThrowSuppression(cs2::CEntityHandle weapon, bool hasBaseline, float baseline) noexcept
+    {
+        if (weapon == cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX})
+            return;
+        suppressedWeapon = weapon;
+        postThrowSuppressionBaseline = baseline;
+        hasPostThrowSuppressionBaseline = hasBaseline && Math::isFinite(baseline);
+        hasPostThrowSuppression = true;
+    }
+
+    [[nodiscard]] bool shouldSuppressHeldPrediction(cs2::CEntityHandle weapon, bool hasCurtime, float curtime) noexcept
+    {
+        if (!hasPostThrowSuppression || weapon == cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX})
+            return false;
+        if (weapon != suppressedWeapon) {
+            clearPostThrowSuppression();
+            return false;
+        }
+        if (!hasCurtime || !Math::isFinite(curtime))
+            return true;
+        if (!hasPostThrowSuppressionBaseline) {
+            postThrowSuppressionBaseline = curtime;
+            hasPostThrowSuppressionBaseline = true;
+            return true;
+        }
+        if (curtime - postThrowSuppressionBaseline < 1.0f)
+            return true;
+        clearPostThrowSuppression();
+        startNewThrowSequence();
+        return false;
+    }
+
+    [[nodiscard]] bool hasActivePostThrowSuppression() const noexcept { return hasPostThrowSuppression; }
+
+    void clearCurrentThrowSequence() noexcept
+    {
+        observedWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
+        hasPinBaseline = false;
+        previousPinPulled = false;
+        startNewThrowSequence();
+    }
+
     void startNewThrowSequence() noexcept
     {
         retainedThrowStrength = 1.0f;
@@ -125,11 +163,20 @@ struct GrenadeThrowObservation {
 
     void reset() noexcept
     {
-        observedWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
-        hasPinBaseline = false;
-        previousPinPulled = false;
-        startNewThrowSequence();
+        clearCurrentThrowSequence();
+        clearPostThrowSuppression();
     }
+
+private:
+    void clearPostThrowSuppression() noexcept
+    {
+        suppressedWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
+        postThrowSuppressionBaseline = 0.0f;
+        hasPostThrowSuppressionBaseline = false;
+        hasPostThrowSuppression = false;
+    }
+
+public:
 
     cs2::CEntityHandle observedWeapon{cs2::INVALID_EHANDLE_INDEX};
     bool hasPinBaseline{};
@@ -139,4 +186,8 @@ struct GrenadeThrowObservation {
     float pendingThrowTime{};
     GrenadeThrowPhase phase{GrenadeThrowPhase::Observing};
     std::uint32_t sequence{};
+    cs2::CEntityHandle suppressedWeapon{cs2::INVALID_EHANDLE_INDEX};
+    float postThrowSuppressionBaseline{};
+    bool hasPostThrowSuppressionBaseline{};
+    bool hasPostThrowSuppression{};
 };

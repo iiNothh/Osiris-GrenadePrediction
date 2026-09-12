@@ -167,6 +167,7 @@ struct GrenadePredictionState {
         if (!throwObservation.consumeActualExecution(hasCurtime, curtime))
             return false;
 
+        throwObservation.beginPostThrowSuppression(weapon, true, throwObservation.pendingThrowTime);
         const bool stagedTrajectoryReady = throwObservation.canCommitTrajectory()
             && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
         finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
@@ -178,11 +179,17 @@ struct GrenadePredictionState {
         if (!throwObservation.consumeLegacyRelease(releaseEdge))
             return false;
 
+        const bool hasCurrentTime = hasCurtime && Math::isFinite(curtime);
+        throwObservation.beginPostThrowSuppression(weapon, hasCurrentTime || hasLastValidCurtime, hasCurrentTime ? curtime : lastValidCurtime);
         const bool stagedTrajectoryReady = throwObservation.canCommitTrajectory()
             && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
         finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
         invalidateTempTrajectory();
         return true;
+    }
+    [[nodiscard]] bool shouldSuppressHeldPrediction(cs2::CEntityHandle weapon, bool hasCurtime, float curtime) noexcept
+    {
+        return throwObservation.shouldSuppressHeldPrediction(weapon, hasCurtime, curtime);
     }
     void resetPresentationState() noexcept
     {

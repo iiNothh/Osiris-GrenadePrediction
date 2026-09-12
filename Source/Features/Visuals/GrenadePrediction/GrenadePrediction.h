@@ -86,11 +86,19 @@ public:
                 applyCachedTrajectoryPresentation(hasCurtime, time);
                 return;
             }
-            const auto kind = GrenadeKindMapper::from(activeWeapon.baseEntity().classify());
             auto* const weapon = static_cast<cs2::C_BaseCSGrenade*>(static_cast<cs2::C_BaseEntity*>(activeWeapon.baseEntity()));
             const auto weaponHandle = activeWeapon.baseEntity().handle();
+            if (state.shouldSuppressHeldPrediction(weaponHandle, hasCurtime, time)) {
+                hideLivePrediction();
+                applyCachedTrajectoryPresentation(hasCurtime, time);
+                return;
+            }
+            const auto kind = GrenadeKindMapper::from(activeWeapon.baseEntity().classify());
             if (!isUsableHeldGrenade(weapon, kind, weaponHandle)) {
-                state.throwObservation.reset();
+                if (state.throwObservation.hasActivePostThrowSuppression())
+                    state.throwObservation.clearCurrentThrowSequence();
+                else
+                    state.throwObservation.reset();
                 state.invalidateTempTrajectory();
                 hideLivePrediction();
                 applyCachedTrajectoryPresentation(hasCurtime, time);

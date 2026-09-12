@@ -22,7 +22,7 @@ TEST(GrenadePredictionThrowObservationTest, CommitsOnlyTheOwnedCompletedSequence
     EXPECT_TRUE(observation.isFinalized());
 }
 
-TEST(GrenadePredictionThrowObservationTest, ClearsFinalizedSequenceWhenThrowTimeResets)
+TEST(GrenadePredictionThrowObservationTest, DoesNotClearFinalizedSequenceWhenThrowTimeResets)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle weapon{4};
@@ -32,16 +32,16 @@ TEST(GrenadePredictionThrowObservationTest, ClearsFinalizedSequenceWhenThrowTime
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
     const auto finalizedSequence = observation.pendingSequence();
 
-    EXPECT_TRUE(observation.observeThrowTime(weapon, 0.0f));
-    EXPECT_FALSE(observation.isFinalized());
-    EXPECT_FALSE(observation.isStrengthLocked());
+    EXPECT_FALSE(observation.observeThrowTime(weapon, 0.0f));
+    EXPECT_TRUE(observation.isFinalized());
+    EXPECT_TRUE(observation.isStrengthLocked());
     EXPECT_FALSE(observation.hasPendingExecution());
-    EXPECT_NE(observation.pendingSequence(), finalizedSequence);
-    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 1.0f);
-    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    EXPECT_EQ(observation.pendingSequence(), finalizedSequence);
+    EXPECT_FLOAT_EQ(observation.retainedThrowStrength, 0.5f);
+    EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
-TEST(GrenadePredictionThrowObservationTest, PreparesLaunchWhenSameWeaponIsImmediatelyReequipped)
+TEST(GrenadePredictionThrowObservationTest, DoesNotPrepareLaunchWhenZeroThrowTimeFollowsFinalization)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle weapon{4};
@@ -51,7 +51,7 @@ TEST(GrenadePredictionThrowObservationTest, PreparesLaunchWhenSameWeaponIsImmedi
     ASSERT_TRUE(observation.observeThrowTime(weapon, 10.0f));
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
 
-    ASSERT_TRUE(observation.observeThrowTime(weapon, 0.0f));
+    ASSERT_FALSE(observation.observeThrowTime(weapon, 0.0f));
     const auto launch = prepareGrenadeLaunch(observation.isFinalized(), observation.hasRetainedThrowStrength,
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> {
@@ -59,8 +59,19 @@ TEST(GrenadePredictionThrowObservationTest, PreparesLaunchWhenSameWeaponIsImmedi
             return GrenadeLaunchState{};
         });
 
-    EXPECT_TRUE(launch.hasValue());
-    EXPECT_EQ(manualCalls, 1);
+    EXPECT_FALSE(launch.hasValue());
+    EXPECT_EQ(manualCalls, 0);
+}
+
+TEST(GrenadePredictionThrowObservationTest, ResetClearsPostThrowSuppression)
+{
+    GrenadeThrowObservation observation;
+    constexpr cs2::CEntityHandle weapon{4};
+
+    observation.beginPostThrowSuppression(weapon, true, 10.0f);
+    observation.reset();
+
+    EXPECT_FALSE(observation.hasActivePostThrowSuppression());
 }
 
 TEST(GrenadePredictionThrowObservationTest, ClearsPendingExecutionWithoutResettingItsSequence)
