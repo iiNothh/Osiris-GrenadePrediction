@@ -18,7 +18,7 @@ struct GrenadeThrowObservation {
     {
         if (observedWeapon == weapon)
             return false;
-        resetThrowSequence();
+        startNewThrowSequence();
         observedWeapon = weapon;
         hasPinBaseline = false;
         previousPinPulled = false;
@@ -36,7 +36,7 @@ struct GrenadeThrowObservation {
         const bool released = hasPinBaseline && previousPinPulled && !pinPulled;
         const bool startedNewPull = hasPinBaseline && !previousPinPulled && pinPulled;
         if (startedNewPull)
-            resetThrowSequence();
+            startNewThrowSequence();
         hasPinBaseline = true;
         previousPinPulled = pinPulled;
         return released;
@@ -58,7 +58,7 @@ struct GrenadeThrowObservation {
             return false;
         if (!(throwTime > 0.0f)) {
             if (phase == GrenadeThrowPhase::Finalized) {
-                resetThrowSequence();
+                startNewThrowSequence();
                 return true;
             }
             if (phase != GrenadeThrowPhase::PendingExecution)
@@ -110,11 +110,11 @@ struct GrenadeThrowObservation {
             retainThrowStrength(throwStrength.value());
     }
     [[nodiscard]] std::uint32_t pendingSequence() const noexcept { return sequence; }
-    [[nodiscard]] bool canCommitActualExecution() const noexcept { return hasRetainedThrowStrength; }
+    [[nodiscard]] bool canCommitTrajectory() const noexcept { return hasRetainedThrowStrength; }
     [[nodiscard]] bool isStrengthLocked() const noexcept { return phase != GrenadeThrowPhase::Observing; }
     [[nodiscard]] bool isFinalized() const noexcept { return phase == GrenadeThrowPhase::Finalized; }
 
-    void resetThrowSequence() noexcept
+    void startNewThrowSequence() noexcept
     {
         retainedThrowStrength = 1.0f;
         hasRetainedThrowStrength = false;
@@ -128,7 +128,7 @@ struct GrenadeThrowObservation {
         observedWeapon = cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX};
         hasPinBaseline = false;
         previousPinPulled = false;
-        resetThrowSequence();
+        startNewThrowSequence();
     }
 
     cs2::CEntityHandle observedWeapon{cs2::INVALID_EHANDLE_INDEX};

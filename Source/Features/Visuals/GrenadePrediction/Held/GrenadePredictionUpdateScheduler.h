@@ -25,7 +25,11 @@ struct GrenadePredictionUpdateScheduler {
         return true;
     }
 
-    void reset() noexcept { initialized = false; accumulatedTime = 0.0f; }
+    void reset() noexcept
+    {
+        initialized = false;
+        accumulatedTime = 0.0f;
+    }
 
     bool initialized{};
     float accumulatedTime{};
