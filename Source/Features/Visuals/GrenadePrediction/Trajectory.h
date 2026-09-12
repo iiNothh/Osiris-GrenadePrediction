@@ -30,6 +30,20 @@ struct Trajectory {
         validLanding = true;
     }
 
+    void copyFrom(const Trajectory& source) noexcept
+    {
+        pointsCount = source.pointsCount;
+        for (int i{}; i < source.pointsCount; ++i)
+            points[i] = source.points[i];
+        markersCount = source.markersCount;
+        worldContactMarkersCount = source.worldContactMarkersCount;
+        for (int i{}; i < source.markersCount; ++i)
+            markers[i] = source.markers[i];
+        endPos = source.endPos;
+        valid = source.valid;
+        validLanding = source.validLanding;
+    }
+
     [[nodiscard]] bool appendPoint(cs2::Vector point) noexcept
     {
         if (pointsCount == kPointsCapacity)

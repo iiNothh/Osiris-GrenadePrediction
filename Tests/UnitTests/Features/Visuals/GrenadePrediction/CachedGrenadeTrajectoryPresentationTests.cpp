@@ -19,13 +19,13 @@ TEST(CachedGrenadeTrajectoryPresentationTest, RollbackHidesBothPanelsAndClearsTh
     EXPECT_FALSE(state.observeTime(true, 12.0f));
     state.beginFrame();
     EXPECT_TRUE(state.observeTime(true, 11.0f));
-    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false);
+    const auto decision = CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Custom, 5.0f, true, 11.0f, false);
     int hiddenLive{};
     int hiddenCached{};
 
     CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [&] { ++hiddenLive; }, [&] { ++hiddenCached; });
 
-    EXPECT_EQ(decision, LastGrenadeCacheVisibility::Hide);
+    EXPECT_EQ(decision, CachedGrenadeTrajectoryPresentation::Decision::Hide);
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);
     EXPECT_FALSE(state.tempTrajectory.valid);
     EXPECT_FALSE(state.rollbackDetected);
@@ -41,7 +41,7 @@ TEST(CachedGrenadeTrajectoryPresentationTest, RendersTheCachedTrajectoryOnceAfte
     int drawn{};
     int hidden{};
 
-    const auto decision = state.cacheVisibility(grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false);
+    const auto decision = CachedGrenadeTrajectoryPresentation::decide(state, grenade_prediction_vars::LastTrajectoryVisibilityMode::Always, 0.0f, true, 10.0f, false);
     CachedGrenadeTrajectoryPresentation::apply(state, decision, [] {}, [] {}, [] {});
     CachedGrenadeTrajectoryPresentation::apply(state, decision, [&] { ++drawn; }, [] {}, [&] { ++hidden; });
 
