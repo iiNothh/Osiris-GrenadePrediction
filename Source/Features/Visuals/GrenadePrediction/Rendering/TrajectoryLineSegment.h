@@ -13,10 +13,39 @@ struct TrajectoryLineSegment {
 
     [[nodiscard]] static bool fromClipSpace(ClipSpaceCoordinates first, ClipSpaceCoordinates second, float aspectRatio, TrajectoryLineSegment& result) noexcept
     {
-        if (!Math::isFinite(first.x) || !Math::isFinite(first.y) || !Math::isFinite(first.z) || !Math::isFinite(first.w)
-            || !Math::isFinite(second.x) || !Math::isFinite(second.y) || !Math::isFinite(second.z) || !Math::isFinite(second.w)
-            || !Math::isFinite(aspectRatio) || aspectRatio <= kNearW)
+        if (!hasFiniteCoordinates(first, second, aspectRatio))
             return false;
+
+        if (!clipAgainstNearPlane(first, second))
+            return false;
+
+        ViewportSegment segment;
+        if (!makeViewportSegment(first, second, segment))
+            return false;
+
+        if (!clipToViewport(segment))
+            return false;
+
+        return buildResult(segment, aspectRatio, result);
+    }
+
+private:
+    struct ViewportSegment {
+        float x0;
+        float y0;
+        float x1;
+        float y1;
+    };
+
+    [[nodiscard]] static bool hasFiniteCoordinates(const ClipSpaceCoordinates& first, const ClipSpaceCoordinates& second, float aspectRatio) noexcept
+    {
+        return Math::isFinite(first.x) && Math::isFinite(first.y) && Math::isFinite(first.z) && Math::isFinite(first.w)
+            && Math::isFinite(second.x) && Math::isFinite(second.y) && Math::isFinite(second.z) && Math::isFinite(second.w)
+            && Math::isFinite(aspectRatio) && aspectRatio > kNearW;
+    }
+
+    [[nodiscard]] static bool clipAgainstNearPlane(ClipSpaceCoordinates& first, ClipSpaceCoordinates& second) noexcept
+    {
         if (first.w < kNearW && second.w < kNearW)
             return false;
 
@@ -36,31 +65,48 @@ struct TrajectoryLineSegment {
             else
                 second = clipped;
         }
+        return true;
+    }
 
-        float x0 = first.x / first.w * 0.5f + 0.5f;
-        float y0 = 0.5f - first.y / first.w * 0.5f;
-        float x1 = second.x / second.w * 0.5f + 0.5f;
-        float y1 = 0.5f - second.y / second.w * 0.5f;
-        if (!Math::isFinite(x0) || !Math::isFinite(y0) || !Math::isFinite(x1) || !Math::isFinite(y1))
-            return false;
-        float dx = x1 - x0;
-        float dy = y1 - y0;
+    [[nodiscard]] static bool makeViewportSegment(const ClipSpaceCoordinates& first, const ClipSpaceCoordinates& second, ViewportSegment& result) noexcept
+    {
+        result.x0 = first.x / first.w * 0.5f + 0.5f;
+        result.y0 = 0.5f - first.y / first.w * 0.5f;
+        result.x1 = second.x / second.w * 0.5f + 0.5f;
+        result.y1 = 0.5f - second.y / second.w * 0.5f;
+        return Math::isFinite(result.x0) && Math::isFinite(result.y0) && Math::isFinite(result.x1) && Math::isFinite(result.y1);
+    }
+
+    [[nodiscard]] static bool clipToViewport(ViewportSegment& segment) noexcept
+    {
+        const float dx = segment.x1 - segment.x0;
+        const float dy = segment.y1 - segment.y0;
         if (!Math::isFinite(dx) || !Math::isFinite(dy))
             return false;
+
         float enter = 0.0f;
         float leave = 1.0f;
-        if (!clip(-dx, x0, enter, leave) || !clip(dx, 1.0f - x0, enter, leave)
-            || !clip(-dy, y0, enter, leave) || !clip(dy, 1.0f - y0, enter, leave))
+        if (!clip(-dx, segment.x0, enter, leave)
+            || !clip(dx, 1.0f - segment.x0, enter, leave)
+            || !clip(-dy, segment.y0, enter, leave)
+            || !clip(dy, 1.0f - segment.y0, enter, leave))
             return false;
 
-        const float clippedX0 = x0 + dx * enter;
-        const float clippedY0 = y0 + dy * enter;
-        const float clippedX1 = x0 + dx * leave;
-        const float clippedY1 = y0 + dy * leave;
+        const float clippedX0 = segment.x0 + dx * enter;
+        const float clippedY0 = segment.y0 + dy * enter;
+        const float clippedX1 = segment.x0 + dx * leave;
+        const float clippedY1 = segment.y0 + dy * leave;
         if (!Math::isFinite(clippedX0) || !Math::isFinite(clippedY0) || !Math::isFinite(clippedX1) || !Math::isFinite(clippedY1))
             return false;
-        dx = clippedX1 - clippedX0;
-        dy = clippedY1 - clippedY0;
+
+        segment = {.x0 = clippedX0, .y0 = clippedY0, .x1 = clippedX1, .y1 = clippedY1};
+        return true;
+    }
+
+    [[nodiscard]] static bool buildResult(const ViewportSegment& segment, float aspectRatio, TrajectoryLineSegment& result) noexcept
+    {
+        const float dx = segment.x1 - segment.x0;
+        const float dy = segment.y1 - segment.y0;
         if (!Math::isFinite(dx) || !Math::isFinite(dy))
             return false;
         const float physicalDy = dy / aspectRatio;
@@ -71,12 +117,11 @@ struct TrajectoryLineSegment {
         if (!Math::isFinite(length) || length <= 0.00001f)
             return false;
 
-        result = {.midpointX = (clippedX0 + clippedX1) * 50.0f, .midpointY = (clippedY0 + clippedY1) * 50.0f,
+        result = {.midpointX = (segment.x0 + segment.x1) * 50.0f, .midpointY = (segment.y0 + segment.y1) * 50.0f,
             .width = length * 100.0f, .angleDegrees = calculateAngleDegrees(physicalDy, dx)};
         return Math::isFinite(result.midpointX) && Math::isFinite(result.midpointY) && Math::isFinite(result.width) && Math::isFinite(result.angleDegrees);
     }
 
-private:
     [[nodiscard]] static float calculateAngleDegrees(float y, float x) noexcept
     {
         constexpr float kPi = 3.14159265358979323846f;

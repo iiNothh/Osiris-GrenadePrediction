@@ -19,13 +19,7 @@ struct TrajectoryRenderPlan {
             || trajectory.markersCount < 0 || trajectory.markersCount > Trajectory::kMarkersCapacity)
             return;
 
-        addMandatoryPoint(0);
-        addMandatoryPoint(trajectory.pointsCount - 1);
-        for (int i = 0; i < trajectory.markersCount; ++i) {
-            const int pointIndex = trajectory.markers[i].pointIndex;
-            if (pointIndex >= 0 && pointIndex < trajectory.pointsCount)
-                addMandatoryPoint(pointIndex);
-        }
+        addMandatoryPoints(trajectory);
 
         const int markerPanelCount = trajectory.markersCount + (trajectory.validLanding ? 1 : 0);
         const int linePanelCapacity = kPanelCapacity - markerPanelCount;
@@ -35,16 +29,47 @@ struct TrajectoryRenderPlan {
             return;
         }
 
-        int totalGaps = 0;
-        for (int i = 1; i < selectedPointCount; ++i)
-            totalGaps += selectedPointIndices[i] - selectedPointIndices[i - 1] - 1;
+        const int totalGaps = countUnselectedPointsInGaps();
 
         const int pointsToAdd = totalGaps < maximumSelectedPointCount - selectedPointCount
             ? totalGaps
             : maximumSelectedPointCount - selectedPointCount;
+        addDistributedPoints(totalGaps, pointsToAdd);
+
+        sortSelectedPoints();
+        lineSegmentCount = selectedPointCount - 1;
+    }
+
+    [[nodiscard]] int pointIndex(int index) const noexcept
+    {
+        return selectedPointIndices[index];
+    }
+
+private:
+    void addMandatoryPoints(const Trajectory& trajectory) noexcept
+    {
+        addMandatoryPoint(0);
+        addMandatoryPoint(trajectory.pointsCount - 1);
+        for (int i = 0; i < trajectory.markersCount; ++i) {
+            const int pointIndex = trajectory.markers[i].pointIndex;
+            if (pointIndex >= 0 && pointIndex < trajectory.pointsCount)
+                addMandatoryPoint(pointIndex);
+        }
+    }
+
+    [[nodiscard]] int countUnselectedPointsInGaps() const noexcept
+    {
+        int totalGaps = 0;
+        for (int i = 1; i < selectedPointCount; ++i)
+            totalGaps += selectedPointIndices[i] - selectedPointIndices[i - 1] - 1;
+        return totalGaps;
+    }
+
+    void addDistributedPoints(int totalGaps, int pointsToAdd) noexcept
+    {
         int previousGapEnd = 0;
         int previousAllocation = 0;
-        int originalMandatoryCount = selectedPointCount;
+        const int originalMandatoryCount = selectedPointCount;
         for (int i = 1; i < originalMandatoryCount; ++i) {
             const int gap = selectedPointIndices[i] - selectedPointIndices[i - 1] - 1;
             const int gapEnd = previousGapEnd + gap;
@@ -58,17 +83,8 @@ struct TrajectoryRenderPlan {
             previousGapEnd = gapEnd;
             previousAllocation = allocation;
         }
-
-        sortSelectedPoints();
-        lineSegmentCount = selectedPointCount - 1;
     }
 
-    [[nodiscard]] int pointIndex(int index) const noexcept
-    {
-        return selectedPointIndices[index];
-    }
-
-private:
     void addMandatoryPoint(int pointIndex) noexcept
     {
         int insertionIndex = 0;
