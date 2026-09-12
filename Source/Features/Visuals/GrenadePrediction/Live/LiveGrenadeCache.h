@@ -143,15 +143,10 @@ private:
         grenades[index] = grenades[--grenadeCount];
     }
 
-    [[nodiscard]] static bool isFiniteVector(cs2::Vector vector) noexcept
-    {
-        return Math::isFinite(vector.x) && Math::isFinite(vector.y) && Math::isFinite(vector.z);
-    }
-
     [[nodiscard]] static bool isValid(const LiveGrenadeSnapshot& grenade) noexcept
     {
         return isValidHandle(grenade.projectileHandle) && isValidHandle(grenade.throwerHandle) && grenade.kind != GrenadeKind::None
-            && isFiniteVector(grenade.initialPosition) && isFiniteVector(grenade.initialVelocity);
+            && grenade.initialPosition.isFinite() && grenade.initialVelocity.isFinite();
     }
 
     [[nodiscard]] static bool isValidHandle(cs2::CEntityHandle handle) noexcept
