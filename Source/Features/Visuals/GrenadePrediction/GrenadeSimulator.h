@@ -4,6 +4,7 @@
 #include <CS2/EngineTrace/CGameTrace.h>
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>

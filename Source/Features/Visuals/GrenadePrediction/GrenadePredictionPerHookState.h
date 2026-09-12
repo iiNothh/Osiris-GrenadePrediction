@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 
 struct GrenadePredictionPerHookState {

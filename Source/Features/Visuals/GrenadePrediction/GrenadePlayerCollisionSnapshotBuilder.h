@@ -4,6 +4,7 @@
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
 #include <CS2/Constants/EntityHandle.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <GameClient/Entities/BaseEntity.h>
 #include <GameClient/Entities/BaseModelEntity.h>
 
@@ -29,6 +30,38 @@ public:
         if (!isPlayer)
             return;
 
+        observePlayerCandidate(scratch, identity);
+    }
+
+    void finish(GrenadePlayerCollisionSnapshot& snapshot, GrenadePlayerCollisionCollectionScratch& scratch, cs2::C_BaseEntity* localPawn) const noexcept
+    {
+        if (scratch.playerDataInvalid || scratch.overflowed) {
+            commitUnavailable(snapshot);
+            return;
+        }
+
+        if (!isValidLocalPawn(localPawn)) {
+            commitUnavailable(snapshot);
+            return;
+        }
+
+        const auto teammatesAreEnemies = hookContext.cvarSystem().template getConVarValue<cs2::mp_teammates_are_enemies>();
+        const auto localTeam = hookContext.template make<BaseEntity>(localPawn).optionalTeamNumber();
+        if (!teammatesAreEnemies.has_value() || !localTeam.hasValue()) {
+            commitUnavailable(snapshot);
+            return;
+        }
+
+        normalizeByRawHandle(scratch);
+        const auto localHandle = localPawn->identity->handle.value;
+        const bool teammatesEligible = *teammatesAreEnemies;
+        const auto localTeamNumber = localTeam.value();
+        commitAvailableSnapshot(snapshot, scratch, localHandle, teammatesEligible, localTeamNumber);
+    }
+
+private:
+    void observePlayerCandidate(GrenadePlayerCollisionCollectionScratch& scratch, const cs2::CEntityIdentity& identity) const noexcept
+    {
         if (!identity.entity || identity.handle.value == cs2::INVALID_EHANDLE_INDEX) {
             scratch.playerDataInvalid = true;
             return;
@@ -59,44 +92,30 @@ public:
         scratch.candidates[scratch.count++] = {identity.handle.value, bounds.mins, bounds.maxs, team.value()};
     }
 
-    void finish(GrenadePlayerCollisionSnapshot& snapshot, GrenadePlayerCollisionCollectionScratch& scratch, cs2::C_BaseEntity* localPawn) const noexcept
+    [[nodiscard]] bool isValidLocalPawn(cs2::C_BaseEntity* localPawn) const noexcept
     {
-        if (scratch.playerDataInvalid || scratch.overflowed || !localPawn || !localPawn->identity || localPawn->identity->entity != localPawn
-            || !localPawn->identity->entityClass || localPawn->identity->handle.value == cs2::INVALID_EHANDLE_INDEX) {
-            commitUnavailable(snapshot);
-            return;
-        }
-
-        if (!hookContext.entityClassifier().template entityIs<cs2::C_CSPlayerPawn>(localPawn->identity->entityClass)) {
-            commitUnavailable(snapshot);
-            return;
-        }
-
-        const auto teammatesAreEnemies = hookContext.cvarSystem().template getConVarValue<cs2::mp_teammates_are_enemies>();
-        const auto localTeam = hookContext.template make<BaseEntity>(localPawn).optionalTeamNumber();
-        if (!teammatesAreEnemies.has_value() || !localTeam.hasValue()) {
-            commitUnavailable(snapshot);
-            return;
-        }
-
-        normalizeByRawHandle(scratch);
-        const auto localHandle = localPawn->identity->handle.value;
-        const bool teammatesEligible = *teammatesAreEnemies;
-        const auto localTeamNumber = localTeam.value();
-        if (!matchesAvailableSnapshot(snapshot, scratch, localHandle, teammatesEligible, localTeamNumber)) {
-            snapshot.count = 0;
-            for (int i = 0; i < scratch.count; ++i) {
-                const auto& collected = scratch.candidates[i];
-                if (collected.rawHandle == localHandle)
-                    continue;
-                snapshot.candidates[snapshot.count++] = {collected.rawHandle, collected.mins, collected.maxs, teammatesEligible || localTeamNumber != collected.team};
-            }
-            snapshot.status = GrenadePlayerCollisionSnapshotStatus::Available;
-            ++snapshot.revision;
-        }
+        return localPawn && localPawn->identity && localPawn->identity->entity == localPawn
+            && localPawn->identity->entityClass && localPawn->identity->handle.value != cs2::INVALID_EHANDLE_INDEX
+            && hookContext.entityClassifier().template entityIs<cs2::C_CSPlayerPawn>(localPawn->identity->entityClass);
     }
 
-private:
+    static void commitAvailableSnapshot(GrenadePlayerCollisionSnapshot& snapshot, const GrenadePlayerCollisionCollectionScratch& scratch,
+        std::uint32_t localHandle, bool teammatesEligible, TeamNumber localTeam) noexcept
+    {
+        if (matchesAvailableSnapshot(snapshot, scratch, localHandle, teammatesEligible, localTeam))
+            return;
+
+        snapshot.count = 0;
+        for (int i = 0; i < scratch.count; ++i) {
+            const auto& collected = scratch.candidates[i];
+            if (collected.rawHandle == localHandle)
+                continue;
+            snapshot.candidates[snapshot.count++] = {collected.rawHandle, collected.mins, collected.maxs, teammatesEligible || localTeam != collected.team};
+        }
+        snapshot.status = GrenadePlayerCollisionSnapshotStatus::Available;
+        ++snapshot.revision;
+    }
+
     static void commitUnavailable(GrenadePlayerCollisionSnapshot& snapshot) noexcept
     {
         if (snapshot.status != GrenadePlayerCollisionSnapshotStatus::Unavailable || snapshot.count != 0) {

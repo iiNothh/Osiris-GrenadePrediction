@@ -1,5 +1,7 @@
 target_sources(UnitTests PRIVATE
   CachedGrenadeTrajectoryPresentationTests.cpp
+  GrenadePlayerCollisionMirrorTests.cpp
+  GrenadePlayerCollisionSnapshotBuilderTests.cpp
   GrenadePredictionConfigVariablesTests.cpp
   GrenadePredictionStateTests.cpp
   GrenadePredictionTests.cpp
