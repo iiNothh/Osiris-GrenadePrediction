@@ -115,7 +115,7 @@ struct GrenadeSimulatorTestHookContext {
 template <typename HookContext>
 struct GrenadeSimulatorTestAccess {
     using Simulator = GrenadeSimulator<HookContext>;
-    [[nodiscard]] static StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
+    [[nodiscard]] static typename Simulator::StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
         void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
     {
         typename Simulator::SimulationScratch scratch{nullptr, simulator.configuredPlayerCollisionSnapshot};
@@ -126,11 +126,11 @@ struct GrenadeSimulatorTestAccess {
     {
         return simulator.applyContactResponse(trace, velocity, kind);
     }
-    [[nodiscard]] static StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
+    [[nodiscard]] static typename Simulator::StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
         void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
     {
         typename Simulator::SimulationScratch scratch{nullptr, nullptr};
-        StepResult result;
+        typename Simulator::StepResult result;
         const auto collision = simulator.movementSubstep(scratch, position, velocity, kind, skipEntity, result, gravity);
         result.traceSucceeded = collision.traceSucceeded;
         result.impactDetonate = collision.impactDetonate;
