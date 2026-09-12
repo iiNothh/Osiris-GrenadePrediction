@@ -167,7 +167,7 @@ struct GrenadePredictionState {
         if (!throwObservation.consumeActualExecution(hasCurtime, curtime))
             return false;
 
-        const bool stagedTrajectoryReady = throwObservation.canCommitActualExecution()
+        const bool stagedTrajectoryReady = throwObservation.canCommitTrajectory()
             && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
         finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
         invalidateTempTrajectory();
@@ -178,7 +178,7 @@ struct GrenadePredictionState {
         if (!throwObservation.consumeLegacyRelease(releaseEdge))
             return false;
 
-        const bool stagedTrajectoryReady = throwObservation.canCommitActualExecution()
+        const bool stagedTrajectoryReady = throwObservation.canCommitTrajectory()
             && stageOwnedTempTrajectory(weapon, throwObservation.pendingSequence());
         finalizeStagedTrajectory(stagedTrajectoryReady, hasCurtime, curtime);
         invalidateTempTrajectory();
