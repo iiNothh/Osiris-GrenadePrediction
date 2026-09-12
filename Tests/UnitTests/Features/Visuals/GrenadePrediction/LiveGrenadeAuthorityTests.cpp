@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
@@ -50,6 +51,65 @@ TEST(GrenadePredictionLiveCacheTest, AdoptsNewestLocalProjectileByObservationOrd
     EXPECT_EQ(newest.value().projectileHandle, firstProjectile);
     authority.accept(newest.value());
     EXPECT_TRUE(authority.hasAcceptedLiveProjectile());
+}
+
+TEST(LiveGrenadeAuthorityTest, SchedulesExponentialSimulationRetries)
+{
+    LiveGrenadeAuthority authority;
+    const auto projectile = snapshot(firstProjectile, 1);
+
+    EXPECT_TRUE(authority.observeForSimulation(projectile));
+    authority.recordSimulationFailure(projectile, 10);
+    EXPECT_FALSE(authority.isSimulationRetryDue(projectile, 10));
+    EXPECT_TRUE(authority.isSimulationRetryDue(projectile, 11));
+
+    authority.recordSimulationFailure(projectile, 11);
+    EXPECT_FALSE(authority.isSimulationRetryDue(projectile, 12));
+    EXPECT_TRUE(authority.isSimulationRetryDue(projectile, 13));
+
+    authority.recordSimulationFailure(projectile, 13);
+    EXPECT_FALSE(authority.isSimulationRetryDue(projectile, 16));
+    EXPECT_TRUE(authority.isSimulationRetryDue(projectile, 17));
+}
+
+TEST(LiveGrenadeAuthorityTest, ResetsRetryForNewObservation)
+{
+    LiveGrenadeAuthority authority;
+    const auto first = snapshot(firstProjectile, 1);
+    const auto second = snapshot(secondProjectile, 2);
+
+    EXPECT_TRUE(authority.observeForSimulation(first));
+    authority.recordSimulationFailure(first, 10);
+    EXPECT_FALSE(authority.isSimulationRetryDue(first, 10));
+
+    EXPECT_TRUE(authority.observeForSimulation(second));
+    EXPECT_TRUE(authority.isSimulationRetryDue(second, 10));
+    authority.recordSimulationFailure(second, 10);
+    EXPECT_FALSE(authority.isSimulationRetryDue(second, 10));
+    EXPECT_TRUE(authority.isSimulationRetryDue(second, 11));
+}
+
+TEST(LiveGrenadeAuthorityTest, TreatsWrappedFrameAsDue)
+{
+    LiveGrenadeAuthority authority;
+    const auto projectile = snapshot(firstProjectile, 1);
+
+    EXPECT_TRUE(authority.observeForSimulation(projectile));
+    authority.recordSimulationFailure(projectile, std::numeric_limits<std::uint32_t>::max());
+    EXPECT_TRUE(authority.isSimulationRetryDue(projectile, 0));
+}
+
+TEST(LiveGrenadeAuthorityTest, AcceptClearsRetryState)
+{
+    LiveGrenadeAuthority authority;
+    const auto projectile = snapshot(firstProjectile, 1);
+
+    EXPECT_TRUE(authority.observeForSimulation(projectile));
+    authority.recordSimulationFailure(projectile, 10);
+    EXPECT_FALSE(authority.isSimulationRetryDue(projectile, 10));
+
+    authority.accept(projectile);
+    EXPECT_TRUE(authority.isSimulationRetryDue(projectile, 10));
 }
 
 }

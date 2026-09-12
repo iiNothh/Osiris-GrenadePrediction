@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 
 #include <GameClient/Entities/GrenadeKind.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionState.h>
@@ -65,6 +66,68 @@ TEST(GrenadePredictionLiveCacheTest, RemovesSmokeAndDecoyWhenLifecycleEnds)
     EXPECT_TRUE(updater.update(projectile, secondProjectile, GrenadeKind::Decoy, {.decoyShotTick = 1}));
     cache.endScan();
     EXPECT_FALSE(cache.newestForThrower(localPawn).hasValue());
+}
+
+TEST(LiveGrenadeCacheTest, OverflowMakesScanNonAuthoritative)
+{
+    LiveGrenadeCache cache;
+    cache.beginScan();
+
+    for (std::size_t i = 0; i < LiveGrenadeCache::maxEntries; ++i)
+        EXPECT_TRUE(cache.upsert(snapshot(cs2::CEntityHandle{static_cast<std::uint32_t>(i + 2)})));
+
+    EXPECT_FALSE(cache.upsert(snapshot(cs2::CEntityHandle{static_cast<std::uint32_t>(LiveGrenadeCache::maxEntries + 2)})));
+    cache.endScan();
+
+    EXPECT_TRUE(cache.hasOverflowed());
+    EXPECT_FALSE(cache.hasAuthoritativeScan());
+}
+
+TEST(LiveGrenadeCacheTest, EndScanRemovesUnseenEntries)
+{
+    LiveGrenadeCache cache;
+    ASSERT_TRUE(cache.upsert(snapshot(firstProjectile)));
+    ASSERT_TRUE(cache.upsert(snapshot(secondProjectile)));
+    cache.beginScan();
+    ASSERT_TRUE(cache.upsert(snapshot(firstProjectile)));
+    cache.endScan();
+
+    const auto newest = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(newest.hasValue());
+    EXPECT_EQ(newest.value().projectileHandle, firstProjectile);
+}
+
+TEST(LiveGrenadeCacheTest, UpdatePreservesObservationSequence)
+{
+    LiveGrenadeCache cache;
+    ASSERT_TRUE(cache.upsert(snapshot(firstProjectile)));
+    const auto initial = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(initial.hasValue());
+
+    cache.beginScan();
+    ASSERT_TRUE(cache.upsert(snapshot(firstProjectile)));
+    cache.endScan();
+
+    const auto updated = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(updated.hasValue());
+    EXPECT_EQ(updated.value().observationSequence, initial.value().observationSequence);
+}
+
+TEST(LiveGrenadeCacheTest, InvalidSnapshotDoesNotMutateCache)
+{
+    LiveGrenadeCache cache;
+    ASSERT_TRUE(cache.upsert(snapshot(firstProjectile)));
+    const auto before = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(before.hasValue());
+
+    auto invalid = snapshot(secondProjectile);
+    invalid.initialPosition.x = std::numeric_limits<float>::quiet_NaN();
+    EXPECT_FALSE(cache.upsert(invalid));
+
+    const auto after = cache.newestForThrower(localPawn);
+    ASSERT_TRUE(after.hasValue());
+    EXPECT_EQ(after.value().projectileHandle, before.value().projectileHandle);
+    EXPECT_EQ(after.value().observationSequence, before.value().observationSequence);
 }
 
 }
