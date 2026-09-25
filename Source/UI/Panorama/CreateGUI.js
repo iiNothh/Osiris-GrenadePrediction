@@ -72,10 +72,23 @@ $.Osiris = (function () {
     sliderUpdated: function (tabID, sliderID, slider) {
       this.addCommand('set', tabID + '/' + sliderID + '/' + Math.floor(slider.value));
     },
-    floatSliderUpdated: function (tabID, sliderID, slider) {
+    floatSliderUpdated: function (tabID, sliderID, slider, decimalPlaces) {
       if (!Number.isFinite(slider.value))
         return;
-      this.addCommand('set', tabID + '/' + sliderID + '/' + slider.value.toFixed(1));
+      this.addCommand('set', tabID + '/' + sliderID + '/' + slider.value.toFixed(decimalPlaces));
+    },
+    floatSliderTextEntryUpdated: function (tabID, sliderID, slider, textEntry, increment, decimalPlaces) {
+      var value = Number(textEntry.text);
+      if (textEntry.text.trim() && Number.isFinite(value)) {
+        var snappedValue = Math.round(value / increment) * increment;
+        var clampedValue = Math.min(slider.max, Math.max(slider.min, snappedValue));
+        slider.SetValueNoEvents(clampedValue);
+      }
+
+      var sliderValue = slider.value;
+      var formattedValue = sliderValue.toFixed(decimalPlaces);
+      textEntry.text = formattedValue;
+      this.addCommand('set', tabID + '/' + sliderID + '/' + formattedValue);
     },
     sliderTextEntryUpdated: function (tabID, sliderID, panel) {
       this.addCommand('set', tabID + '/' + sliderID + '/' + panel.text);
@@ -433,7 +446,7 @@ u8R"(
     textEntry.SetPanelEvent('onmouseout', function () { if (!textEntry.BHasKeyFocus()) textEntry.style.backgroundColor = 'none'; });
   }
 
-  var createFloatSlider = function (parent, name, id, min, max, rowId = '') {
+  var createFloatSlider = function (parent, name, id, min, max, increment, decimalPlaces, textEntryFilter, rowId = '') {
     var container = $.CreatePanel('Panel', parent, rowId, {
       class: "SettingsMenuDropdownContainer"
     });
@@ -453,19 +466,37 @@ u8R"(
       direction: "horizontal"
     });
 
-    slider.SetPanelEvent('onvaluechanged', function () { $.Osiris.floatSliderUpdated('visuals', id, slider); });
+    slider.SetPanelEvent('onvaluechanged', function () { $.Osiris.floatSliderUpdated('visuals', id, slider, decimalPlaces); });
     slider.min = min;
     slider.max = max;
-    slider.increment = 0.1;
+    slider.increment = increment;
 
+    var maxChars = Math.max(min.toFixed(decimalPlaces).length, max.toFixed(decimalPlaces).length);
+    var textEntryWidth = 75 + Math.max(0, maxChars - 4) * 10;
     var textEntry = $.CreatePanel('TextEntry', sliderContainer, id + '_text', {
-      maxchars: "48",
+      maxchars: String(maxChars),
       textmode: "text",
-      style: "width: 75px; margin-left: 10px; padding-left: 10px; text-align: center; font-size: 20px; color: #ccccccff; font-weight: bold; font-family: Stratum2, notosans, 'Arial Unicode MS'; border: 2px solid #cccccc15;"
+      style: `width: ${textEntryWidth}px; margin-left: 10px; text-align: center; font-size: 20px; color: #ccccccff; font-weight: bold; font-family: Stratum2, notosans, 'Arial Unicode MS'; border: 2px solid #cccccc15;`
     });
 
-    textEntry.SetPanelEvent('ontextentrysubmit', function () { $.Osiris.sliderTextEntryUpdated('visuals', `${id}_text`, textEntry); });
-    textEntry.SetPanelEvent('onfocus', function () { textEntry.style.backgroundColor = 'gradient(linear, 100% 0%, 0% 0%, from(#00000080), color-stop(0, #00000060), to(#00000080))'; });
+    var lastAcceptedText = textEntry.text;
+    if (textEntryFilter) {
+      textEntry.SetPanelEvent('ontextentrychange', function () {
+        if (textEntryFilter(textEntry.text, slider, decimalPlaces))
+          lastAcceptedText = textEntry.text;
+        else
+          textEntry.text = lastAcceptedText;
+      });
+    }
+
+    textEntry.SetPanelEvent('ontextentrysubmit', function () {
+      $.Osiris.floatSliderTextEntryUpdated('visuals', id, slider, textEntry, increment, decimalPlaces);
+      lastAcceptedText = textEntry.text;
+    });
+    textEntry.SetPanelEvent('onfocus', function () {
+      lastAcceptedText = textEntry.text;
+      textEntry.style.backgroundColor = 'gradient(linear, 100% 0%, 0% 0%, from(#00000080), color-stop(0, #00000060), to(#00000080))';
+    });
     textEntry.SetPanelEvent('onblur', function () { textEntry.style.backgroundColor = 'none'; });
     textEntry.SetPanelEvent('onmouseover', function () { if (!textEntry.BHasKeyFocus()) textEntry.style.backgroundColor = 'gradient(linear, 100% 0%, 0% 0%, from(#000000ff), color-stop(0, #00000000), to(#00000050));'; });
     textEntry.SetPanelEvent('onmouseout', function () { if (!textEntry.BHasKeyFocus()) textEntry.style.backgroundColor = 'none'; });
@@ -794,7 +825,19 @@ u8R"(
   var grenadePredictionCache = createSection(grenadePredictionTab, 'Cache');
   createDropDown(grenadePredictionCache, 'Last Trajectory Visibility', 'visuals', 'grenade_prediction_last_trajectory_visibility', ['Explode', 'Always', 'Off', 'Custom']);
   separator(grenadePredictionCache);
-  createFloatSlider(grenadePredictionCache, 'Custom Duration (seconds)', 'grenade_prediction_cache_duration', 0.0, 60.0, 'grenade_prediction_cache_duration_row');
+  var cacheDurationDecimalPlaces = 2;
+  var cacheDurationTextEntryFilter = function (text, slider, decimalPlaces) {
+    if (!/^-?\d*(?:\.\d*)?$/.test(text))
+      return false;
+
+    var decimalPoint = text.indexOf('.');
+    if (decimalPoint !== -1 && text.length - decimalPoint - 1 > decimalPlaces)
+      return false;
+
+    var value = Number(text);
+    return !Number.isFinite(value) || value <= 0 || value <= slider.max;
+  };
+  createFloatSlider(grenadePredictionCache, 'Custom Duration (seconds)', 'grenade_prediction_cache_duration', 0.0, 60.0, 0.01, cacheDurationDecimalPlaces, cacheDurationTextEntryFilter, 'grenade_prediction_cache_duration_row');
 
   $.Osiris.navigateToSubTab('visuals', 'player_info');
 

@@ -20,13 +20,21 @@ TEST(GrenadePredictionConfigVariablesTest, NormalizesEveryVisibilityModeAndInval
 TEST(GrenadePredictionConfigVariablesTest, ClampsAndRoundsCacheDuration)
 {
     EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(-1.0f), 0.0f);
-    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(0.04f), 0.0f);
-    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(0.05f), 0.1f);
-    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.24f), 1.2f);
-    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.25f), 1.3f);
-    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(59.94f), 59.9f);
-    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(59.95f), 60.0f);
+    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(0.004f), 0.0f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(0.0051f), 0.01f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.234f), 1.23f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.235f), 1.24f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(59.994f), 59.99f);
+    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(59.996f), 60.0f);
     EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(61.0f), 60.0f);
+}
+
+TEST(GrenadePredictionConfigVariablesTest, NormalizesCacheDurationToSliderIncrement)
+{
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.534f), 1.53f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(-0.006f), 0.0f);
+    EXPECT_FLOAT_EQ(grenade_prediction_vars::normalizeCacheDuration(60.006f), 60.0f);
+    EXPECT_EQ(grenade_prediction_vars::normalizeCacheDuration(1.5f), 1.5f);
 }
 
 TEST(GrenadePredictionConfigVariablesTest, ClampsNonFiniteCacheDuration)

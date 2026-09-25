@@ -8,6 +8,9 @@
 namespace grenade_prediction_vars
 {
     enum class LastTrajectoryVisibilityMode : std::uint8_t { Explode, Always, Off, Custom };
+    constexpr std::uint32_t kCacheDurationSliderScale = 100;
+    constexpr auto kCacheDurationSliderIncrement = 1.0f / kCacheDurationSliderScale;
+    constexpr auto kCacheDurationSliderDecimalPlaces = 2U;
 
     [[nodiscard]] constexpr LastTrajectoryVisibilityMode normalizeLastTrajectoryVisibilityMode(std::uint8_t value) noexcept
     {
@@ -21,7 +24,14 @@ namespace grenade_prediction_vars
             return 0.0f;
         if (value >= 60.0f)
             return 60.0f;
-        return static_cast<float>(static_cast<unsigned int>(value * 10.0f + 0.5f)) * 0.1f;
+
+        const auto snappedUnits = static_cast<std::uint32_t>(static_cast<double>(value) * static_cast<double>(kCacheDurationSliderScale) + 0.5);
+        const auto snappedValue = static_cast<float>(static_cast<double>(snappedUnits) / static_cast<double>(kCacheDurationSliderScale));
+        if (snappedValue <= 0.0f)
+            return 0.0f;
+        if (snappedValue >= 60.0f)
+            return 60.0f;
+        return snappedValue;
     }
 
     CONFIG_VARIABLE(Enabled, bool, false);

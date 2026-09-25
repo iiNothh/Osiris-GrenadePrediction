@@ -249,7 +249,7 @@ private:
         setDropDownSelectedIndex(mainMenu, "grenade_prediction_last_trajectory_visibility", lastTrajectoryVisibilityIndex());
         updateHueSlider<grenade_prediction_vars::TrajectoryHue>(mainMenu, "grenade_prediction_trajectory_hue");
         updateHueSlider<grenade_prediction_vars::BounceHue>(mainMenu, "grenade_prediction_bounce_hue");
-        updateFloatSlider(mainMenu, "grenade_prediction_cache_duration", GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration));
+        updateFloatSlider(mainMenu, "grenade_prediction_cache_duration", GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), grenade_prediction_vars::kCacheDurationSliderDecimalPlaces);
         setDurationRowState(mainMenu, lastTrajectoryVisibilityIndex() == 3);
     }
 
@@ -280,9 +280,9 @@ private:
         slider.updateTextEntry(value);
     }
 
-    void updateFloatSlider(auto&& mainMenu, const char* sliderId, float value) const noexcept
+    void updateFloatSlider(auto&& mainMenu, const char* sliderId, float value, std::uint32_t decimalPlaces) const noexcept
     {
-        auto&& slider = hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId));
+        auto&& slider = hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId), decimalPlaces);
         slider.updateSlider(value);
         slider.updateTextEntry(value);
     }

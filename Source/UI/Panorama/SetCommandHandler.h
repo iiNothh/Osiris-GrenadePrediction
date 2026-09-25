@@ -52,9 +52,7 @@ private:
         } else if (feature == "viewmodel_fov_text") {
             handleIntSliderTextEntry<viewmodel_mod_vars::Fov>("viewmodel_fov");
         } else if (feature == "grenade_prediction_cache_duration") {
-            handleFloatSlider<grenade_prediction_vars::CacheDuration>("grenade_prediction_cache_duration");
-        } else if (feature == "grenade_prediction_cache_duration_text") {
-            handleFloatSliderTextEntry<grenade_prediction_vars::CacheDuration>("grenade_prediction_cache_duration");
+            handleFloatSlider<grenade_prediction_vars::CacheDuration, grenade_prediction_vars::normalizeCacheDuration>("grenade_prediction_cache_duration", grenade_prediction_vars::kCacheDurationSliderDecimalPlaces);
         }
     }
 
@@ -106,52 +104,30 @@ private:
         return hookContext.template make<IntSlider>(mainMenu.findChildInLayoutFile(sliderId));
     }
 
-    template <typename ConfigVariable>
-    void handleFloatSlider(const char* sliderId) const noexcept
+    template <typename ConfigVariable, auto Normalizer>
+    void handleFloatSlider(const char* sliderId, std::uint32_t decimalPlaces) const noexcept
     {
-        const auto newVariableValue = handleFloatSlider(sliderId, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax, GET_CONFIG_VAR(ConfigVariable));
-        getFloatSlider(sliderId).updateTextEntry(newVariableValue);
+        const auto newVariableValue = handleFloatSlider<Normalizer>(GET_CONFIG_VAR(ConfigVariable));
+        auto&& slider = getFloatSlider(sliderId, decimalPlaces);
+        slider.updateTextEntry(newVariableValue);
         hookContext.config().template setVariable<ConfigVariable>(typename ConfigVariable::ValueType{newVariableValue});
     }
 
-    [[nodiscard]] float handleFloatSlider(const char* sliderId, float min, float max, float current) const noexcept
+    template <auto Normalizer>
+    [[nodiscard]] float handleFloatSlider(float current) const noexcept
     {
         float value{};
-        if (!parser.parseFloat(value) || value != value || value == current || value < min || value > max)
+        if (!parser.parseFloat(value))
             return current;
 
-        getFloatSlider(sliderId).updateTextEntry(value);
-        return value;
+        return Normalizer(value);
     }
 
-    template <typename ConfigVariable>
-    void handleFloatSliderTextEntry(const char* sliderId) const noexcept
-    {
-        const auto newVariableValue = handleFloatSliderTextEntry(sliderId, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax, GET_CONFIG_VAR(ConfigVariable));
-        hookContext.config().template setVariable<ConfigVariable>(typename ConfigVariable::ValueType{newVariableValue});
-    }
-
-    [[nodiscard]] float handleFloatSliderTextEntry(const char* sliderId, float min, float max, float current) const noexcept
-    {
-        auto&& slider = getFloatSlider(sliderId);
-        float value{};
-        if (!parser.parseFloat(value) || value != value || value < min || value > max) {
-            slider.updateTextEntry(current);
-            return current;
-        }
-
-        if (value == current)
-            return current;
-
-        slider.updateSlider(value);
-        return value;
-    }
-
-    [[nodiscard]] decltype(auto) getFloatSlider(const char* sliderId) const noexcept
+    [[nodiscard]] decltype(auto) getFloatSlider(const char* sliderId, std::uint32_t decimalPlaces) const noexcept
     {
         const auto mainMenuPointer = hookContext.patternSearchResults().template get<MainMenuPanelPointer>();
         auto&& mainMenu = hookContext.template make<ClientPanel>(mainMenuPointer ? *mainMenuPointer : nullptr).uiPanel();
-        return hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId));
+        return hookContext.template make<FloatSlider>(mainMenu.findChildInLayoutFile(sliderId), decimalPlaces);
     }
 
     StringParser& parser;
