@@ -5,7 +5,6 @@ target_sources(UnitTests PRIVATE
   GrenadePredictionConfigVariablesTests.cpp
   GrenadePredictionStateTests.cpp
   GrenadePredictionTests.cpp
-  GrenadePredictionUpdateSchedulerTests.cpp
   GrenadeSimulatorParityTests.cpp
   GrenadeThrowObservationTests.cpp
   GrenadeTracePresetTests.cpp

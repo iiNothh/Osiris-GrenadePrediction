@@ -31,7 +31,7 @@ public:
     }
 
     void draw(const auto& trajectory, cs2::PanelHandle& containerPanelHandle, GrenadeTrajectoryPresentationState& presentationState,
-        auto&& parentPanel, color::Hue trajectoryHue, color::Hue bounceHue) noexcept
+        auto&& parentPanel, color::Hue trajectoryHue, color::Hue bounceHue, bool hideWhileUpdating = false) noexcept
     {
         if (!isDrawableTrajectory(trajectory)) {
             hide(containerPanelHandle);
@@ -43,7 +43,8 @@ public:
             hide(containerPanelHandle);
             return;
         }
-        containerPanel.setVisible(true);
+        if (hideWhileUpdating)
+            containerPanel.setVisible(false);
 
         auto childrenProxy = containerPanel.children();
         int childCount = (childrenProxy.vector && childrenProxy.vector->memory) ? childrenProxy.vector->size : 0;
@@ -92,6 +93,7 @@ public:
         hideUnusedPanels(children, index, childCount, presentationState.activePanelCount);
         presentationState.activePanelCount = neededPanels;
         presentationState.panelStyle = {segmentCount, trajectory.markersCount, trajectory.validLanding, trajectoryHueValue, bounceHueValue, true};
+        containerPanel.setVisible(true);
     }
 
 private:

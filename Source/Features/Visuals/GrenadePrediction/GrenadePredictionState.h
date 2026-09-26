@@ -9,7 +9,6 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTrajectoryPresentationState.h>
 #include <Features/Visuals/GrenadePrediction/Held/HeldGrenadeSimulationInput.h>
-#include <Features/Visuals/GrenadePrediction/Held/GrenadePredictionUpdateScheduler.h>
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
@@ -29,7 +28,6 @@ struct GrenadePredictionState {
     std::uint64_t committedHeldSmokeInfernoRevision{};
 
     GrenadeThrowObservation throwObservation{};
-    GrenadePredictionUpdateScheduler updateScheduler{};
     LiveGrenadeCache liveGrenadeCache{};
     LiveGrenadeAuthority liveGrenadeAuthority{};
     SmokeInfernoScan smokeInfernoScan{};
@@ -99,7 +97,6 @@ struct GrenadePredictionState {
     void clearPrediction() noexcept
     {
         throwObservation.reset();
-        updateScheduler.reset();
         liveGrenadeAuthority.reset();
         lastCommitCurtime = 0.0f;
         lastValidCurtime = 0.0f;
@@ -227,7 +224,6 @@ struct GrenadePredictionState {
         throwObservation.reset();
         invalidateTempTrajectory();
         invalidateCommittedTrajectory();
-        updateScheduler.reset();
         liveGrenadeAuthority.reset();
         lastCommitCurtime = 0.0f;
         lastValidCurtime = 0.0f;

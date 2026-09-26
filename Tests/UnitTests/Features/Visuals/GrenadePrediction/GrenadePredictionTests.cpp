@@ -72,6 +72,8 @@ struct GrenadePredictionUnloadTestContext {
 struct GrenadePredictionBranchRecorder {
     cs2::PanelHandle* hiddenPanels[4]{};
     cs2::PanelHandle* drawnPanels[4]{};
+    cs2::Vector drawnFirstPoints[4]{};
+    bool transactionalDraws[4]{};
     int hideCalls{};
     int drawCalls{};
     int pinPulledCalls{};
@@ -80,6 +82,7 @@ struct GrenadePredictionBranchRecorder {
     int fallbackLaunchCalls{};
     int simulateCalls{};
     bool pinPulled{};
+    GrenadeLaunchState launch{{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
 
     void resetPresentationCalls() noexcept
     {
@@ -99,10 +102,15 @@ struct GrenadePredictionBranchRenderer {
     }
 
     template <typename Trajectory, typename ParentPanel>
-    void draw(const Trajectory&, cs2::PanelHandle& panelHandle, GrenadeTrajectoryPresentationState&, ParentPanel&&, color::Hue, color::Hue) noexcept
+    void draw(const Trajectory& trajectory, cs2::PanelHandle& panelHandle, GrenadeTrajectoryPresentationState&, ParentPanel&&,
+        color::Hue, color::Hue, bool hideWhileUpdating) noexcept
     {
-        if (recorder.drawCalls < 4)
+        if (recorder.drawCalls < 4) {
             recorder.drawnPanels[recorder.drawCalls] = &panelHandle;
+            recorder.transactionalDraws[recorder.drawCalls] = hideWhileUpdating;
+            if (trajectory.pointsCount > 0)
+                recorder.drawnFirstPoints[recorder.drawCalls] = trajectory.points[0];
+        }
         ++recorder.drawCalls;
     }
 };
@@ -133,7 +141,7 @@ struct GrenadePredictionBranchGrenadeLaunch {
     [[nodiscard]] Optional<GrenadeLaunchState> get(cs2::C_BaseCSGrenade*, cs2::C_CSPlayerPawn*) const noexcept
     {
         ++recorder.nativeLaunchCalls;
-        return GrenadeLaunchState{{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
+        return recorder.launch;
     }
 };
 
@@ -151,11 +159,14 @@ struct GrenadePredictionBranchSimulator {
         ++recorder.fallbackLaunchCalls;
         return {};
     }
-    void simulate(Trajectory& trajectory, const GrenadeLaunchState&, GrenadeKind, void*, float) const noexcept
+    void simulate(Trajectory& trajectory, const GrenadeLaunchState& launch, GrenadeKind, void*, float) const noexcept
     {
         ++recorder.simulateCalls;
+        trajectory.clear();
         trajectory.valid = true;
-        trajectory.pointsCount = 1;
+        trajectory.pointsCount = 2;
+        trajectory.points[0] = launch.origin;
+        trajectory.points[1] = launch.velocity;
     }
 };
 
@@ -415,8 +426,6 @@ TEST(GrenadePredictionTest, SwitchingAwayThenBackObservesBothWeaponsAndAllowsHel
         GrenadePredictionBranchActiveWeapon activeWeapon;
         activeWeapon.baseEntityStorage.entity = static_cast<cs2::C_BaseEntity*>(&context.grenade);
         armPostThrowSuppression(state, originalWeapon);
-        state.updateScheduler.reset();
-
         GrenadePrediction<GrenadePredictionBranchTestContext> prediction{context};
         activeWeapon.baseEntityStorage.entityHandle = otherWeapon;
         prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
@@ -436,6 +445,112 @@ TEST(GrenadePredictionTest, SwitchingAwayThenBackObservesBothWeaponsAndAllowsHel
         EXPECT_EQ(context.recorder.nativeLaunchCalls, 1);
         EXPECT_EQ(context.recorder.fallbackLaunchCalls, 0);
         EXPECT_EQ(context.recorder.simulateCalls, 1);
+    }
+}
+
+TEST(GrenadePredictionTest, RecomputesAndPresentsChangedInputOnConsecutiveHighFrequencyCallbacks)
+{
+    if constexpr (!GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
+        GTEST_SKIP();
+    } else {
+        GrenadePredictionBranchTestContext context;
+        context.globalVarsStorage.frameTime = 1.0f / 240.0f;
+        context.configStorage.visibility = grenade_prediction_vars::LastTrajectoryVisibilityMode::Off;
+        context.recorder.pinPulled = true;
+        GrenadePredictionBranchPlayerPawn playerPawn;
+        GrenadePredictionBranchActiveWeapon activeWeapon;
+        activeWeapon.baseEntityStorage.entity = static_cast<cs2::C_BaseEntity*>(&context.grenade);
+        activeWeapon.baseEntityStorage.entityHandle = cs2::CEntityHandle{4};
+        constexpr cs2::CEntityHandle localPawn{1};
+        GrenadePrediction<GrenadePredictionBranchTestContext> prediction{context};
+
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+        ASSERT_EQ(context.recorder.simulateCalls, 1);
+        ASSERT_EQ(context.recorder.drawCalls, 1);
+
+        context.recorder.launch.origin = {10.0f, 20.0f, 30.0f};
+        context.recorder.launch.velocity = {40.0f, 50.0f, 60.0f};
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+
+        EXPECT_EQ(context.recorder.simulateCalls, 2);
+        EXPECT_EQ(context.recorder.drawCalls, 2);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[1].x, 10.0f);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[1].y, 20.0f);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[1].z, 30.0f);
+        EXPECT_TRUE(context.recorder.transactionalDraws[0]);
+        EXPECT_TRUE(context.recorder.transactionalDraws[1]);
+        EXPECT_EQ(context.recorder.drawnPanels[0], &context.featuresStatesStorage.visualFeaturesStates.grenadePredictionState.liveContainerPanelHandle);
+        EXPECT_EQ(context.recorder.drawnPanels[1], &context.featuresStatesStorage.visualFeaturesStates.grenadePredictionState.liveContainerPanelHandle);
+    }
+}
+
+TEST(GrenadePredictionTest, ReusesTrajectoryForIdenticalInputOnConsecutiveHighFrequencyCallbacks)
+{
+    if constexpr (!GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
+        GTEST_SKIP();
+    } else {
+        GrenadePredictionBranchTestContext context;
+        context.globalVarsStorage.frameTime = 1.0f / 240.0f;
+        context.configStorage.visibility = grenade_prediction_vars::LastTrajectoryVisibilityMode::Off;
+        context.recorder.pinPulled = true;
+        GrenadePredictionBranchPlayerPawn playerPawn;
+        GrenadePredictionBranchActiveWeapon activeWeapon;
+        activeWeapon.baseEntityStorage.entity = static_cast<cs2::C_BaseEntity*>(&context.grenade);
+        activeWeapon.baseEntityStorage.entityHandle = cs2::CEntityHandle{4};
+        constexpr cs2::CEntityHandle localPawn{1};
+        GrenadePrediction<GrenadePredictionBranchTestContext> prediction{context};
+
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+        ASSERT_EQ(context.recorder.simulateCalls, 1);
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+
+        EXPECT_EQ(context.recorder.simulateCalls, 1);
+        EXPECT_EQ(context.recorder.drawCalls, 2);
+        EXPECT_TRUE(context.recorder.transactionalDraws[0]);
+        EXPECT_TRUE(context.recorder.transactionalDraws[1]);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[0].x, context.recorder.drawnFirstPoints[1].x);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[0].y, context.recorder.drawnFirstPoints[1].y);
+        EXPECT_EQ(context.recorder.drawnFirstPoints[0].z, context.recorder.drawnFirstPoints[1].z);
+    }
+}
+
+TEST(GrenadePredictionTest, HidesUnownedLiveTrajectoryInSameCallbackAndKeepsCachedTrajectoryVisible)
+{
+    if constexpr (!GrenadePredictionPlatformCapabilities::supportsHeldPrediction) {
+        GTEST_SKIP();
+    } else {
+        GrenadePredictionBranchTestContext context;
+        context.recorder.pinPulled = true;
+        GrenadePredictionBranchPlayerPawn playerPawn;
+        GrenadePredictionBranchActiveWeapon activeWeapon;
+        activeWeapon.baseEntityStorage.entity = static_cast<cs2::C_BaseEntity*>(&context.grenade);
+        activeWeapon.baseEntityStorage.entityHandle = cs2::CEntityHandle{4};
+        constexpr cs2::CEntityHandle localPawn{1};
+        auto& state = context.featuresStatesStorage.visualFeaturesStates.grenadePredictionState;
+        GrenadePrediction<GrenadePredictionBranchTestContext> prediction{context};
+
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+        ASSERT_EQ(context.recorder.drawCalls, 1);
+        ASSERT_TRUE(state.tempTrajectory.valid);
+
+        state.lastCommittedTrajectory = state.tempTrajectory;
+        constexpr cs2::CEntityHandle otherPawn{2};
+        constexpr cs2::CEntityHandle projectile{3};
+        ASSERT_TRUE(state.liveGrenadeCache.upsert({projectile, otherPawn, {1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}, GrenadeKind::HEGrenade}));
+        const auto observedProjectile = state.liveGrenadeCache.newestForThrower(otherPawn);
+        ASSERT_TRUE(observedProjectile.hasValue());
+        state.liveGrenadeAuthority.observeLocalPawn(localPawn);
+        ASSERT_TRUE(state.liveGrenadeAuthority.observeForSimulation(observedProjectile.value()));
+        const int previousHideCalls = context.recorder.hideCalls;
+        prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
+
+        EXPECT_FALSE(state.tempTrajectory.valid);
+        ASSERT_GT(context.recorder.hideCalls, previousHideCalls);
+        EXPECT_EQ(context.recorder.hiddenPanels[previousHideCalls], &state.liveContainerPanelHandle);
+        EXPECT_EQ(context.recorder.drawCalls, 2);
+        EXPECT_EQ(context.recorder.drawnPanels[1], &state.lastCacheContainerPanelHandle);
+        EXPECT_FALSE(context.recorder.transactionalDraws[1]);
+        EXPECT_TRUE(state.lastCommittedTrajectory.valid);
     }
 }
 

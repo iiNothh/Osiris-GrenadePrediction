@@ -50,8 +50,10 @@ public:
 
     void handleGrenadePrediction(auto&& playerPawn, auto&& activeWeapon, cs2::CEntityHandle localPawnHandle, bool enabled) noexcept
     {
-        if (!playerPawn.isControlledByLocalPlayer())
+        if (!playerPawn.isControlledByLocalPlayer()) {
+            hideLivePrediction();
             return;
+        }
         auto& state = this->state();
         state.beginFrame();
         const Optional<float> curtime = finiteTime(hookContext.globalVars().curtime());
@@ -78,8 +80,6 @@ public:
                     hideLivePrediction();
             }
             static_cast<void>(state.observeTime(hasCurtime, time));
-            const Optional<float> frametime = finiteTime(hookContext.globalVars().frametime());
-            bool shouldUpdate = state.updateScheduler.shouldUpdate(false, frametime.hasValue(), frametime.valueOr(0.0f));
             const auto pendingWeapon = state.throwObservation.pendingWeapon();
             if (state.completeHeldThrow(pendingWeapon, hasCurtime, time)) {
                 hideLivePrediction();
@@ -107,17 +107,12 @@ public:
 
             const Optional<float> throwTime = finiteTime(hookContext.template make<GrenadeWeapon>(weapon).throwTime());
             const bool releaseEdge = observeHeldThrow(weapon, weaponHandle, throwTime);
-            const bool scheduledTransition = throwTime.hasValue() && state.throwObservation.observeThrowTime(weaponHandle, throwTime.value());
+            if (throwTime.hasValue())
+                static_cast<void>(state.throwObservation.observeThrowTime(weaponHandle, throwTime.value()));
             if (state.completeHeldThrow(state.throwObservation.pendingWeapon(), hasCurtime, time)
                 || (!throwTime.hasValue() && state.completeLegacyHeldThrow(weaponHandle, releaseEdge, hasCurtime, time))) {
                 hideLivePrediction();
                 applyCachedTrajectoryPresentation(hasCurtime, time);
-                return;
-            }
-            if (scheduledTransition)
-                shouldUpdate = state.updateScheduler.shouldUpdate(true, frametime.hasValue(), frametime.valueOr(0.0f));
-            if (!shouldUpdate) {
-                presentHeldTrajectory(weaponHandle, hasCurtime, time);
                 return;
             }
             auto simulator = hookContext.template make<GrenadeSimulator>();
@@ -235,8 +230,8 @@ private:
     {
         auto& state = this->state();
         if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.ownsTempTrajectory(weaponHandle, state.throwObservation.sequence))
-            drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState);
-        else if (state.liveGrenadeAuthority.blocksHeldPrediction())
+            drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState, true);
+        else
             hideLivePrediction();
         applyCachedTrajectoryPresentation(hasCurtime, curtime);
     }
@@ -259,11 +254,12 @@ private:
         return releaseEdge;
     }
 
-    void drawTrajectory(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation) noexcept
+    void drawTrajectory(const Trajectory& trajectory, cs2::PanelHandle& panel, GrenadeTrajectoryPresentationState& presentation,
+        bool hideWhileUpdating = false) noexcept
     {
         const auto hue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::TrajectoryHue)).toHueFloat();
         const auto bounceHue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::BounceHue)).toHueFloat();
-        renderer().draw(trajectory, panel, presentation, hookContext.hud().getHudReticle(), hue, bounceHue);
+        renderer().draw(trajectory, panel, presentation, hookContext.hud().getHudReticle(), hue, bounceHue, hideWhileUpdating);
     }
 
     void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept

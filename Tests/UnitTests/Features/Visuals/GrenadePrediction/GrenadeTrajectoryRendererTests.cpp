@@ -53,6 +53,29 @@ struct PanelMutationRecorder {
     int eventCount{};
 };
 
+enum class RenderEventKind {
+    ContainerVisibility,
+    ChildMutation
+};
+
+struct RenderEvent {
+    RenderEventKind kind{};
+    bool visible{};
+};
+
+struct RenderEventRecorder {
+    static constexpr int kCapacity = 64;
+
+    void record(RenderEvent event) noexcept
+    {
+        if (eventCount < kCapacity)
+            events[eventCount++] = event;
+    }
+
+    std::array<RenderEvent, kCapacity> events{};
+    int eventCount{};
+};
+
 struct ScriptedPanel {
     struct ChildrenVector {
         int size{};
@@ -77,6 +100,12 @@ struct ScriptedPanel {
     {
         visible = newVisible;
         ++setVisibleCalls;
+        if (renderEventRecorder) {
+            if (isContainer)
+                renderEventRecorder->record({RenderEventKind::ContainerVisibility, newVisible});
+            else
+                renderEventRecorder->record({RenderEventKind::ChildMutation, false});
+        }
     }
 
     void setTransformOrigin(cs2::CUILength, cs2::CUILength) noexcept
@@ -95,6 +124,7 @@ struct ScriptedPanel {
         height = newHeight;
         ++setHeightCalls;
         recordMutation(PanelMutation::SetHeight, newHeight);
+        recordChildMutation();
     }
 
     void setWidth(cs2::CUILength newWidth) noexcept
@@ -102,6 +132,7 @@ struct ScriptedPanel {
         width = newWidth;
         ++setWidthCalls;
         recordMutation(PanelMutation::SetWidth, newWidth);
+        recordChildMutation();
     }
 
     void setBackgroundColor(cs2::Color newBackgroundColor) noexcept
@@ -114,12 +145,14 @@ struct ScriptedPanel {
     void setRotate2dCentered(float) noexcept
     {
         ++setRotate2dCalls;
+        recordChildMutation();
     }
 
     template <typename T>
     void setTransform3D(const T&) noexcept
     {
         ++setTransform3DCalls;
+        recordChildMutation();
     }
 
     void fitParent() noexcept
@@ -143,6 +176,12 @@ struct ScriptedPanel {
             mutationRecorder->record({.panelIndex = panelIndex, .mutation = mutation, .length = length, .color = color});
     }
 
+    void recordChildMutation() noexcept
+    {
+        if (renderEventRecorder && !isContainer)
+            renderEventRecorder->record({RenderEventKind::ChildMutation, false});
+    }
+
     bool available{true};
     bool visible{};
     int setVisibleCalls{};
@@ -159,7 +198,9 @@ struct ScriptedPanel {
     cs2::Color backgroundColor{0, 0, 0};
     ChildrenVector* childrenVector{};
     PanelMutationRecorder* mutationRecorder{};
+    RenderEventRecorder* renderEventRecorder{};
     int panelIndex{};
+    bool isContainer{};
 };
 
 struct ScriptedClientPanel {
@@ -221,9 +262,12 @@ struct ScriptedGrenadeTrajectoryContext {
         : panelFactoryStorage{*this}
     {
         container.childrenVector = &children;
+        container.isContainer = true;
+        container.renderEventRecorder = &renderEventRecorder;
         for (int i = 0; i < kPanelCapacity; ++i) {
             childPointers[i] = &childPanels[i];
             childPanels[i].mutationRecorder = &panelMutationRecorder;
+            childPanels[i].renderEventRecorder = &renderEventRecorder;
             childPanels[i].panelIndex = i;
         }
         children.memory = childPointers.data();
@@ -272,6 +316,7 @@ struct ScriptedGrenadeTrajectoryContext {
     std::array<ScriptedPanel*, kPanelCapacity> childPointers{};
     ScriptedPanel::ChildrenVector children{};
     PanelMutationRecorder panelMutationRecorder;
+    RenderEventRecorder renderEventRecorder;
     ScriptedClientPanel clientPanel{};
     ScriptedPanelFactory panelFactoryStorage;
     ScriptedPanoramaTransformFactory panoramaTransformFactoryStorage;
@@ -326,9 +371,9 @@ protected:
         return trajectory;
     }
 
-    void draw(const Trajectory& trajectory) noexcept
+    void draw(const Trajectory& trajectory, bool hideWhileUpdating = false) noexcept
     {
-        renderer.draw(trajectory, containerPanelHandle, presentationState, context.parentPanel, color::Hue{0.25f}, color::Hue{0.5f});
+        renderer.draw(trajectory, containerPanelHandle, presentationState, context.parentPanel, color::Hue{0.25f}, color::Hue{0.5f}, hideWhileUpdating);
     }
 
     ScriptedGrenadeTrajectoryContext context;
@@ -458,6 +503,32 @@ TEST_F(GrenadeTrajectoryRendererTest, HidesPanelsNoLongerUsedByTheTrajectory)
     EXPECT_EQ(context.childPanels[2].setVisibleCalls, 1);
     EXPECT_EQ(context.childPanels[3].setVisibleCalls, 1);
     EXPECT_EQ(presentationState.activePanelCount, 2);
+}
+
+TEST_F(GrenadeTrajectoryRendererTest, HidesReusedContainerUntilReplacementPanelsAreUpdated)
+{
+    context.makeContainerAvailable(2);
+    context.container.visible = true;
+    context.childPanels[0].visible = true;
+    context.childPanels[1].visible = true;
+
+    draw(validTrajectory(3), true);
+
+    const auto& events = context.renderEventRecorder;
+    ASSERT_GE(events.eventCount, 3);
+    EXPECT_EQ(events.events[0].kind, RenderEventKind::ContainerVisibility);
+    EXPECT_FALSE(events.events[0].visible);
+    EXPECT_EQ(events.events[events.eventCount - 1].kind, RenderEventKind::ContainerVisibility);
+    EXPECT_TRUE(events.events[events.eventCount - 1].visible);
+    EXPECT_TRUE(context.container.visible);
+    bool childUpdatedWhileHidden = false;
+    for (int i = 1; i < events.eventCount - 1; ++i) {
+        if (events.events[i].kind == RenderEventKind::ChildMutation)
+            childUpdatedWhileHidden = true;
+        else
+            EXPECT_FALSE(events.events[i].visible);
+    }
+    EXPECT_TRUE(childUpdatedWhileHidden);
 }
 
 }
