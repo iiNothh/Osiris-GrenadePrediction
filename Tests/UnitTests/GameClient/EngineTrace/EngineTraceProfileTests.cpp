@@ -41,6 +41,9 @@ struct GrenadeTraceRecorder {
     bool constructorFieldsPreservedBeforeSecondExclusion{};
     bool overlayAppliedBeforeSecondExclusion{};
     bool traceShapeCalledAfterSecondExclusion{};
+    cs2::engine_trace::InteractionLayer interactsWith{};
+    cs2::CollisionGroup collisionGroup{};
+    cs2::PhysicsQueryFlag queryFlags{};
     cs2::AABB_t bounds{};
     engine_trace::grenade::FilterOverlayLayout filterOverlayLayout{kCanonicalFilterOverlayLayout};
 };
@@ -76,7 +79,8 @@ private:
         .end = end,
         .mins = {-2.0f, -2.0f, -2.0f},
         .maxs = {2.0f, 2.0f, 2.0f},
-        .excludedEntities = excludedEntities
+        .excludedEntities = excludedEntities,
+        .filter = engine_trace::grenade::kDefaultFilter
     };
 }
 
@@ -95,6 +99,9 @@ void writeOutput(cs2::CGameTrace& output, std::size_t offset, T value) noexcept
         return nullptr;
 
     ++activeRecorder->filterConstructionCalls;
+    activeRecorder->interactsWith = interactsWith;
+    activeRecorder->collisionGroup = collisionGroup;
+    activeRecorder->queryFlags = queryFlags;
     if (activeRecorder->clearManagerOnFilterConstruction)
         *activeRecorder->physicsWorldPointerSlotStorage = nullptr;
     activeRecorder->constructedWithNativeArguments = interactsWith == engine_trace::grenade::kFirstInteraction
@@ -426,6 +433,26 @@ TEST(EngineTraceGrenadeTest, AppliesOverlayThenSecondExclusionBeforeTracing)
     EXPECT_TRUE(recorder.constructorFieldsPreservedBeforeSecondExclusion);
     EXPECT_TRUE(recorder.overlayAppliedBeforeSecondExclusion);
     EXPECT_TRUE(recorder.traceShapeCalledAfterSecondExclusion);
+}
+
+TEST(EngineTraceGrenadeTest, UsesCallerProvidedFilterParameters)
+{
+    GrenadeEngineTraceContext context;
+    GrenadeTraceRecorder recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    GrenadeEngineTrace trace{context};
+    auto request = grenadeRequest({}, {});
+    request.filter = {
+        .interactsWith = cs2::engine_trace::InteractionLayer::Hitboxes | cs2::engine_trace::InteractionLayer::Player,
+        .collisionGroup = cs2::CollisionGroup::Default,
+        .queryFlags = cs2::PhysicsQueryFlag::IncludeTriggerContacts
+    };
+
+    ASSERT_TRUE(trace.traceGrenadeHull(request).hasValue());
+
+    EXPECT_EQ(recorder.interactsWith, request.filter.interactsWith);
+    EXPECT_EQ(recorder.collisionGroup, request.filter.collisionGroup);
+    EXPECT_EQ(recorder.queryFlags, request.filter.queryFlags);
 }
 
 TEST(EngineTraceGrenadeTest, UsesOneBindingSnapshotForTheWholeTraceCall)

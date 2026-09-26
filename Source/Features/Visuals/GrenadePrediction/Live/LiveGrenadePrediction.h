@@ -13,10 +13,17 @@
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCacheUpdater.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <GameClient/Entities/DecoyProjectile.h>
+#if defined(_WIN64)
+#include <GameClient/Entities/BaseEntity.h>
+#endif
 #include <GameClient/Entities/GrenadeKind.h>
 #include <GameClient/Entities/GrenadeKindMapper.h>
 #include <GameClient/Entities/GrenadeProjectile.h>
+#if defined(_WIN64)
+#include <GameClient/Entities/Inferno.h>
+#endif
 #include <GameClient/Entities/SmokeGrenadeProjectile.h>
+#include <GameClient/EngineTrace/EngineTrace.h>
 #include <Platform/GrenadePredictionCapabilities.h>
 #include <Utils/Math.h>
 #include <Utils/Optional.h>
@@ -35,17 +42,21 @@ public:
         auto& scratch = hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch;
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.begin(scratch);
         state.liveGrenadeCache.beginScan();
+        state.smokeInfernoScan.beginScan();
     }
 
     void observeEntity(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.observe(hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch, identity);
+        observeInferno(identity, type);
         observeLiveProjectile(identity, type);
     }
 
     void endScan(cs2::C_CSPlayerPawn* localPawn) noexcept
     {
         state.liveGrenadeCache.endScan();
+        if (state.smokeInfernoScan.endScan())
+            state.invalidateSmokeInfernoDependentPrediction();
         GrenadePlayerCollisionSnapshotBuilder<HookContext>{hookContext}.finish(state.playerCollisionSnapshot,
             hookContext.grenadePredictionPerHookState().playerCollisionCollectionScratch, static_cast<cs2::C_BaseEntity*>(localPawn));
     }
@@ -87,6 +98,43 @@ public:
     }
 
 private:
+#if defined(_WIN64)
+    void observeInferno(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
+    {
+        if (!identity.entity || !type.template is<cs2::C_Inferno>())
+            return;
+
+        const auto baseEntity = BaseEntity{hookContext, static_cast<cs2::C_BaseEntity*>(identity.entity)};
+        const auto origin = baseEntity.absOrigin();
+        const auto inferno = baseEntity.template as<Inferno>();
+        const auto fireCount = inferno.fireCount();
+        const auto fireLifetime = inferno.fireLifetime();
+        const auto firePositions = inferno.firePositions().get();
+        const auto fireIsBurning = inferno.fireIsBurning().get();
+        if (!origin.hasValue() || !fireCount.hasValue() || !fireLifetime.hasValue() || !firePositions || !fireIsBurning) {
+            state.smokeInfernoScan.markMalformed();
+            return;
+        }
+
+        SmokeInfernoSnapshot snapshot{
+            .origin = origin.value(),
+            .fireCount = fireCount.value(),
+            .fireLifetime = fireLifetime.value()
+        };
+        if (snapshot.fireCount < 0 || snapshot.fireCount > static_cast<std::int32_t>(SmokeInfernoSnapshot::kMaxFireAreas)) {
+            state.smokeInfernoScan.markMalformed();
+            return;
+        }
+        for (std::int32_t i{}; i < snapshot.fireCount; ++i) {
+            snapshot.firePositions[i] = firePositions[i];
+            snapshot.fireIsBurning[i] = fireIsBurning[i];
+        }
+        state.smokeInfernoScan.observe(snapshot);
+    }
+#else
+    void observeInferno(const cs2::CEntityIdentity&, EntityTypeInfo) noexcept {}
+#endif
+
     void observeLiveProjectile(const cs2::CEntityIdentity& identity, EntityTypeInfo type) noexcept
     {
         if constexpr (!GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction)
@@ -124,6 +172,8 @@ private:
         auto simulator = hookContext.template make<GrenadeSimulator>();
         liveGrenadeTrajectoryScratch.clear();
         simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+        if constexpr (requires { simulator.setSmokeInfernoScan(&state.smokeInfernoScan); })
+            simulator.setSmokeInfernoScan(&state.smokeInfernoScan);
         const auto serverGravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
         simulator.simulate(liveGrenadeTrajectoryScratch, {projectile.initialPosition, projectile.initialVelocity}, projectile.kind, pawn, serverGravity);
         return liveGrenadeTrajectoryScratch.valid && liveGrenadeTrajectoryScratch.pointsCount;

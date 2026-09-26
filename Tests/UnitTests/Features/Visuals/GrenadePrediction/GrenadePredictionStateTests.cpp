@@ -207,6 +207,37 @@ TEST(GrenadePredictionStateTest, SuppressionPreservesCommittedTrajectoryAndLiveA
     EXPECT_TRUE(state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile()));
 }
 
+TEST(GrenadePredictionStateTest, InfernoRevisionInvalidatesCommittedHeldSmokeBeforeLiveProjectileObservation)
+{
+    GrenadePredictionState state;
+    SmokeInfernoSnapshot firstInferno{.fireLifetime = 1.0f};
+    state.smokeInfernoScan.beginScan();
+    state.smokeInfernoScan.observe(firstInferno);
+    static_cast<void>(state.smokeInfernoScan.endScan());
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    static_cast<void>(state.throwObservation.observeWeapon(heldWeapon));
+    state.throwObservation.retainThrowStrength(0.5f);
+    state.cacheHeldSimulationInput({.kind = GrenadeKind::SmokeGrenade, .smokeInfernoRevision = state.smokeInfernoScan.currentRevision(),
+        .weapon = heldWeapon, .throwSequence = state.throwObservation.pendingSequence()});
+    static_cast<void>(state.throwObservation.observeThrowTime(heldWeapon, 10.0f));
+
+    ASSERT_FALSE(state.completeHeldThrow(heldWeapon, true, 10.0f));
+    ASSERT_TRUE(state.completeHeldThrow(heldWeapon, true, 10.1f));
+    ASSERT_TRUE(state.lastCommittedTrajectory.valid);
+    ASSERT_FALSE(state.hasHeldSimulationInput);
+    EXPECT_FALSE(state.liveGrenadeAuthority.hasObservedLiveProjectile());
+
+    firstInferno.origin.x = 1.0f;
+    state.smokeInfernoScan.beginScan();
+    state.smokeInfernoScan.observe(firstInferno);
+    ASSERT_TRUE(state.smokeInfernoScan.endScan());
+    state.invalidateSmokeInfernoDependentPrediction();
+
+    EXPECT_FALSE(state.lastCommittedTrajectory.valid);
+    EXPECT_FALSE(state.liveGrenadeAuthority.hasObservedLiveProjectile());
+}
+
 TEST(GrenadePredictionStateTest, TreatsDifferentHeldWeaponHandleAsNewSimulationCacheOwner)
 {
     GrenadePredictionState state;
@@ -219,6 +250,39 @@ TEST(GrenadePredictionStateTest, TreatsDifferentHeldWeaponHandleAsNewSimulationC
 
     const HeldGrenadeSimulationInput inputForDifferentWeapon{.weapon = {5}, .throwSequence = 1};
     EXPECT_TRUE(state.shouldSimulateHeld(inputForDifferentWeapon));
+}
+
+TEST(GrenadePredictionStateTest, SmokeInfernoRevisionOnlyChangesSmokeHeldCacheIdentity)
+{
+    const HeldGrenadeSimulationInput flashInput{.kind = GrenadeKind::Flashbang, .smokeInfernoRevision = 1};
+    const HeldGrenadeSimulationInput changedFlashInput{.kind = GrenadeKind::Flashbang, .smokeInfernoRevision = 2};
+    const HeldGrenadeSimulationInput smokeInput{.kind = GrenadeKind::SmokeGrenade, .smokeInfernoRevision = 1};
+    const HeldGrenadeSimulationInput changedSmokeInput{.kind = GrenadeKind::SmokeGrenade, .smokeInfernoRevision = 2};
+
+    EXPECT_TRUE(flashInput.exactlyEquals(changedFlashInput));
+    EXPECT_FALSE(smokeInput.exactlyEquals(changedSmokeInput));
+}
+
+TEST(GrenadePredictionStateTest, InfernoChangesDoNotInvalidateNonSmokePrediction)
+{
+    GrenadePredictionState state;
+    state.tempTrajectory.valid = true;
+    state.tempTrajectory.pointsCount = 1;
+    state.cacheHeldSimulationInput({.kind = GrenadeKind::Flashbang, .weapon = heldWeapon, .throwSequence = 1});
+    state.lastCommittedTrajectory.valid = true;
+    state.lastCommittedTrajectory.pointsCount = 1;
+    state.liveGrenadeAuthority.observeLocalPawn(localPawn);
+    ASSERT_TRUE(state.liveGrenadeCache.upsert(snapshot(firstProjectile, GrenadeKind::Flashbang)));
+    const auto projectile = state.liveGrenadeAuthority.newestLocalProjectile(state.liveGrenadeCache);
+    ASSERT_TRUE(projectile.hasValue());
+    ASSERT_TRUE(state.liveGrenadeAuthority.observeForSimulation(projectile.value()));
+    state.liveGrenadeAuthority.accept(projectile.value());
+
+    state.invalidateSmokeInfernoDependentPrediction();
+
+    EXPECT_TRUE(state.tempTrajectory.valid);
+    EXPECT_TRUE(state.lastCommittedTrajectory.valid);
+    EXPECT_TRUE(state.liveGrenadeAuthority.hasAcceptedLiveProjectile());
 }
 
 TEST(GrenadePredictionStateTest, DoesNotCacheOrOwnATempTrajectoryForAnInvalidWeaponHandle)

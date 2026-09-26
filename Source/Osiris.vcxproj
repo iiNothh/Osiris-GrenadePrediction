@@ -65,6 +65,7 @@
     <ClInclude Include="CS2\Classes\Entities\C_CSPlayerResource.h" />
     <ClInclude Include="CS2\Classes\Entities\C_CSWeaponBase.h" />
     <ClInclude Include="CS2\Classes\Entities\C_Hostage.h" />
+    <ClInclude Include="CS2\Classes\Entities\C_Inferno.h" />
     <ClInclude Include="CS2\Classes\Entities\GrenadeProjectiles.h" />
     <ClInclude Include="CS2\Classes\Entities\WeaponEntities.h" />
     <ClInclude Include="CS2\Classes\EntitySystem\CConcreteEntityList.h" />
@@ -203,6 +204,7 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionPerHookState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadePredictionState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeSimulator.h" />
+    <ClInclude Include="Features\Visuals\GrenadePrediction\SmokeInfernoPlacement.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTracePreset.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\HeldGrenadeSimulationInput.h" />
@@ -317,6 +319,7 @@
     <ClInclude Include="GameClient\Entities\GrenadeProjectile.h" />
     <ClInclude Include="GameClient\Entities\GlowProperty.h" />
     <ClInclude Include="GameClient\Entities\HostageServices.h" />
+    <ClInclude Include="GameClient\Entities\Inferno.h" />
     <ClInclude Include="GameClient\Entities\LifeState.h" />
     <ClInclude Include="GameClient\Entities\PlantedC4.h" />
     <ClInclude Include="GameClient\Entities\PlayerController.h" />
@@ -427,6 +430,7 @@
     <ClInclude Include="MemoryPatterns\PatternTypes\GlowSceneObjectPatternTypes.h" />
     <ClInclude Include="MemoryPatterns\PatternTypes\GrenadeProjectilePatternTypes.h" />
     <ClInclude Include="MemoryPatterns\PatternTypes\HostageServicesPatternTypes.h" />
+    <ClInclude Include="MemoryPatterns\PatternTypes\InfernoPatternTypes.h" />
     <ClInclude Include="MemoryPatterns\PatternTypes\MemAllocPatternTypes.h" />
     <ClInclude Include="MemoryPatterns\PatternTypes\PanelPatternTypes.h" />
     <ClInclude Include="MemoryPatterns\PatternTypes\PanelStylePatternTypes.h" />
@@ -472,6 +476,7 @@
     <ClInclude Include="MemoryPatterns\Windows\GlowSceneObjectPatternsWindows.h" />
     <ClInclude Include="MemoryPatterns\Windows\GrenadeProjectilePatternsWindows.h" />
     <ClInclude Include="MemoryPatterns\Windows\HostageServicesPatternsWindows.h" />
+    <ClInclude Include="MemoryPatterns\Windows\InfernoPatternsWindows.h" />
     <ClInclude Include="MemoryPatterns\Windows\PlayerResourcePatternsWindows.h" />
     <ClInclude Include="MemoryPatterns\Windows\PortraitWorldPatternsWindows.h" />
     <ClInclude Include="MemoryPatterns\Windows\MemAllocPatternsWindows.h" />

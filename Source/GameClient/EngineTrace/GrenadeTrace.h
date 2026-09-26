@@ -11,13 +11,17 @@
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
 
 namespace engine_trace::grenade {
-    [[nodiscard]] inline bool applyFilterOverlay(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout) noexcept
+    [[nodiscard]] inline bool applyFilterOverlay(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout,
+        const TraceFilterParameters& parameters = {}) noexcept
     {
         if (!hasValidFilterOverlayLayout(layout))
             return false;
 
-        filter.writeValue(layout.interactsExcludeOffset, kFilterInteractionMask);
-        filter.writeValue(layout.interactsAsOffset, kFilterObjectMask);
+        if (parameters.interactsExclude.hasValue() != parameters.interactsAs.hasValue())
+            return false;
+
+        filter.writeValue(layout.interactsExcludeOffset, parameters.interactsExclude.valueOr(kFilterInteractionMask));
+        filter.writeValue(layout.interactsAsOffset, parameters.interactsAs.valueOr(kFilterObjectMask));
         filter.storage[layout.flagsOffset] |= std::byte{0x02};
         filter.storage[layout.candidateCollectionModeOffset] = std::byte{0x01};
         return true;
@@ -91,11 +95,11 @@ namespace engine_trace::grenade {
         const auto queryShape = makeQueryShape(bindings.buildQueryShape, request);
         cs2::CTraceFilter filter{};
         cs2::CGameTrace output{};
-        if (bindings.constructFilter(&filter, request.excludedEntities.first, kFirstInteraction, kCollisionGroup, kQueryFlags)
+        if (bindings.constructFilter(&filter, request.excludedEntities.first, request.filter.interactsWith, request.filter.collisionGroup, request.filter.queryFlags)
                 != &filter)
             return {};
 
-        if (!applyFilterOverlay(filter, bindings.filterOverlayLayout))
+        if (!applyFilterOverlay(filter, bindings.filterOverlayLayout, request.filter))
             return {};
         if (request.excludedEntities.second != nullptr)
             bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);

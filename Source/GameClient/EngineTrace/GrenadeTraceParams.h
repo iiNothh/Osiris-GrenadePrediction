@@ -3,6 +3,7 @@
 #include <CS2/Constants/CollisionGroup.h>
 #include <CS2/Constants/InteractionLayers.h>
 #include <CS2/Constants/PhysicsQueryFlag.h>
+#include <GameClient/EngineTrace/TraceFilter.h>
 
 namespace engine_trace::grenade {
     constexpr cs2::CollisionGroup kCollisionGroup{cs2::CollisionGroup::Projectile};
@@ -18,6 +19,12 @@ namespace engine_trace::grenade {
         | cs2::engine_trace::InteractionLayer::Solid
         | cs2::engine_trace::InteractionLayer::Window
         | cs2::engine_trace::InteractionLayer::PassBullets;
+
+    constexpr TraceFilterParameters kDefaultFilter{
+        .interactsWith = kFirstInteraction,
+        .collisionGroup = kCollisionGroup,
+        .queryFlags = kQueryFlags
+    };
 
     constexpr auto kFilterInteractionMask =
         cs2::engine_trace::InteractionLayer::Pickup

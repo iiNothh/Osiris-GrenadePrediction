@@ -17,6 +17,7 @@ struct ScriptedGrenadeTrace {
     int calls{};
     int genericCalls{};
     int inFlightCalls{};
+    int pointHullCalls{};
     bool inFlightTraceAvailable{true};
     Optional<TraceResult> fallback{};
     void* lastExcludedFirst{};
@@ -47,6 +48,8 @@ struct ScriptedGrenadeTrace {
         lastExcludedFirst = request.excludedEntities.first;
         lastExcludedSecond = request.excludedEntities.second;
         ++inFlightCalls;
+        if (request.mins == SmokeInfernoPlacement::kPointHullMins && request.maxs == SmokeInfernoPlacement::kPointHullMaxs)
+            ++pointHullCalls;
         return inFlightTraceAvailable ? nextResult() : Optional<TraceResult>{};
     }
 private:
@@ -134,6 +137,7 @@ struct GrenadeSimulatorTestAccess {
         const auto collision = simulator.movementSubstep(scratch, position, velocity, kind, skipEntity, result, gravity);
         result.traceSucceeded = collision.traceSucceeded;
         result.impactDetonate = collision.impactDetonate;
+        result.smokePlacementComplete = collision.smokePlacementComplete;
         return result;
     }
 };

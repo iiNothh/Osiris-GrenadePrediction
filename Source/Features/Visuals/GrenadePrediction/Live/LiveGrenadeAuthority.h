@@ -114,6 +114,11 @@ public:
         return acceptedSnapshot.kind == GrenadeKind::Flashbang && hasAcceptedTime && currentTime.hasValue()
             && currentTime.value() >= acceptedTime + flashHorizon - flashEarlyHideLead;
     }
+    [[nodiscard]] bool hasSmokeLiveProjectile() const noexcept
+    {
+        return (accepted && acceptedSnapshot.kind == GrenadeKind::SmokeGrenade)
+            || (hasHighestObserved && newestObservedSnapshot.kind == GrenadeKind::SmokeGrenade);
+    }
     [[nodiscard]] bool hasObservedLiveProjectile() const noexcept { return hasHighestObserved; }
 
     [[nodiscard]] bool blocksHeldPrediction() const noexcept { return hasHighestObserved && !accepted; }

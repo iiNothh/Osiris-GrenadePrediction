@@ -991,6 +991,9 @@
     <ClInclude Include="MemoryPatterns\Windows\SmokeGrenadeProjectilePatternsWindows.h">
       <Filter>MemoryPatterns\Windows</Filter>
     </ClInclude>
+    <ClInclude Include="MemoryPatterns\Windows\InfernoPatternsWindows.h">
+      <Filter>MemoryPatterns\Windows</Filter>
+    </ClInclude>
     <ClInclude Include="Features\Visuals\OutlineGlow\DroppedBombOutlineGlow\DroppedBombOutlineGlow.h">
       <Filter>Features\Visuals\OutlineGlow\DroppedBombOutlineGlow</Filter>
     </ClInclude>
@@ -1010,6 +1013,9 @@
       <Filter>Features\Visuals\OutlineGlow\HostageOutlineGlow</Filter>
     </ClInclude>
     <ClInclude Include="CS2\Classes\Entities\C_Hostage.h">
+      <Filter>CS2\Classes\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="CS2\Classes\Entities\C_Inferno.h">
       <Filter>CS2\Classes\Entities</Filter>
     </ClInclude>
     <ClInclude Include="Features\Visuals\PlayerInfoInWorld\PlayerInfoContainerPanelParams.h">
@@ -1169,6 +1175,9 @@
       <Filter>MemoryPatterns\PatternTypes</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPatterns\PatternTypes\SmokeGrenadeProjectilePatternTypes.h">
+      <Filter>MemoryPatterns\PatternTypes</Filter>
+    </ClInclude>
+    <ClInclude Include="MemoryPatterns\PatternTypes\InfernoPatternTypes.h">
       <Filter>MemoryPatterns\PatternTypes</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPatterns\PatternTypes\SoundSystemPatternTypes.h">
@@ -1463,6 +1472,9 @@
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\Entities\SmokeGrenadeProjectile.h">
+      <Filter>GameClient\Entities</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\Entities\Inferno.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\Entities\TeamNumber.h">

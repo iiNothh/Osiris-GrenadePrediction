@@ -14,6 +14,7 @@ target_sources(UnitTests PRIVATE
   LiveGrenadeLifecycleTests.cpp
   LiveGrenadePredictionTests.cpp
   ManualGrenadeLaunchTests.cpp
+  SmokeInfernoPlacementTests.cpp
   TrajectoryLineSegmentTests.cpp
   GrenadeTrajectoryRendererTests.cpp
   TrajectoryRenderPlanTests.cpp

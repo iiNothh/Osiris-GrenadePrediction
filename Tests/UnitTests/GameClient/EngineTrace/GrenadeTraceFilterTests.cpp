@@ -164,4 +164,27 @@ TEST(EngineTraceGrenadeFilterTest, AppliesOnlyAtResolvedOffsetsAndPreservesFlagB
         EXPECT_EQ(filter.storage[i], afterFirstOverlay.storage[i]);
 }
 
+TEST(EngineTraceGrenadeFilterTest, UsesSmokeSpecificOverlayWhenBothValuesAreProvided)
+{
+    cs2::CTraceFilter filter{};
+    const engine_trace::TraceFilterParameters smokeFilter{
+        .interactsExclude = cs2::engine_trace::InteractionLayer::Player | cs2::engine_trace::InteractionLayer::Debris,
+        .interactsAs = engine_trace::grenade::kFilterObjectMask
+    };
+
+    ASSERT_TRUE(engine_trace::grenade::applyFilterOverlay(filter, kCanonicalFilterOverlayLayout, smokeFilter));
+    EXPECT_EQ(filter.readValue<cs2::engine_trace::InteractionLayer>(kCanonicalFilterOverlayLayout.interactsExcludeOffset), smokeFilter.interactsExclude.value());
+    EXPECT_EQ(filter.readValue<cs2::engine_trace::InteractionLayer>(kCanonicalFilterOverlayLayout.interactsAsOffset), smokeFilter.interactsAs.value());
+}
+
+TEST(EngineTraceGrenadeFilterTest, RejectsPartialSmokeSpecificOverlay)
+{
+    cs2::CTraceFilter filter{};
+    const engine_trace::TraceFilterParameters incompleteSmokeFilter{
+        .interactsExclude = cs2::engine_trace::InteractionLayer::Player
+    };
+
+    EXPECT_FALSE(engine_trace::grenade::applyFilterOverlay(filter, kCanonicalFilterOverlayLayout, incompleteSmokeFilter));
+}
+
 }

@@ -13,6 +13,7 @@ struct HeldGrenadeSimulationInput {
     GrenadeKind kind{GrenadeKind::None};
     float gravity{};
     std::uint64_t collisionSnapshotRevision{};
+    std::uint64_t smokeInfernoRevision{};
     cs2::CEntityHandle localPawnHandle{};
     cs2::CEntityHandle weapon{cs2::INVALID_EHANDLE_INDEX};
     std::uint32_t throwSequence{};
@@ -22,6 +23,7 @@ struct HeldGrenadeSimulationInput {
         return launchOrigin.x == other.launchOrigin.x && launchOrigin.y == other.launchOrigin.y && launchOrigin.z == other.launchOrigin.z
             && launchVelocity.x == other.launchVelocity.x && launchVelocity.y == other.launchVelocity.y && launchVelocity.z == other.launchVelocity.z
             && kind == other.kind && gravity == other.gravity && collisionSnapshotRevision == other.collisionSnapshotRevision
+            && (kind != GrenadeKind::SmokeGrenade || smokeInfernoRevision == other.smokeInfernoRevision)
             && localPawnHandle == other.localPawnHandle && weapon == other.weapon && throwSequence == other.throwSequence;
     }
 };

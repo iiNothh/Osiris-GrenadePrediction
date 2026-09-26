@@ -3,6 +3,7 @@
 #include <CS2/Constants/CollisionGroup.h>
 #include <CS2/Constants/InteractionLayers.h>
 #include <CS2/Constants/PhysicsQueryFlag.h>
+#include <Utils/Optional.h>
 
 namespace engine_trace {
     struct TraceFilterExcludedEntities {
@@ -22,5 +23,7 @@ namespace engine_trace {
         cs2::engine_trace::InteractionLayer interactsWith{};
         cs2::CollisionGroup collisionGroup{};
         cs2::PhysicsQueryFlag queryFlags{};
+        Optional<cs2::engine_trace::InteractionLayer> interactsExclude{};
+        Optional<cs2::engine_trace::InteractionLayer> interactsAs{};
     };
 }

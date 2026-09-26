@@ -132,7 +132,7 @@ public:
 
             const auto gravity = grenade_prediction::resolveServerGravity(hookContext.cvarSystem());
             const HeldGrenadeSimulationInput input{launch.value().origin, launch.value().velocity, kind, gravity, state.playerCollisionSnapshot.revision,
-                localPawnHandle, weaponHandle, state.throwObservation.sequence};
+                kind == GrenadeKind::SmokeGrenade ? state.smokeInfernoScan.currentRevision() : 0, localPawnHandle, weaponHandle, state.throwObservation.sequence};
             simulateHeldTrajectoryIfNeeded(simulator, launch.value(), kind, pawn, gravity, input);
             presentHeldTrajectory(weaponHandle, hasCurtime, time);
         }
@@ -221,6 +221,8 @@ private:
         auto& state = this->state();
         if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.shouldSimulateHeld(input)) {
             simulator.setPlayerCollisionSnapshot(&state.playerCollisionSnapshot);
+            if constexpr (requires { simulator.setSmokeInfernoScan(&state.smokeInfernoScan); })
+                simulator.setSmokeInfernoScan(&state.smokeInfernoScan);
             simulator.simulate(state.tempTrajectory, launch, kind, pawn, gravity);
             const bool succeeded = state.tempTrajectory.valid && state.tempTrajectory.pointsCount;
             state.recordHeldSimulationResult(input, succeeded);

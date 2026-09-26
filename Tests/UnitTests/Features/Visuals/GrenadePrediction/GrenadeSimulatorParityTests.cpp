@@ -23,6 +23,20 @@ using Simulator = GrenadeSimulator<GrenadeSimulatorTestHookContext>;
     return snapshot;
 }
 
+[[nodiscard]] SmokeInfernoScan smokeInfernoScan() noexcept
+{
+    SmokeInfernoSnapshot inferno{
+        .fireCount = 1,
+        .fireLifetime = 1.0f
+    };
+    inferno.fireIsBurning[0] = true;
+    SmokeInfernoScan scan;
+    scan.beginScan();
+    scan.observe(inferno);
+    static_cast<void>(scan.endScan());
+    return scan;
+}
+
 TEST(GrenadeSimulationParityTest, FallsBackToDefaultGravity)
 {
     ScriptedGrenadeCvarSystem cvars;
@@ -194,6 +208,71 @@ TEST(GrenadeSimulationParityTest, AppliesAnOrdinaryResponseWhenPaneContinuationR
     EXPECT_EQ(context.trace.lastExcludedSecond, &context.entitySystem.entity);
     EXPECT_NEAR(velocity.x, -36.0140625f, 0.001f);
     EXPECT_NEAR(velocity.z, -0.45f, 0.001f);
+}
+
+TEST(GrenadeSimulationParityTest, CompletesSmokeAtFirstRealWorldContactAndPreservesContactMarker)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.push(TraceResult{0.5f, {1.0f, 0.0f, 0.0f}, {-1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
+    context.trace.push(TraceResult{1.0f, {}, {}});
+    context.trace.push(TraceResult{0.25f, {4.0f, 5.0f, 6.0f}, {}});
+    Simulator simulator{context};
+    const auto scan = smokeInfernoScan();
+    simulator.setSmokeInfernoScan(&scan);
+    Trajectory trajectory;
+
+    simulator.simulate(trajectory, {{}, {100.0f, 0.0f, 0.0f}}, GrenadeKind::SmokeGrenade, nullptr, 800.0f);
+
+    ASSERT_TRUE(trajectory.valid);
+    EXPECT_EQ(trajectory.endPos, (cs2::Vector{4.0f, 5.0f, 6.0f}));
+    ASSERT_EQ(trajectory.pointsCount, 3);
+    EXPECT_EQ(trajectory.points[1], (cs2::Vector{1.0f, 0.0f, 0.0f}));
+    EXPECT_EQ(trajectory.points[2], trajectory.endPos);
+    ASSERT_EQ(trajectory.markersCount, 1);
+    EXPECT_EQ(trajectory.markers[0].pointIndex, 1);
+    EXPECT_EQ(context.trace.calls, 3);
+}
+
+TEST(GrenadeSimulationParityTest, RetriesSmokePlacementAtLaterRealContactAfterFailedAttempt)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.push(TraceResult{0.5f, {}, {-1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
+    context.trace.push(TraceResult{0.5f, {}, {0.0f, 0.0f, 1.0f}});
+    context.trace.push(TraceResult{0.5f, {}, {0.0f, 0.0f, 1.0f}});
+    context.trace.push(Optional<TraceResult>{});
+    context.trace.push(TraceResult{1.0f, {}, {}});
+    context.trace.push(TraceResult{0.5f, {}, {1.0f, 0.0f, 0.0f}, cs2::engine_trace::kWorldEntityHandle});
+    context.trace.push(TraceResult{1.0f, {}, {}});
+    context.trace.push(TraceResult{0.25f, {4.0f, 5.0f, 6.0f}, {}});
+    Simulator simulator{context};
+    const auto scan = smokeInfernoScan();
+    simulator.setSmokeInfernoScan(&scan);
+    cs2::Vector position{};
+    cs2::Vector velocity{100.0f, 0.0f, 0.0f};
+
+    const auto first = GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::movementSubstep(simulator, position, velocity, GrenadeKind::SmokeGrenade);
+    const auto second = GrenadeSimulatorTestAccess<GrenadeSimulatorTestHookContext>::movementSubstep(simulator, position, velocity, GrenadeKind::SmokeGrenade);
+
+    EXPECT_TRUE(first.traceSucceeded);
+    EXPECT_FALSE(first.smokePlacementComplete);
+    EXPECT_TRUE(second.smokePlacementComplete);
+    EXPECT_EQ(position, (cs2::Vector{4.0f, 5.0f, 6.0f}));
+    EXPECT_EQ(context.trace.calls, 8);
+}
+
+TEST(GrenadeSimulationParityTest, DoesNotSearchForSmokePlacementAtFuseOnlyTermination)
+{
+    GrenadeSimulatorTestHookContext context;
+    context.trace.clearAfterScript();
+    Simulator simulator{context};
+    const auto scan = smokeInfernoScan();
+    simulator.setSmokeInfernoScan(&scan);
+    Trajectory trajectory;
+
+    simulator.simulate(trajectory, {{}, {100.0f, 0.0f, 0.0f}}, GrenadeKind::SmokeGrenade, nullptr, 800.0f);
+
+    EXPECT_TRUE(trajectory.valid);
+    EXPECT_EQ(context.trace.pointHullCalls, 0);
 }
 
 TEST(GrenadeSimulationParityTest, AppliesAnOrdinaryResponseToAResolvedNonDynamicEntity)

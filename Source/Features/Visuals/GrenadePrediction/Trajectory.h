@@ -52,6 +52,11 @@ struct Trajectory {
         return true;
     }
 
+    [[nodiscard]] bool appendTerminalPoint(cs2::Vector point) noexcept
+    {
+        return pointsCount && points[pointsCount - 1] != point && appendPoint(point);
+    }
+
     [[nodiscard]] bool appendWorldContactMarker() noexcept
     {
         if (worldContactMarkersCount == kWorldContactMarkersCapacity || !appendMarker())

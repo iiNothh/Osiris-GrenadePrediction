@@ -6,6 +6,7 @@
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionMirror.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePlayerCollisionState.h>
 #include <Features/Visuals/GrenadePrediction/GrenadePredictionParams.h>
+#include <Features/Visuals/GrenadePrediction/SmokeInfernoPlacement.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeTracePreset.h>
 #include <GameClient/Entities/EntityClassifier.h>
@@ -23,6 +24,7 @@ public:
     explicit GrenadeSimulator(HookContext& hookContext) noexcept : hookContext{hookContext} {}
 
     void setPlayerCollisionSnapshot(const GrenadePlayerCollisionSnapshot* snapshot) noexcept { configuredPlayerCollisionSnapshot = snapshot; }
+    void setSmokeInfernoScan(const SmokeInfernoScan* scan) noexcept { smokeInfernoScan = scan; }
 
     [[nodiscard]] static cs2::Vector computeInitialVelocity(cs2::Vector viewAngles, float baseVelocity, float throwStrength) noexcept
     {
@@ -81,7 +83,7 @@ public:
             landedOnSurface = landedOnSurface || result.impactDetonate;
             const bool stopped = (kind == GrenadeKind::SmokeGrenade || kind == GrenadeKind::Decoy)
                 && (position - previousPosition).squareLength() < grenade_prediction_params::kStopDisplacementSq;
-            if (result.impactDetonate || stopped || bounceCount > grenade_prediction_params::kMaxBounces || shouldDetonate(kind, tick)) {
+            if (result.smokePlacementComplete || result.impactDetonate || stopped || bounceCount > grenade_prediction_params::kMaxBounces || shouldDetonate(kind, tick)) {
                 markTrajectoryComplete(trajectory, position, kind, landedOnSurface);
                 break;
             }
@@ -95,6 +97,7 @@ public:
 private:
     struct StepResult {
         bool traceSucceeded{true};
+        bool smokePlacementComplete{};
         bool impactDetonate{};
         bool hit{};
         int contactsCount{};
@@ -119,6 +122,7 @@ private:
         bool traceSucceeded{true};
         bool impactDetonate{};
         bool stopped{};
+        bool smokePlacementComplete{};
     };
 
     struct SimulationScratch {
@@ -198,6 +202,10 @@ private:
                 result.impactDetonate = true;
                 return result;
             }
+            if (collision.smokePlacementComplete) {
+                result.smokePlacementComplete = true;
+                return result;
+            }
         }
         return result;
     }
@@ -237,6 +245,8 @@ private:
         result.hit = true;
         ++result.contactsCount;
         appendWorldContactPoint(scratch, position);
+        if (correctSmokeInfernoContact(scratch, position, kind))
+            return {.smokePlacementComplete = true};
         const auto response = applyContactResponse(trace, velocity, kind);
         if (response.stopped || response.impactDetonate)
             return response;
@@ -264,6 +274,8 @@ private:
         result.hit = true;
         ++result.contactsCount;
         appendWorldContactPoint(scratch, position);
+        if (correctSmokeInfernoContact(scratch, position, kind))
+            return {.smokePlacementComplete = true};
         return applyContactResponse(continuation.value(), velocity, kind);
     }
     [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, GrenadeKind kind) noexcept
@@ -305,6 +317,19 @@ private:
     {
         if (scratch.trajectoryOutput && scratch.trajectoryOutput->appendPoint(point))
             static_cast<void>(scratch.trajectoryOutput->appendPlayerResponseMarker());
+    }
+    [[nodiscard]] bool correctSmokeInfernoContact(const SimulationScratch& scratch, cs2::Vector& position, GrenadeKind kind) noexcept
+    {
+        if (!smokeInfernoScan)
+            return false;
+        const auto endpoint = SmokeInfernoPlacement::correctedEndpoint(kind, position, *smokeInfernoScan,
+            [this](const engine_trace::HullTraceRequest& request) noexcept { return hookContext.template make<EngineTrace>().traceGrenadeHull(request); });
+        if (!endpoint.hasValue())
+            return false;
+        position = endpoint.value();
+        if (scratch.trajectoryOutput)
+            static_cast<void>(scratch.trajectoryOutput->appendTerminalPoint(position));
+        return true;
     }
     [[nodiscard]] bool getDynamicPropHandle(const TraceResult& traceResult, cs2::CEntityHandle& dynamicPropHandle) const noexcept
     {
@@ -372,5 +397,6 @@ private:
 
     HookContext& hookContext;
     const GrenadePlayerCollisionSnapshot* configuredPlayerCollisionSnapshot{};
+    const SmokeInfernoScan* smokeInfernoScan{};
     friend struct GrenadeSimulatorTestAccess<HookContext>;
 };

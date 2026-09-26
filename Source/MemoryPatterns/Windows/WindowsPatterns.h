@@ -12,6 +12,7 @@
 #include "EngineTracePatternsWindows.h"
 #include "FileSystemPatternsWindows.h"
 #include "HostageServicesPatternsWindows.h"
+#include "InfernoPatternsWindows.h"
 #include "GameRulesPatternsWindows.h"
 #include "GameSceneNodePatternsWindows.h"
 #include "GlobalVarsPatternsWindows.h"

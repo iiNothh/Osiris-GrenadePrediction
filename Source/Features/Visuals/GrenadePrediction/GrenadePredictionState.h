@@ -13,6 +13,7 @@
 #include <Features/Visuals/GrenadePrediction/Held/GrenadeThrowObservation.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeAuthority.h>
 #include <Features/Visuals/GrenadePrediction/Live/LiveGrenadeCache.h>
+#include <Features/Visuals/GrenadePrediction/SmokeInfernoPlacement.h>
 #include <Features/Visuals/GrenadePrediction/Trajectory.h>
 #include <Utils/Math.h>
 
@@ -24,11 +25,14 @@ struct GrenadePredictionState {
     std::uint32_t tempTrajectorySequence{};
     HeldGrenadeSimulationInput heldSimulationInput{};
     bool hasHeldSimulationInput{};
+    GrenadeKind committedHeldTrajectoryKind{GrenadeKind::None};
+    std::uint64_t committedHeldSmokeInfernoRevision{};
 
     GrenadeThrowObservation throwObservation{};
     GrenadePredictionUpdateScheduler updateScheduler{};
     LiveGrenadeCache liveGrenadeCache{};
     LiveGrenadeAuthority liveGrenadeAuthority{};
+    SmokeInfernoScan smokeInfernoScan{};
     GrenadePlayerCollisionSnapshot playerCollisionSnapshot{};
 
     cs2::PanelHandle liveContainerPanelHandle{};
@@ -105,7 +109,25 @@ struct GrenadePredictionState {
         invalidateTempTrajectory();
         invalidateCommittedTrajectory();
     }
-    void invalidateCommittedTrajectory() noexcept { lastCommittedTrajectory.clear(); }
+    void invalidateCommittedTrajectory() noexcept
+    {
+        lastCommittedTrajectory.clear();
+        committedHeldTrajectoryKind = GrenadeKind::None;
+        committedHeldSmokeInfernoRevision = 0;
+    }
+    void invalidateSmokeInfernoDependentPrediction() noexcept
+    {
+        if (hasHeldSimulationInput && heldSimulationInput.kind == GrenadeKind::SmokeGrenade)
+            invalidateTempTrajectory();
+        if (committedHeldTrajectoryKind == GrenadeKind::SmokeGrenade
+            && committedHeldSmokeInfernoRevision != smokeInfernoScan.currentRevision())
+            invalidateCommittedTrajectory();
+        if (liveGrenadeAuthority.hasSmokeLiveProjectile()) {
+            if (liveGrenadeAuthority.hasAcceptedLiveProjectile())
+                invalidateCommittedTrajectory();
+            liveGrenadeAuthority.reset();
+        }
+    }
     void tagTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
     {
         if (weapon == cs2::CEntityHandle{cs2::INVALID_EHANDLE_INDEX}) {
@@ -145,6 +167,8 @@ struct GrenadePredictionState {
     void commitLiveGrenadeTrajectory(const Trajectory& trajectory) noexcept
     {
         lastCommittedTrajectory.copyFrom(trajectory);
+        committedHeldTrajectoryKind = GrenadeKind::None;
+        committedHeldSmokeInfernoRevision = 0;
     }
 
     [[nodiscard]] bool stageOwnedTempTrajectory(cs2::CEntityHandle weapon, std::uint32_t sequence) noexcept
@@ -152,6 +176,8 @@ struct GrenadePredictionState {
         if (liveGrenadeAuthority.hasObservedLiveProjectile() || !ownsTempTrajectory(weapon, sequence))
             return false;
         lastCommittedTrajectory.copyFrom(tempTrajectory);
+        committedHeldTrajectoryKind = heldSimulationInput.kind;
+        committedHeldSmokeInfernoRevision = heldSimulationInput.smokeInfernoRevision;
         return true;
     }
     void finalizeStagedTrajectory(bool hasCandidate, bool hasCurtime, float curtime) noexcept
