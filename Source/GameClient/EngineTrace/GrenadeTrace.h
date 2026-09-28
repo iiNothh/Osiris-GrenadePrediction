@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <CS2/EngineTrace/CTraceFilter.h>
@@ -9,6 +10,7 @@
 #include <GameClient/EngineTrace/TraceLayout.h>
 #include <GameClient/EngineTrace/TraceResult.h>
 #include <MemoryPatterns/PatternTypes/EngineTracePatternTypes.h>
+#include <Utils/ByteStorage.h>
 
 namespace engine_trace::grenade {
     [[nodiscard]] inline bool applyFilterOverlay(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout,
@@ -73,6 +75,68 @@ namespace engine_trace::grenade {
             || !hasValidFilterOverlayLayout(bindings.filterOverlayLayout))
             return false;
         return true;
+    }
+
+    struct LaunchEndpointTraceBindings {
+        UnpackStrongTypeAliasT<TraceShapeFunctionPointer> traceShape{};
+        UnpackStrongTypeAliasT<BuildRnQueryShapeAttrFromAABBFunctionPointer> buildQueryShape{};
+        UnpackStrongTypeAliasT<PhysicsWorldPointerSlotStoragePointer> physicsWorldPointerSlotStorage{};
+        UnpackStrongTypeAliasT<CTraceFilterConstructionFunctionPointer> constructFilter{};
+        std::int32_t endPositionOffset{};
+    };
+
+    template <typename HookContext>
+    [[nodiscard]] LaunchEndpointTraceBindings resolveLaunchEndpointBindings(HookContext& hookContext) noexcept
+    {
+        const auto& results = hookContext.patternSearchResults();
+        return {
+            .traceShape = results.template get<TraceShapeFunctionPointer>(),
+            .buildQueryShape = results.template get<BuildRnQueryShapeAttrFromAABBFunctionPointer>(),
+            .physicsWorldPointerSlotStorage = results.template get<PhysicsWorldPointerSlotStoragePointer>(),
+            .constructFilter = results.template get<CTraceFilterConstructionFunctionPointer>(),
+            .endPositionOffset = results.template get<CGameTraceEndPositionOffset>().value()
+        };
+    }
+
+    [[nodiscard]] inline bool hasValidLaunchEndpointBindings(const LaunchEndpointTraceBindings& bindings) noexcept
+    {
+        return bindings.traceShape != nullptr && bindings.buildQueryShape != nullptr
+            && bindings.physicsWorldPointerSlotStorage != nullptr && *bindings.physicsWorldPointerSlotStorage != nullptr
+            && bindings.constructFilter != nullptr
+            && isValidCGameTraceOutputOffset(bindings.endPositionOffset, sizeof(cs2::Vector));
+    }
+
+    template <typename HookContext>
+    [[nodiscard]] Optional<cs2::Vector> traceLaunchEndpoint(HookContext& hookContext, cs2::Vector start, cs2::Vector end, void* owner) noexcept
+    {
+        if (!start.isFinite() || !end.isFinite() || owner == nullptr)
+            return {};
+
+        const auto bindings = resolveLaunchEndpointBindings(hookContext);
+        if (!hasValidLaunchEndpointBindings(bindings))
+            return {};
+
+        const HullTraceRequest request{
+            .start = start,
+            .end = end,
+            .mins = {kHullMins.x - 0.02f, kHullMins.y - 0.02f, kHullMins.z - 0.02f},
+            .maxs = {kHullMaxs.x + 0.02f, kHullMaxs.y + 0.02f, kHullMaxs.z + 0.02f}
+        };
+        const auto queryShape = makeQueryShape(bindings.buildQueryShape, request);
+        cs2::CTraceFilter filter{};
+        cs2::CGameTrace output{};
+        if (bindings.constructFilter(&filter, owner, kLaunchEndpointFilter.interactsWith, kLaunchEndpointFilter.collisionGroup,
+                kLaunchEndpointFilter.queryFlags) != &filter)
+            return {};
+
+        const auto endpointOffset = static_cast<std::size_t>(bindings.endPositionOffset);
+        const float nonFinite = std::bit_cast<float>(std::uint32_t{0x7FC00000u});
+        if (!byte_storage::write(output.storage, endpointOffset, cs2::Vector{nonFinite, nonFinite, nonFinite}))
+            return {};
+
+        bindings.traceShape(*bindings.physicsWorldPointerSlotStorage, &queryShape, &start, &end, &filter, &output);
+        const auto endpoint = output.readValue<cs2::Vector>(endpointOffset);
+        return endpoint.isFinite() ? Optional<cs2::Vector>{endpoint} : Optional<cs2::Vector>{};
     }
 
     template <typename HookContext>

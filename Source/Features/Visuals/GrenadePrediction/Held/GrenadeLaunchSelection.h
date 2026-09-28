@@ -3,15 +3,39 @@
 #include <GameClient/GrenadePrediction/GrenadeLaunchState.h>
 #include <Utils/Optional.h>
 
-template <typename NativeProvider, typename ManualProvider>
-[[nodiscard]] Optional<GrenadeLaunchState> prepareGrenadeLaunch(bool finalized, bool nativeLaunchEligible, NativeProvider&& nativeProvider, ManualProvider&& manualProvider) noexcept
+enum class GrenadeLaunchRoute {
+    Unavailable,
+    Manual,
+    Native,
+    NativeUnpinned
+};
+
+[[nodiscard]] constexpr GrenadeLaunchRoute selectGrenadeLaunchRoute(bool hasRetainedThrowStrength, bool hasPinBaseline, bool pinPulled) noexcept
+{
+    if (!hasPinBaseline)
+        return GrenadeLaunchRoute::Unavailable;
+    if (hasRetainedThrowStrength)
+        return GrenadeLaunchRoute::Native;
+    if (!pinPulled)
+        return GrenadeLaunchRoute::NativeUnpinned;
+    return GrenadeLaunchRoute::Manual;
+}
+
+template <typename NativeProvider, typename NativeUnpinnedProvider, typename ManualProvider>
+[[nodiscard]] Optional<GrenadeLaunchState> prepareGrenadeLaunch(bool finalized, GrenadeLaunchRoute route, NativeProvider&& nativeProvider,
+    NativeUnpinnedProvider&& nativeUnpinnedProvider, ManualProvider&& manualProvider) noexcept
 {
     if (finalized)
         return {};
-    if (nativeLaunchEligible) {
+    if (route == GrenadeLaunchRoute::Native) {
         auto nativeState = nativeProvider();
         if (nativeState.hasValue())
             return nativeState;
+        return manualProvider();
     }
-    return manualProvider();
+    if (route == GrenadeLaunchRoute::NativeUnpinned)
+        return nativeUnpinnedProvider();
+    if (route == GrenadeLaunchRoute::Manual)
+        return manualProvider();
+    return {};
 }

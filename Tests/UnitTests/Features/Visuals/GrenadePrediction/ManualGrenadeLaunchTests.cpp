@@ -175,8 +175,9 @@ TEST(ManualGrenadeLaunchTest, PrefersNativeLaunchWithoutCallingManualProvider)
     int manualCalls{};
     const GrenadeLaunchState native{{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
 
-    const auto launch = prepareGrenadeLaunch(false, true,
+    const auto launch = prepareGrenadeLaunch(false, GrenadeLaunchRoute::Native,
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return native; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
 
     ASSERT_TRUE(launch.hasValue());
@@ -188,36 +189,45 @@ TEST(ManualGrenadeLaunchTest, PrefersNativeLaunchWithoutCallingManualProvider)
 
 TEST(GrenadePredictionLaunchTest, RejectsUnavailableNativeLaunch)
 {
-    const auto unavailable = prepareGrenadeLaunch(false, false,
+    const auto unavailable = prepareGrenadeLaunch(false, GrenadeLaunchRoute::Manual,
+        []() noexcept { return Optional<GrenadeLaunchState>{}; },
         []() noexcept { return Optional<GrenadeLaunchState>{}; },
         []() noexcept { return Optional<GrenadeLaunchState>{}; });
     EXPECT_FALSE(unavailable.hasValue());
 }
 
-TEST(ManualGrenadeLaunchTest, FallsBackToManualLaunchWhenNativeIsUnavailable)
+TEST(ManualGrenadeLaunchTest, FallsBackToManualLaunchWhenRetainedNativeIsUnavailable)
 {
     const GrenadeLaunchState manual{{7.0f, 8.0f, 9.0f}, {10.0f, 11.0f, 12.0f}};
+    int nativeCalls{};
+    int manualCalls{};
 
-    const auto launch = prepareGrenadeLaunch(false, true,
+    const auto launch = prepareGrenadeLaunch(false, GrenadeLaunchRoute::Native,
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return {}; },
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
-        [&]() noexcept -> Optional<GrenadeLaunchState> { return manual; });
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return manual; });
 
     ASSERT_TRUE(launch.hasValue());
     EXPECT_EQ(launch.value().origin, manual.origin);
     EXPECT_EQ(launch.value().velocity, manual.velocity);
+    EXPECT_EQ(nativeCalls, 1);
+    EXPECT_EQ(manualCalls, 1);
 }
 
 TEST(ManualGrenadeLaunchTest, FinalizedLaunchDoesNotInvokeProviders)
 {
     int nativeCalls{};
+    int unpinnedCalls{};
     int manualCalls{};
 
-    const auto launch = prepareGrenadeLaunch(true, true,
+    const auto launch = prepareGrenadeLaunch(true, GrenadeLaunchRoute::Native,
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++unpinnedCalls; return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
 
     EXPECT_FALSE(launch.hasValue());
     EXPECT_EQ(nativeCalls, 0);
+    EXPECT_EQ(unpinnedCalls, 0);
     EXPECT_EQ(manualCalls, 0);
 }
 
@@ -236,32 +246,90 @@ TEST(ManualGrenadeLaunchTest, UsesFullStrengthUntilPinnedStrengthIsCaptured)
     EXPECT_TRUE(observation.hasRetainedThrowStrength);
 }
 
-TEST(ManualGrenadeLaunchTest, SkipsAvailableNativeLaunchUntilRealStrengthIsCaptured)
+TEST(ManualGrenadeLaunchTest, UsesNativeLaunchForUnpinnedGrenadeWithoutRetainingStrength)
 {
     GrenadeThrowObservation observation;
     constexpr cs2::CEntityHandle weapon{1};
     int nativeCalls{};
     int manualCalls{};
     static_cast<void>(observation.observeWeapon(weapon));
+    static_cast<void>(observation.observePinState(weapon, false));
 
-    const auto manual = prepareGrenadeLaunch(false, observation.hasRetainedThrowStrength,
+    const auto native = prepareGrenadeLaunch(false,
+        selectGrenadeLaunchRoute(observation.hasRetainedThrowStrength, observation.hasPinBaseline, observation.previousPinPulled),
+        [&]() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return GrenadeLaunchState{{1.0f, 0.0f, 0.0f}, {observation.retainedThrowStrength, 0.0f, 0.0f}}; });
 
-    ASSERT_TRUE(manual.hasValue());
-    EXPECT_EQ(nativeCalls, 0);
-    EXPECT_EQ(manualCalls, 1);
-    EXPECT_FLOAT_EQ(manual.value().velocity.x, 1.0f);
+    ASSERT_TRUE(native.hasValue());
+    EXPECT_EQ(nativeCalls, 1);
+    EXPECT_EQ(manualCalls, 0);
+    EXPECT_FALSE(observation.hasRetainedThrowStrength);
+    EXPECT_FALSE(observation.canCommitTrajectory());
+}
+
+TEST(ManualGrenadeLaunchTest, KeepsNativeLaunchAvailableAfterPinnedStrengthIsCaptured)
+{
+    GrenadeThrowObservation observation;
+    constexpr cs2::CEntityHandle weapon{1};
+    int nativeCalls{};
+    int manualCalls{};
+    static_cast<void>(observation.observeWeapon(weapon));
+    static_cast<void>(observation.observePinState(weapon, true));
 
     observation.retainThrowStrength(0.5f);
-    const auto native = prepareGrenadeLaunch(false, observation.hasRetainedThrowStrength,
+    const auto native = prepareGrenadeLaunch(false, selectGrenadeLaunchRoute(observation.hasRetainedThrowStrength, observation.hasPinBaseline, observation.previousPinPulled),
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return GrenadeLaunchState{{2.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return {}; });
 
     ASSERT_TRUE(native.hasValue());
     EXPECT_EQ(nativeCalls, 1);
-    EXPECT_EQ(manualCalls, 1);
+    EXPECT_EQ(manualCalls, 0);
     EXPECT_FLOAT_EQ(native.value().velocity.x, 3.0f);
+}
+
+TEST(ManualGrenadeLaunchTest, SelectsUnpinnedProviderWithoutAnyFallback)
+{
+    int nativeCalls{};
+    int unpinnedCalls{};
+    int manualCalls{};
+
+    const auto launch = prepareGrenadeLaunch(false, GrenadeLaunchRoute::NativeUnpinned,
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++unpinnedCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return GrenadeLaunchState{}; });
+
+    EXPECT_FALSE(launch.hasValue());
+    EXPECT_EQ(nativeCalls, 0);
+    EXPECT_EQ(unpinnedCalls, 1);
+    EXPECT_EQ(manualCalls, 0);
+}
+
+TEST(ManualGrenadeLaunchTest, RetainedStrengthTakesPrecedenceOverUnpinnedPinState)
+{
+    EXPECT_EQ(selectGrenadeLaunchRoute(true, true, false), GrenadeLaunchRoute::Native);
+    EXPECT_EQ(selectGrenadeLaunchRoute(true, false, false), GrenadeLaunchRoute::Unavailable);
+    EXPECT_EQ(selectGrenadeLaunchRoute(false, true, false), GrenadeLaunchRoute::NativeUnpinned);
+    EXPECT_EQ(selectGrenadeLaunchRoute(false, false, false), GrenadeLaunchRoute::Unavailable);
+    EXPECT_EQ(selectGrenadeLaunchRoute(false, true, true), GrenadeLaunchRoute::Manual);
+}
+
+TEST(ManualGrenadeLaunchTest, UnknownPinBaselineDoesNotInvokeAnyProvider)
+{
+    int nativeCalls{};
+    int unpinnedCalls{};
+    int manualCalls{};
+
+    const auto launch = prepareGrenadeLaunch(false, selectGrenadeLaunchRoute(false, false, false),
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++nativeCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++unpinnedCalls; return {}; },
+        [&]() noexcept -> Optional<GrenadeLaunchState> { ++manualCalls; return GrenadeLaunchState{}; });
+
+    EXPECT_FALSE(launch.hasValue());
+    EXPECT_EQ(nativeCalls, 0);
+    EXPECT_EQ(unpinnedCalls, 0);
+    EXPECT_EQ(manualCalls, 0);
 }
 
 TEST(ManualGrenadeLaunchTest, RetainsPinnedZeroStrength)

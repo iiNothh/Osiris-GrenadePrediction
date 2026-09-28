@@ -19,6 +19,7 @@
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunch.h>
+#include <GameClient/GrenadePrediction/UnpinnedGrenadeLaunch.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/GrenadePredictionCapabilities.h>
@@ -205,8 +206,10 @@ private:
         cs2::C_CSPlayerPawn* pawn, auto& simulator) noexcept
     {
         const auto& observation = state().throwObservation;
-        return prepareGrenadeLaunch(observation.isFinalized(), observation.hasRetainedThrowStrength,
+        const auto route = selectGrenadeLaunchRoute(observation.hasRetainedThrowStrength, observation.hasPinBaseline, observation.previousPinPulled);
+        return prepareGrenadeLaunch(observation.isFinalized(), route,
             [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
+            [&]() noexcept { return hookContext.template make<UnpinnedGrenadeLaunch<HookContext>>().get(weapon, pawn); },
             [&]() noexcept { return computeHeldGrenadeLaunchFallback(playerPawn, simulator, observation.retainedThrowStrength, pawn); });
     }
 

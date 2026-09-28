@@ -80,7 +80,7 @@ private:
         .mins = {-2.0f, -2.0f, -2.0f},
         .maxs = {2.0f, 2.0f, 2.0f},
         .excludedEntities = excludedEntities,
-        .filter = engine_trace::grenade::kDefaultFilter
+        .filter = engine_trace::grenade::kInFlightFilter
     };
 }
 
@@ -104,8 +104,8 @@ void writeOutput(cs2::CGameTrace& output, std::size_t offset, T value) noexcept
     activeRecorder->queryFlags = queryFlags;
     if (activeRecorder->clearManagerOnFilterConstruction)
         *activeRecorder->physicsWorldPointerSlotStorage = nullptr;
-    activeRecorder->constructedWithNativeArguments = interactsWith == engine_trace::grenade::kFirstInteraction
-        && collisionGroup == engine_trace::grenade::kCollisionGroup && queryFlags == engine_trace::grenade::kQueryFlags;
+    activeRecorder->constructedWithNativeArguments = static_cast<std::uint64_t>(interactsWith) == 0x0000000200003001ull
+        && static_cast<std::uint8_t>(collisionGroup) == 16 && static_cast<std::uint8_t>(queryFlags) == 15;
     auto& filter = *storage;
     filter.writeValue(0x08, interactsWith);
     filter.writeValue(0x34, std::uint16_t{0xFFFF});
@@ -130,11 +130,12 @@ void grenadeAddSecondExcludedEntity(cs2::CTraceFilter* storage, void*, void*) no
 
     ++activeRecorder->secondExclusionCalls;
     const auto& filter = *storage;
-    activeRecorder->constructorFieldsPreservedBeforeSecondExclusion = filter.readValue<cs2::engine_trace::InteractionLayer>(0x08) == engine_trace::grenade::kFirstInteraction
+    activeRecorder->constructorFieldsPreservedBeforeSecondExclusion = static_cast<std::uint64_t>(filter.readValue<cs2::engine_trace::InteractionLayer>(0x08))
+            == 0x0000000200003001ull
         && filter.readValue<std::uint16_t>(0x34) == 0xFFFF
         && filter.storage[0x36] == std::byte{}
-        && filter.storage[0x37] == std::byte{static_cast<std::uint8_t>(engine_trace::grenade::kQueryFlags)}
-        && filter.storage[0x38] == std::byte{static_cast<std::uint8_t>(engine_trace::grenade::kCollisionGroup)};
+        && filter.storage[0x37] == std::byte{15}
+        && filter.storage[0x38] == std::byte{16};
     const auto& layout = activeRecorder->filterOverlayLayout;
     activeRecorder->overlayAppliedBeforeSecondExclusion = filter.readValue<cs2::engine_trace::InteractionLayer>(layout.interactsExcludeOffset) == engine_trace::grenade::kFilterInteractionMask
         && filter.readValue<cs2::engine_trace::InteractionLayer>(layout.interactsAsOffset) == engine_trace::grenade::kFilterObjectMask

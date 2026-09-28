@@ -45,9 +45,9 @@ void expectInFlightGrenadeRequest(const engine_trace::HullTraceRequest& request,
     EXPECT_EQ(request.maxs, (cs2::Vector{2.0f, 2.0f, 2.0f}));
     EXPECT_EQ(request.excludedEntities.first, firstExcluded);
     EXPECT_EQ(request.excludedEntities.second, secondExcluded);
-    EXPECT_EQ(request.filter.interactsWith, engine_trace::grenade::kFirstInteraction);
-    EXPECT_EQ(request.filter.collisionGroup, engine_trace::grenade::kCollisionGroup);
-    EXPECT_EQ(request.filter.queryFlags, engine_trace::grenade::kQueryFlags);
+    EXPECT_EQ(static_cast<std::uint64_t>(request.filter.interactsWith), 0x0000000200003001ull);
+    EXPECT_EQ(static_cast<std::uint8_t>(request.filter.collisionGroup), 16);
+    EXPECT_EQ(static_cast<std::uint8_t>(request.filter.queryFlags), 15);
 }
 
 void expectSpawnGrenadeRequest(const engine_trace::HullTraceRequest& request, cs2::Vector start, cs2::Vector end, void* excluded) noexcept
@@ -59,9 +59,8 @@ void expectSpawnGrenadeRequest(const engine_trace::HullTraceRequest& request, cs
     EXPECT_EQ(request.excludedEntities.first, excluded);
     EXPECT_EQ(request.excludedEntities.second, nullptr);
     EXPECT_EQ(static_cast<std::uint64_t>(request.filter.interactsWith), 0x001C200Bull);
-    EXPECT_EQ(request.filter.collisionGroup, cs2::CollisionGroup::Default);
-    EXPECT_EQ(request.filter.queryFlags, cs2::PhysicsQueryFlag::IncludeSolidContacts
-        | cs2::PhysicsQueryFlag::RespectDisabledSolidContacts | cs2::PhysicsQueryFlag::IncludeTriggerContacts);
+    EXPECT_EQ(static_cast<std::uint8_t>(request.filter.collisionGroup), 4);
+    EXPECT_EQ(static_cast<std::uint8_t>(request.filter.queryFlags), 7);
 }
 
 TEST(GrenadeTracePresetTest, ProducesTheExactInFlightRequest)

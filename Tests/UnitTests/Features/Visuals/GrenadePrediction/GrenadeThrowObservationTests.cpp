@@ -52,7 +52,8 @@ TEST(GrenadePredictionThrowObservationTest, DoesNotPrepareLaunchWhenZeroThrowTim
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
 
     ASSERT_FALSE(observation.observeThrowTime(weapon, 0.0f));
-    const auto launch = prepareGrenadeLaunch(observation.isFinalized(), observation.hasRetainedThrowStrength,
+    const auto launch = prepareGrenadeLaunch(observation.isFinalized(), GrenadeLaunchRoute::Native,
+        []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> {
             ++manualCalls;
@@ -318,8 +319,21 @@ TEST(GrenadeThrowObservationParityTest, ActualExecutionWithoutRetainedStrengthDo
     state.tempTrajectory.valid = true;
     state.tempTrajectory.pointsCount = 1;
     ASSERT_TRUE(state.throwObservation.observeWeapon(weapon));
+    ASSERT_FALSE(state.throwObservation.observePinState(weapon, false));
     state.tagTempTrajectory(weapon, state.throwObservation.pendingSequence());
     ASSERT_TRUE(state.throwObservation.observeThrowTime(weapon, 10.0f));
+
+    const auto launch = prepareGrenadeLaunch(state.throwObservation.isFinalized(),
+        selectGrenadeLaunchRoute(state.throwObservation.hasRetainedThrowStrength, state.throwObservation.hasPinBaseline, state.throwObservation.previousPinPulled),
+        []() noexcept -> Optional<GrenadeLaunchState> { return GrenadeLaunchState{}; },
+        []() noexcept -> Optional<GrenadeLaunchState> { return GrenadeLaunchState{}; },
+        []() noexcept -> Optional<GrenadeLaunchState> { return {}; });
+
+    EXPECT_TRUE(launch.hasValue());
+    EXPECT_FALSE(state.throwObservation.hasRetainedThrowStrength);
+    EXPECT_FALSE(state.throwObservation.canCommitTrajectory());
+    EXPECT_FALSE(state.throwObservation.isFinalized());
+    EXPECT_TRUE(state.throwObservation.hasPendingExecution());
 
     EXPECT_TRUE(state.completeHeldThrow(weapon, true, 10.1f));
     EXPECT_FALSE(state.lastCommittedTrajectory.valid);

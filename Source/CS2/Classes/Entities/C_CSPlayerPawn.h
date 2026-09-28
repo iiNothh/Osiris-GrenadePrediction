@@ -22,6 +22,7 @@ struct C_CSPlayerPawn : C_BaseModelEntity {
     using sceneObjectUpdaterHandle = SceneObjectUpdaterHandle_t*;
     using m_bIsScoped = bool;
     using m_angEyeAngles = Vector;
+    using GatherGrenadeLaunchInputs = char(C_CSPlayerPawn*, Vector*, Vector*, Vector*, Vector*, bool);
 };
 
 }

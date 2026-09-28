@@ -21,6 +21,7 @@ struct C_CSWeaponBase : C_BaseModelEntity {
     using m_weaponMode = CSWeaponMode;
     using sceneObjectUpdaterHandle = SceneObjectUpdaterHandle_t*;
     using GetInaccuracy = float(C_CSWeaponBase* thisptr, float* movementInaccuracy, float* airSpeedInaccuracy);
+    using BuildGrenadeLaunch = char(C_CSWeaponBase* thisptr, C_CSPlayerPawn* playerPawn, Vector* origin, Vector* velocity, bool unknown);
 };
 
 }

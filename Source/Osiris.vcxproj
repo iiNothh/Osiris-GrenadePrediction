@@ -342,6 +342,7 @@
     <ClInclude Include="GameClient\GlobalVars.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunch.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunchState.h" />
+    <ClInclude Include="GameClient\GrenadePrediction\UnpinnedGrenadeLaunch.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanel.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanelContext.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanelManager.h" />

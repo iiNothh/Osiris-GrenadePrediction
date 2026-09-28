@@ -24,11 +24,11 @@ constexpr engine_trace::grenade::FilterOverlayLayout kAlternateFilterOverlayLayo
 
 void mockConstructFilter(cs2::CTraceFilter& filter) noexcept
 {
-    filter.writeValue(0x08, engine_trace::grenade::kFirstInteraction);
+    filter.writeValue(0x08, static_cast<cs2::engine_trace::InteractionLayer>(0x0000000200003001ull));
     filter.writeValue(0x34, std::uint16_t{0xFFFF});
     filter.storage[0x36] = std::byte{};
-    filter.storage[0x37] = std::byte{static_cast<std::uint8_t>(engine_trace::grenade::kQueryFlags)};
-    filter.storage[0x38] = std::byte{static_cast<std::uint8_t>(engine_trace::grenade::kCollisionGroup)};
+    filter.storage[0x37] = std::byte{15};
+    filter.storage[0x38] = std::byte{16};
     filter.storage[kAlternateFilterOverlayLayout.flagsOffset] = std::byte{0xA4};
     filter.storage[kAlternateFilterOverlayLayout.candidateCollectionModeOffset] = std::byte{0xA5};
 }
@@ -41,7 +41,7 @@ TEST(EngineTraceGrenadeFilterLayoutTest, AcceptsCanonicalAndAlternateLayouts)
 
 TEST(EngineTraceGrenadeFilterTest, DefinesObservedFilterMasks)
 {
-    EXPECT_EQ(static_cast<std::uint64_t>(engine_trace::grenade::kFirstInteraction), 0x0000000200003001ull);
+    EXPECT_EQ(static_cast<std::uint64_t>(engine_trace::grenade::kInFlightFilter.interactsWith), 0x0000000200003001ull);
     EXPECT_EQ(static_cast<std::uint64_t>(engine_trace::grenade::kFilterInteractionMask), 0x00040200ull);
     EXPECT_EQ(static_cast<std::uint64_t>(engine_trace::grenade::kFilterObjectMask), 0x0000008000020001ull);
 }

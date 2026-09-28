@@ -1957,6 +1957,9 @@
     <ClInclude Include="GameClient\Entities\WeaponVData.h">
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
+    <ClInclude Include="GameClient\GrenadePrediction\UnpinnedGrenadeLaunch.h">
+      <Filter>GameClient</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="UI\Panorama\CreateGUI.js">

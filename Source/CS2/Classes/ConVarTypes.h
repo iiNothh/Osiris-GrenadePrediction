@@ -12,6 +12,7 @@ namespace cs2
 
 CONVAR(mp_teammates_are_enemies, bool);
 CONVAR(sv_gravity, float);
+CONVAR(sv_grenade_collision_sphere, bool);
 CONVAR(viewmodel_fov, float);
 CONVAR(cl_crosshaircolor_r, int);
 CONVAR(cl_crosshaircolor_g, int);

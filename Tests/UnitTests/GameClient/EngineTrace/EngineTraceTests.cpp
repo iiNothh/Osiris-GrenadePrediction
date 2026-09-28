@@ -31,6 +31,12 @@ namespace
     };
 }
 
+enum class FilterConstructionResult {
+    Storage,
+    Null,
+    WrongPointer
+};
+
 struct GenericTraceRecorder {
     int filterConstructionCalls{};
     int addSecondExclusionCalls{};
@@ -46,9 +52,14 @@ struct GenericTraceRecorder {
     cs2::Vector start{};
     cs2::Vector end{};
     bool traceShapeReceivedBuiltQueryShape{};
+    bool traceShapeReturnValue{true};
+    bool writeEndPosition{true};
+    cs2::Vector endPosition{1.0f, 2.0f, 3.0f};
+    FilterConstructionResult filterConstructionResult{FilterConstructionResult::Storage};
 };
 
 GenericTraceRecorder* activeRecorder{};
+cs2::CTraceFilter unexpectedFilter{};
 
 class ActiveRecorderGuard {
 public:
@@ -81,7 +92,11 @@ private:
         activeRecorder->collisionGroup = collisionGroup;
         activeRecorder->queryFlags = queryFlags;
     }
-    return storage;
+    if (activeRecorder == nullptr || activeRecorder->filterConstructionResult == FilterConstructionResult::Storage)
+        return storage;
+    if (activeRecorder->filterConstructionResult == FilterConstructionResult::Null)
+        return nullptr;
+    return &unexpectedFilter;
 }
 
 void genericAddSecondExcludedEntity(cs2::CTraceFilter*, void* firstExcludedEntity, void* secondExcludedEntity) noexcept
@@ -122,10 +137,11 @@ void writeOutput(cs2::CGameTrace& output, std::size_t offset, T value) noexcept
             && queryShape->storage[sizeof(queryShape->storage) - 1] == std::byte{0xA5};
     }
     auto& traceOutput = *output;
-    writeOutput(traceOutput, 0x10, cs2::Vector{1.0f, 2.0f, 3.0f});
+    if (activeRecorder == nullptr || activeRecorder->writeEndPosition)
+        writeOutput(traceOutput, 0x10, activeRecorder == nullptr ? cs2::Vector{1.0f, 2.0f, 3.0f} : activeRecorder->endPosition);
     writeOutput(traceOutput, 0x20, cs2::Vector{});
     writeOutput(traceOutput, 0x30, 1.0f);
-    return true;
+    return activeRecorder == nullptr || activeRecorder->traceShapeReturnValue;
 }
 
 enum class GenericTraceDependency {
@@ -352,6 +368,108 @@ TEST(EngineTraceTest, GenericTracingDoesNotRequireGrenadeOrRawEntityHandleLayout
     EXPECT_EQ(recorder.bounds.m_vMaxBounds, (cs2::Vector{2.0f, 2.0f, 2.0f}));
     EXPECT_EQ(recorder.traceShapeCalls, 1);
     EXPECT_TRUE(recorder.traceShapeReceivedBuiltQueryShape);
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceUsesNativeFilterAndAcceptsFalseReturnWithAFiniteEndpoint)
+{
+    GenericEngineTraceContext context;
+    GenericTraceRecorder recorder{.traceShapeReturnValue = false};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    std::byte owner{};
+
+    const auto endpoint = engine_trace::grenade::traceLaunchEndpoint(context, {10.0f, 20.0f, 30.0f}, {40.0f, 50.0f, 60.0f}, &owner);
+
+    ASSERT_TRUE(endpoint.hasValue());
+    EXPECT_EQ(endpoint.value(), (cs2::Vector{1.0f, 2.0f, 3.0f}));
+    EXPECT_EQ(recorder.filterConstructionCalls, 1);
+    EXPECT_EQ(recorder.firstExcludedEntity, &owner);
+    EXPECT_EQ(static_cast<std::uint64_t>(recorder.interactsWith), 0x0000000200003001ull);
+    EXPECT_EQ(static_cast<std::uint8_t>(recorder.collisionGroup), 4);
+    EXPECT_EQ(static_cast<std::uint8_t>(recorder.queryFlags), 15);
+    EXPECT_EQ(recorder.addSecondExclusionCalls, 0);
+    EXPECT_EQ(recorder.bounds.m_vMinBounds, (cs2::Vector{-2.02f, -2.02f, -2.02f}));
+    EXPECT_EQ(recorder.bounds.m_vMaxBounds, (cs2::Vector{2.02f, 2.02f, 2.02f}));
+    EXPECT_EQ(recorder.start, (cs2::Vector{10.0f, 20.0f, 30.0f}));
+    EXPECT_EQ(recorder.end, (cs2::Vector{40.0f, 50.0f, 60.0f}));
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceRejectsAnUnwrittenEndpoint)
+{
+    GenericEngineTraceContext context;
+    GenericTraceRecorder recorder{.writeEndPosition = false};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    std::byte owner{};
+
+    EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {1.0f, 2.0f, 3.0f}, &owner).hasValue());
+    EXPECT_EQ(recorder.traceShapeCalls, 1);
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceRejectsMissingBindingsBeforeNativeCalls)
+{
+    constexpr std::array dependencies{
+        GenericTraceDependency::TraceShape,
+        GenericTraceDependency::QueryShapeBuilder,
+        GenericTraceDependency::PhysicsWorldPointerSlotStorage,
+        GenericTraceDependency::PhysicsWorldPointerSlot,
+        GenericTraceDependency::FilterConstruction,
+        GenericTraceDependency::EndPositionOffset
+    };
+    std::byte owner{};
+
+    for (const auto dependency : dependencies) {
+        GenericEngineTraceContext context;
+        GenericTraceRecorder recorder;
+        ActiveRecorderGuard activeRecorderGuard{recorder};
+        context.setDependencyAvailable(dependency, false);
+
+        EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {1.0f, 2.0f, 3.0f}, &owner).hasValue());
+        EXPECT_EQ(recorder.filterConstructionCalls, 0);
+        EXPECT_EQ(recorder.buildQueryShapeCalls, 0);
+        EXPECT_EQ(recorder.traceShapeCalls, 0);
+    }
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceRejectsMissingOwnerAndNonFiniteInputsBeforeNativeCalls)
+{
+    constexpr float nonFinite = std::bit_cast<float>(std::uint32_t{0x7FC00000u});
+    GenericEngineTraceContext context;
+    GenericTraceRecorder recorder;
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    std::byte owner{};
+
+    EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {1.0f, 2.0f, 3.0f}, nullptr).hasValue());
+    EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {nonFinite, 0.0f, 0.0f}, {}, &owner).hasValue());
+    EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {nonFinite, 0.0f, 0.0f}, &owner).hasValue());
+    EXPECT_EQ(recorder.filterConstructionCalls, 0);
+    EXPECT_EQ(recorder.buildQueryShapeCalls, 0);
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceRejectsFailedFilterConstruction)
+{
+    std::byte owner{};
+    for (const auto result : {FilterConstructionResult::Null, FilterConstructionResult::WrongPointer}) {
+        GenericEngineTraceContext context;
+        GenericTraceRecorder recorder{.filterConstructionResult = result};
+        ActiveRecorderGuard activeRecorderGuard{recorder};
+
+        EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {1.0f, 2.0f, 3.0f}, &owner).hasValue());
+        EXPECT_EQ(recorder.filterConstructionCalls, 1);
+        EXPECT_EQ(recorder.buildQueryShapeCalls, 1);
+        EXPECT_EQ(recorder.traceShapeCalls, 0);
+    }
+}
+
+TEST(EngineTraceGrenadeTest, LaunchEndpointTraceRejectsANonFiniteWrittenEndpoint)
+{
+    constexpr float nonFinite = std::bit_cast<float>(std::uint32_t{0x7FC00000u});
+    GenericEngineTraceContext context;
+    GenericTraceRecorder recorder{.endPosition = {nonFinite, 2.0f, 3.0f}};
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    std::byte owner{};
+
+    EXPECT_FALSE(engine_trace::grenade::traceLaunchEndpoint(context, {}, {1.0f, 2.0f, 3.0f}, &owner).hasValue());
+    EXPECT_EQ(recorder.traceShapeCalls, 1);
 }
 
 TEST(HullTraceRequestTest, NormalizesEntityExclusionsWithoutChangingTheSecondExclusionSlot)

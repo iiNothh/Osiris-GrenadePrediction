@@ -16,3 +16,6 @@ STRONG_TYPE_ALIAS(OffsetToClipAmmo, WeaponOffset<cs2::C_CSWeaponBase::m_iClip1, 
 STRONG_TYPE_ALIAS(OffsetToWeaponMode, WeaponOffset<cs2::C_CSWeaponBase::m_weaponMode, std::int32_t>);
 STRONG_TYPE_ALIAS(OffsetToWeaponSceneObjectUpdaterHandle, WeaponOffset<cs2::C_CSWeaponBase::sceneObjectUpdaterHandle, std::int32_t>);
 STRONG_TYPE_ALIAS(PointerToGetInaccuracyFunction, cs2::C_CSWeaponBase::GetInaccuracy*);
+STRONG_TYPE_ALIAS(OffsetToThrowStrength, GrenadeWeaponOffset<cs2::C_BaseCSGrenade::m_flThrowStrength, std::int32_t>);
+STRONG_TYPE_ALIAS(OffsetToPinPulled, GrenadeWeaponOffset<cs2::C_BaseCSGrenade::m_bPinPulled, std::int32_t>);
+STRONG_TYPE_ALIAS(OffsetToThrowTime, GrenadeWeaponOffset<cs2::C_BaseCSGrenade::m_fThrowTime, std::int32_t>);
