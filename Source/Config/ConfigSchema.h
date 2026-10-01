@@ -171,6 +171,7 @@ private:
         configConversion.boolean(u8"Enabled", loadVariable<grenade_prediction_vars::Enabled>(), saveVariable<grenade_prediction_vars::Enabled>());
         configConversion.uint(u8"TrajectoryHue", loadVariable<grenade_prediction_vars::TrajectoryHue>(), saveVariable<grenade_prediction_vars::TrajectoryHue>());
         configConversion.uint(u8"BounceHue", loadVariable<grenade_prediction_vars::BounceHue>(), saveVariable<grenade_prediction_vars::BounceHue>());
+        configConversion.floatValue(u8"Thickness", loadVariable<grenade_prediction_vars::TrajectoryThickness>(), saveVariable<grenade_prediction_vars::TrajectoryThickness>());
         configConversion.floatValue(u8"CacheDuration", loadVariable<grenade_prediction_vars::CacheDuration>(), saveVariable<grenade_prediction_vars::CacheDuration>());
         configConversion.uint(u8"LastTrajectoryVisibilityMode", loadVariable<grenade_prediction_vars::LastTrajectoryVisibility>(), saveVariable<grenade_prediction_vars::LastTrajectoryVisibility>());
         configConversion.endObject();
@@ -234,6 +235,8 @@ private:
                 } else if constexpr (std::is_same_v<float, typename ConfigVariable::ValueType::ValueType>) {
                     if constexpr (std::is_same_v<ConfigVariable, grenade_prediction_vars::CacheDuration>)
                         hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{grenade_prediction_vars::normalizeCacheDuration(value)});
+                    else if constexpr (std::is_same_v<ConfigVariable, grenade_prediction_vars::TrajectoryThickness>)
+                        hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{grenade_prediction_vars::normalizeTrajectoryThickness(value)});
                     else if (Math::isFinite(value))
                         hookContext.config().template setVariableWithoutAutoSave<ConfigVariable>(typename ConfigVariable::ValueType{std::clamp(value, ConfigVariable::ValueType::kMin, ConfigVariable::ValueType::kMax)});
                 } else {

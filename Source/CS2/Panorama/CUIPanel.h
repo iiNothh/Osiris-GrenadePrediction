@@ -22,6 +22,7 @@ struct CUIPanel {
 
     using setParent = void (*)(CUIPanel* thisptr, CUIPanel* parent);
     using setVisible = void (*)(CUIPanel* thisptr, bool visible);
+    using getActualLayoutHeight = float (*)(CUIPanel* thisptr);
     using getAttributeString = const char* (*)(CUIPanel* thisptr, CPanoramaSymbol attributeName, const char* defaultValue);
     using setAttributeString = void (*)(CUIPanel* thisptr, CPanoramaSymbol attributeName, const char* value);
 

@@ -250,6 +250,7 @@ private:
         updateHueSlider<grenade_prediction_vars::TrajectoryHue>(mainMenu, "grenade_prediction_trajectory_hue");
         updateHueSlider<grenade_prediction_vars::BounceHue>(mainMenu, "grenade_prediction_bounce_hue");
         updateFloatSlider(mainMenu, "grenade_prediction_cache_duration", GET_CONFIG_VAR(grenade_prediction_vars::CacheDuration), grenade_prediction_vars::kCacheDurationSliderDecimalPlaces);
+        updateFloatSlider(mainMenu, "grenade_prediction_trajectory_thickness", GET_CONFIG_VAR(grenade_prediction_vars::TrajectoryThickness), grenade_prediction_vars::kTrajectoryThicknessSliderDecimalPlaces);
         setDurationRowState(mainMenu, lastTrajectoryVisibilityIndex() == 3);
     }
 

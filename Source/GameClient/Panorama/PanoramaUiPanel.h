@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string_view>
 #include <utility>
 
@@ -18,7 +19,9 @@
 #include <GameClient/Panorama/PanelShadowParams.h>
 #include <MemoryPatterns/PatternTypes/PanelStylePatternTypes.h>
 #include <MemoryPatterns/PatternTypes/UiPanelPatternTypes.h>
+#include <Platform/Macros/PlatformSpecific.h>
 #include <Utils/Lvalue.h>
+#include <Utils/Optional.h>
 
 #include "ClientPanel.h"
 #include "PanelStylePropertyFactory.h"
@@ -171,6 +174,17 @@ public:
         setStyleProperty(propertyFactory().rotate2dCentered(degrees));
     }
 
+    [[nodiscard]] bool setScale2dCentered(float x, float y) const noexcept
+    {
+#if IS_WIN64()
+        return setStyleProperty(propertyFactory().scale2dCentered(x, y));
+#else
+        (void)x;
+        (void)y;
+        return false;
+#endif
+    }
+
     void setImageShadow(const PanelShadowParams& params) const noexcept
     {
         setStyleProperty(propertyFactory().imageShadow(params));
@@ -256,25 +270,40 @@ public:
         return getParentWindow().getUiScaleFactor();
     }
 
-private:
-    template <typename StyleProperty>
-    void setStyleProperty(std::optional<StyleProperty> styleProperty) const
+    [[nodiscard]] Optional<float> getActualLayoutHeight() const noexcept
     {
-        if (styleProperty.has_value())
-            setProperty(&*styleProperty);
+#if IS_WIN64()
+        const auto getHeight = PanoramaUiPanelMethodInvoker{panel,
+            hookContext.patternSearchResults().template get<GetActualLayoutHeightFunctionOffset>()};
+        if (getHeight && *getHeight.function)
+            return getHeight();
+#endif
+        return {};
     }
 
-    void setProperty(cs2::CStyleProperty* styleProperty) const noexcept
+private:
+    template <typename StyleProperty>
+    bool setStyleProperty(std::optional<StyleProperty> styleProperty) const
+    {
+        if (styleProperty.has_value())
+            return setProperty(&*styleProperty);
+        return false;
+    }
+
+    bool setProperty(cs2::CStyleProperty* styleProperty) const noexcept
     {
         if (!styleProperty)
-            return;
+            return false;
 
         const auto style = getStyle();
         if (!style)
-            return;
+            return false;
 
-        if (const auto setPropertyFn{hookContext.patternSearchResults().template get<SetPanelStylePropertyFunctionPointer>()})
+        if (const auto setPropertyFn{hookContext.patternSearchResults().template get<SetPanelStylePropertyFunctionPointer>()}) {
             setPropertyFn(style, styleProperty, true);
+            return true;
+        }
+        return false;
     }
 
     [[nodiscard]] PanoramaUiPanelClasses classes() const noexcept

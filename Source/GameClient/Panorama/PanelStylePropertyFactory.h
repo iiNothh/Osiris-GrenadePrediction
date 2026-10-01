@@ -14,6 +14,7 @@
 #include <GameClient/Panorama/PanelAlignmentParams.h>
 #include <GameClient/Panorama/PanelFontParams.h>
 #include <GameClient/Panorama/PanelMarginParams.h>
+#include <Platform/Macros/PlatformSpecific.h>
 
 #include "PanelShadowParams.h"
 #include "StylePropertiesSymbolsAndVMTs.h"
@@ -79,6 +80,26 @@ struct PanelStylePropertyFactory {
                 .m_bDisallowTransition = false,
                 .m_flDegrees = degrees
             };
+        return {};
+    }
+
+    [[nodiscard]] std::optional<cs2::CStylePropertyScale2DCentered> scale2dCentered(float x, float y) const noexcept
+    {
+#if IS_WIN64()
+        const auto vmt = symbolsAndVMTs.getVmt<cs2::CStylePropertyScale2DCentered>();
+        const auto symbol = symbolsAndVMTs.getSymbol<cs2::CStylePropertyScale2DCentered>();
+        if (vmt && symbol.isValid())
+            return cs2::CStylePropertyScale2DCentered{
+                .vmt = vmt,
+                .m_symPropertyName = symbol,
+                .m_bDisallowTransition = false,
+                .m_flScaleX = x,
+                .m_flScaleY = y
+            };
+#else
+        (void)x;
+        (void)y;
+#endif
         return {};
     }
 

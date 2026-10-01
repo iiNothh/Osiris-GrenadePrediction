@@ -53,6 +53,8 @@ private:
             handleIntSliderTextEntry<viewmodel_mod_vars::Fov>("viewmodel_fov");
         } else if (feature == "grenade_prediction_cache_duration") {
             handleFloatSlider<grenade_prediction_vars::CacheDuration, grenade_prediction_vars::normalizeCacheDuration>("grenade_prediction_cache_duration", grenade_prediction_vars::kCacheDurationSliderDecimalPlaces);
+        } else if (feature == "grenade_prediction_trajectory_thickness") {
+            handleFloatSlider<grenade_prediction_vars::TrajectoryThickness, grenade_prediction_vars::normalizeTrajectoryThickness>("grenade_prediction_trajectory_thickness", grenade_prediction_vars::kTrajectoryThicknessSliderDecimalPlaces);
         }
     }
 

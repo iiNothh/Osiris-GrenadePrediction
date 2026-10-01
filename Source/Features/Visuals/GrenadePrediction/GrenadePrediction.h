@@ -267,7 +267,8 @@ private:
     {
         const auto hue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::TrajectoryHue)).toHueFloat();
         const auto bounceHue = static_cast<color::HueInteger>(GET_CONFIG_VAR(grenade_prediction_vars::BounceHue)).toHueFloat();
-        renderer().draw(trajectory, panel, presentation, hookContext.hud().getHudReticle(), hue, bounceHue, hideWhileUpdating);
+        const auto thickness = grenade_prediction_vars::normalizeTrajectoryThickness(GET_CONFIG_VAR(grenade_prediction_vars::TrajectoryThickness));
+        renderer().draw(trajectory, panel, presentation, hookContext.hud().getHudReticle(), hue, bounceHue, thickness, hideWhileUpdating);
     }
 
     void applyCachedTrajectoryPresentation(bool hasCurtime, float curtime) noexcept

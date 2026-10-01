@@ -31,7 +31,7 @@ public:
     }
 
     void draw(const auto& trajectory, cs2::PanelHandle& containerPanelHandle, GrenadeTrajectoryPresentationState& presentationState,
-        auto&& parentPanel, color::Hue trajectoryHue, color::Hue bounceHue, bool hideWhileUpdating = false) noexcept
+        auto&& parentPanel, color::Hue trajectoryHue, color::Hue bounceHue, float trajectoryThickness, bool hideWhileUpdating = false) noexcept
     {
         if (!isDrawableTrajectory(trajectory)) {
             hide(containerPanelHandle);
@@ -48,6 +48,7 @@ public:
 
         auto childrenProxy = containerPanel.children();
         int childCount = (childrenProxy.vector && childrenProxy.vector->memory) ? childrenProxy.vector->size : 0;
+        const int childCountBeforeCreation = childCount;
         TrajectoryRenderPlan renderPlan;
         renderPlan.build(trajectory);
         const int segmentCount = renderPlan.lineSegmentCount;
@@ -86,13 +87,14 @@ public:
         initializePanelAlignment(children, neededPanels, updateStyles);
 
         int index = 0;
-        drawLinePanels(children, index, trajectory, renderPlan, converter, aspectRatio, updateStyles, trajectoryColor);
+        drawLinePanels(children, index, trajectory, renderPlan, converter, aspectRatio, updateStyles, trajectoryColor,
+            trajectoryThickness, childCountBeforeCreation, presentationState);
         drawBounceMarkerPanels(children, index, trajectory, converter, updateStyles, bounceColor);
         drawLandingMarkerPanel(children, index, trajectory, converter, updateStyles, endMarkerColor);
 
         hideUnusedPanels(children, index, childCount, presentationState.activePanelCount);
         presentationState.activePanelCount = neededPanels;
-        presentationState.panelStyle = {segmentCount, trajectory.markersCount, trajectory.validLanding, trajectoryHueValue, bounceHueValue, true};
+        presentationState.panelStyle = {segmentCount, trajectory.markersCount, trajectory.validLanding, trajectoryHueValue, bounceHueValue, trajectoryThickness, true};
         containerPanel.setVisible(true);
     }
 
@@ -101,7 +103,7 @@ private:
     static constexpr int kMaxMarkers = Trajectory::kMarkersCapacity;
     static constexpr int kMaxPanels = TrajectoryRenderPlan::kPanelCapacity;
     static constexpr float kNearW = TrajectoryLineSegment::kNearW;
-    static constexpr float kTrajectoryLineThickness = 2.0f;
+    static constexpr float kTrajectoryLineBaseHeight = 4.0f;
     static constexpr float kBounceDotSize = 8.0f;
     static constexpr float kEndMarkerSize = 10.0f;
 
@@ -161,22 +163,28 @@ private:
     }
 
     void drawLinePanels(auto&& children, int& index, const auto& trajectory, const TrajectoryRenderPlan& renderPlan,
-        const auto& converter, float aspectRatio, bool updateStyles, const auto& trajectoryColor) noexcept
+        const auto& converter, float aspectRatio, bool updateStyles, const auto& trajectoryColor, float trajectoryThickness,
+        int childCountBeforeCreation, const GrenadeTrajectoryPresentationState& presentationState) noexcept
     {
         auto previousPoint = converter.toClipSpace(trajectory.points[renderPlan.pointIndex(0)]);
         for (int i = 0; i < renderPlan.lineSegmentCount; ++i) {
-            auto child = children[index++];
+            const int panelIndex = index++;
+            auto child = children[panelIndex];
+            const bool prepareLine = shouldPrepareLine(panelIndex, childCountBeforeCreation, presentationState);
+            if (prepareLine)
+                child.setHeight(cs2::CUILength::pixels(kTrajectoryLineBaseHeight));
             if (updateStyles) {
-                child.setHeight(cs2::CUILength::pixels(kTrajectoryLineThickness));
                 child.setBackgroundColor(trajectoryColor);
             }
+            const bool scaleSubmitted = setLineScale(child, trajectoryThickness, prepareLine);
+
             TrajectoryLineSegment segment{};
             const auto nextPoint = converter.toClipSpace(trajectory.points[renderPlan.pointIndex(i + 1)]);
             if (TrajectoryLineSegment::fromClipSpace(previousPoint, nextPoint, aspectRatio, segment)) {
                 child.setWidth(cs2::CUILength::percent(segment.width));
                 child.setRotate2dCentered(segment.angleDegrees);
-                child.setVisible(true);
                 translatePanel(child, segment.midpointX - 50.0f, segment.midpointY - 50.0f);
+                child.setVisible(scaleSubmitted);
             } else {
                 child.setVisible(false);
             }
@@ -189,6 +197,7 @@ private:
     {
         for (int i = 0; i < trajectory.markersCount; ++i) {
             auto child = children[index++];
+            const bool scaleSubmitted = child.setScale2dCentered(1.0f, 1.0f);
             if (updateStyles) {
                 child.setWidth(cs2::CUILength::pixels(kBounceDotSize));
                 child.setHeight(cs2::CUILength::pixels(kBounceDotSize));
@@ -200,7 +209,7 @@ private:
                 child.setVisible(false);
                 continue;
             }
-            setMarkerVisibility(child, converter.toClipSpace(trajectory.points[pointIndex]));
+            setMarkerVisibility(child, converter.toClipSpace(trajectory.points[pointIndex]), scaleSubmitted);
         }
     }
 
@@ -211,13 +220,14 @@ private:
             return;
 
         auto child = children[index++];
+        const bool scaleSubmitted = child.setScale2dCentered(1.0f, 1.0f);
         if (updateStyles) {
             child.setWidth(cs2::CUILength::pixels(kEndMarkerSize));
             child.setHeight(cs2::CUILength::pixels(kEndMarkerSize));
             child.setRotate2dCentered(0.0f);
             child.setBackgroundColor(endMarkerColor);
         }
-        setMarkerVisibility(child, converter.toClipSpace(trajectory.endPos));
+        setMarkerVisibility(child, converter.toClipSpace(trajectory.endPos), scaleSubmitted);
     }
 
     static void hideUnusedPanels(auto&& children, int& index, int childCount, int activePanelCount) noexcept
@@ -226,7 +236,31 @@ private:
             children[index++].setVisible(false);
     }
 
-    void setMarkerVisibility(auto&& panel, ClipSpaceCoordinates clipSpace) noexcept
+    [[nodiscard]] static bool shouldPrepareLine(int panelIndex, int childCountBeforeCreation,
+        const GrenadeTrajectoryPresentationState& presentationState) noexcept
+    {
+        return panelIndex >= childCountBeforeCreation || !presentationState.panelStyle.initialized
+            || panelIndex >= presentationState.panelStyle.lineSegmentCount;
+    }
+
+    [[nodiscard]] static bool setLineScale(auto&& panel, float trajectoryThickness, bool prepareLine) noexcept
+    {
+        if (prepareLine)
+            return panel.setScale2dCentered(1.0f, 0.0f);
+
+        const auto actualHeight = panel.getActualLayoutHeight();
+        if (!actualHeight.hasValue() || !Math::isFinite(actualHeight.value()) || actualHeight.value() <= 0.0f
+            || !Math::isFinite(trajectoryThickness) || trajectoryThickness <= 0.0f) {
+            return panel.setScale2dCentered(1.0f, 0.0f);
+        }
+
+        const float scaleY = trajectoryThickness / actualHeight.value();
+        if (!Math::isFinite(scaleY) || scaleY <= 0.0f)
+            return panel.setScale2dCentered(1.0f, 0.0f);
+        return panel.setScale2dCentered(1.0f, scaleY);
+    }
+
+    void setMarkerVisibility(auto&& panel, ClipSpaceCoordinates clipSpace, bool scaleSubmitted) noexcept
     {
         if (!Math::isFinite(clipSpace.x) || !Math::isFinite(clipSpace.y) || !Math::isFinite(clipSpace.z) || !Math::isFinite(clipSpace.w)
             || clipSpace.w < kNearW || clipSpace.x < -clipSpace.w || clipSpace.x > clipSpace.w
@@ -242,7 +276,7 @@ private:
             return;
         }
 
-        panel.setVisible(true);
+        panel.setVisible(scaleSubmitted);
         translatePanel(panel, x - 50.0f, y - 50.0f);
     }
 

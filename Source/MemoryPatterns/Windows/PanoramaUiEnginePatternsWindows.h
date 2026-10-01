@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MemoryPatterns/PatternTypes/UiEnginePatternTypes.h>
 #include <MemoryPatterns/PatternTypes/UiPanelPatternTypes.h>
 #include <MemorySearch/CodePattern.h>
 

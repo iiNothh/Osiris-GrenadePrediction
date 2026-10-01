@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -177,6 +178,7 @@ protected:
         get<grenade_prediction_vars::Enabled>() = true;
         get<grenade_prediction_vars::TrajectoryHue>() = grenade_prediction_vars::TrajectoryHue::ValueType{color::HueInteger{180}};
         get<grenade_prediction_vars::BounceHue>() = grenade_prediction_vars::BounceHue::ValueType{color::HueInteger{60}};
+        get<grenade_prediction_vars::TrajectoryThickness>() = grenade_prediction_vars::TrajectoryThickness::ValueType{1.25f};
         get<grenade_prediction_vars::CacheDuration>() = grenade_prediction_vars::CacheDuration::ValueType{1.5f};
         get<grenade_prediction_vars::LastTrajectoryVisibility>() = grenade_prediction_vars::LastTrajectoryVisibilityMode::Explode;
     }
@@ -267,6 +269,8 @@ protected:
 
     void testLoadingConfigFile(const char* filename)
     {
+        if (!expectedVariableValues.contains(ConfigVariableTypes::indexOf<grenade_prediction_vars::TrajectoryThickness>()))
+            EXPECT_CALL(mockConfig, setVariableWithoutAutoSave(ConfigVariableTypes::indexOf<grenade_prediction_vars::TrajectoryThickness>(), testing::_)).Times(0);
         enableVariableExpectationsForSetting();
         auto fileContents = readConfigFile(filename);
         prepareLoadOperation(fileContents);
@@ -336,3 +340,43 @@ TEST_F(ConfigCompatibilityLoadTest, ConfigCurrent) {
     setVariableExpectationsCurrent();
     testLoadingConfigFile("config_current.cfg");
 }
+
+TEST_F(ConfigCompatibilityLoadTest, MissingTrajectoryThicknessDoesNotOverrideTwoPixelDefault)
+{
+    static_assert(static_cast<float>(grenade_prediction_vars::TrajectoryThickness::kDefaultValue) == 2.0f);
+    EXPECT_CALL(mockConfig, setVariableWithoutAutoSave(ConfigVariableTypes::indexOf<grenade_prediction_vars::TrajectoryThickness>(), testing::_)).Times(0);
+    get<grenade_prediction_vars::Enabled>() = false;
+    enableVariableExpectationsForSetting();
+    constexpr std::u8string_view input = u8"{\"Visuals\":{\"GrenadePrediction\":{\"Enabled\":false}}}";
+    std::vector<char8_t> fileContents{input.begin(), input.end()};
+    prepareLoadOperation(fileContents);
+
+    config.update();
+}
+
+struct ConfigTrajectoryThicknessLoadCase {
+    std::u8string_view input;
+    float expected;
+};
+
+class ConfigTrajectoryThicknessLoadTest : public ConfigCompatibilityLoadTest, public testing::WithParamInterface<ConfigTrajectoryThicknessLoadCase> {};
+
+TEST_P(ConfigTrajectoryThicknessLoadTest, LoadsClampedAndNormalizedTrajectoryThickness)
+{
+    const auto& [input, expected] = GetParam();
+    get<grenade_prediction_vars::TrajectoryThickness>() = grenade_prediction_vars::TrajectoryThickness::ValueType{expected};
+    enableVariableExpectationsForSetting();
+    std::vector<char8_t> fileContents{input.begin(), input.end()};
+    prepareLoadOperation(fileContents);
+
+    config.update();
+}
+
+INSTANTIATE_TEST_SUITE_P(BoundsAndSnapping, ConfigTrajectoryThicknessLoadTest, testing::Values(
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":-1}}}", 0.5f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":0.01}}}", 0.5f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":1.234}}}", 1.23f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":1.235}}}", 1.24f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":2}}}", 2.0f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":3}}}", 3.0f},
+    ConfigTrajectoryThicknessLoadCase{u8"{\"Visuals\":{\"GrenadePrediction\":{\"Thickness\":4}}}", 3.0f}));

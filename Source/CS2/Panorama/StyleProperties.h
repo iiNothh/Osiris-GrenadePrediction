@@ -1,7 +1,11 @@
 #pragma once
 
+#include <cstddef>
+#include <type_traits>
+
 #include <CS2/Classes/Color.h>
 #include <CS2/Classes/CUtlString.h>
+#include <CS2/Classes/CUtlVector.h>
 #include <CS2/Classes/VMatrix.h>
 #include <CS2/Panorama/CUILength.h>
 #include <CS2/Panorama/StyleEnums.h>
@@ -53,6 +57,22 @@ struct CStylePropertyRotate2DCentered : CStyleProperty {
 static_assert(std::is_standard_layout_v<CStylePropertyRotate2DCentered>);
 static_assert(sizeof(CStylePropertyRotate2DCentered) == WIN64_LINUX(24, 16));
 static_assert(offsetof(CStylePropertyRotate2DCentered, m_flDegrees) == WIN64_LINUX(16, 12));
+
+struct CStylePropertyScale2DCentered : CStyleProperty {
+    BASE_STYLE_PROPERTY_FIELDS();
+    float m_flScaleX{1.0f};
+    float m_flScaleY{1.0f};
+};
+static_assert(std::is_standard_layout_v<CStylePropertyScale2DCentered>);
+// Only the Windows layout is verified; Linux construction and registration stay disabled.
+WIN64_ONLY(
+static_assert(sizeof(CStylePropertyScale2DCentered) == 24);
+static_assert(offsetof(CStylePropertyScale2DCentered, vmt) == 0);
+static_assert(offsetof(CStylePropertyScale2DCentered, m_symPropertyName) == 8);
+static_assert(offsetof(CStylePropertyScale2DCentered, m_bDisallowTransition) == 9);
+static_assert(offsetof(CStylePropertyScale2DCentered, m_flScaleX) == 16);
+static_assert(offsetof(CStylePropertyScale2DCentered, m_flScaleY) == 20);
+)
 
 struct CStylePropertyHeight : CStyleProperty {
     BASE_STYLE_PROPERTY_FIELDS();

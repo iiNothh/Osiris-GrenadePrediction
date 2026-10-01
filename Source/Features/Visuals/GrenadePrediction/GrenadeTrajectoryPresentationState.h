@@ -6,6 +6,7 @@ struct GrenadeTrajectoryPanelStyleState {
     bool validLanding{};
     float trajectoryHue{};
     float bounceHue{};
+    float trajectoryThickness{};
     bool initialized{};
 };
 

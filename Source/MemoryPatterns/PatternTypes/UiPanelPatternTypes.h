@@ -14,6 +14,7 @@ using PanoramaUiPanelOffset = FieldOffset<cs2::CUIPanel, FieldType, OffsetType>;
 
 STRONG_TYPE_ALIAS(SetParentFunctionOffset, FieldOffset<const void, cs2::CUIPanel::setParent, std::int32_t>);
 STRONG_TYPE_ALIAS(SetVisibleFunctionOffset, FieldOffset<const void, cs2::CUIPanel::setVisible, std::int32_t>);
+STRONG_TYPE_ALIAS(GetActualLayoutHeightFunctionOffset, FieldOffset<const void, cs2::CUIPanel::getActualLayoutHeight, std::int32_t>);
 STRONG_TYPE_ALIAS(GetAttributeStringFunctionOffset, FieldOffset<const void, cs2::CUIPanel::getAttributeString, std::int32_t>);
 STRONG_TYPE_ALIAS(SetAttributeStringFunctionOffset, FieldOffset<const void, cs2::CUIPanel::setAttributeString, std::int32_t>);
 

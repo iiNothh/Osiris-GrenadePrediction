@@ -73,6 +73,7 @@ struct GrenadePredictionBranchRecorder {
     cs2::PanelHandle* hiddenPanels[4]{};
     cs2::PanelHandle* drawnPanels[4]{};
     cs2::Vector drawnFirstPoints[4]{};
+    float drawnThicknesses[4]{};
     bool transactionalDraws[4]{};
     int hideCalls{};
     int drawCalls{};
@@ -105,10 +106,11 @@ struct GrenadePredictionBranchRenderer {
 
     template <typename Trajectory, typename ParentPanel>
     void draw(const Trajectory& trajectory, cs2::PanelHandle& panelHandle, GrenadeTrajectoryPresentationState&, ParentPanel&&,
-        color::Hue, color::Hue, bool hideWhileUpdating) noexcept
+        color::Hue, color::Hue, float trajectoryThickness, bool hideWhileUpdating) noexcept
     {
         if (recorder.drawCalls < 4) {
             recorder.drawnPanels[recorder.drawCalls] = &panelHandle;
+            recorder.drawnThicknesses[recorder.drawCalls] = trajectoryThickness;
             recorder.transactionalDraws[recorder.drawCalls] = hideWhileUpdating;
             if (trajectory.pointsCount > 0)
                 recorder.drawnFirstPoints[recorder.drawCalls] = trajectory.points[0];
@@ -176,12 +178,15 @@ struct GrenadePredictionBranchSimulator {
 
 struct GrenadePredictionBranchConfig {
     grenade_prediction_vars::LastTrajectoryVisibilityMode visibility{grenade_prediction_vars::LastTrajectoryVisibilityMode::Always};
+    grenade_prediction_vars::TrajectoryThickness::ValueType trajectoryThickness{grenade_prediction_vars::TrajectoryThickness::kDefaultValue};
 
     template <typename Variable>
     [[nodiscard]] auto getVariable() const noexcept
     {
         if constexpr (std::is_same_v<Variable, grenade_prediction_vars::LastTrajectoryVisibility>)
             return visibility;
+        else if constexpr (std::is_same_v<Variable, grenade_prediction_vars::TrajectoryThickness>)
+            return trajectoryThickness;
         else
             return Variable::kDefaultValue;
     }
@@ -408,6 +413,7 @@ TEST(GrenadePredictionTest, SuppressionAfterInvalidIdentityHidesHeldPredictionWi
         EXPECT_EQ(context.recorder.hiddenPanels[0], &state.liveContainerPanelHandle);
         EXPECT_EQ(context.recorder.drawCalls, 1);
         EXPECT_EQ(context.recorder.drawnPanels[0], &state.lastCacheContainerPanelHandle);
+        EXPECT_FLOAT_EQ(context.recorder.drawnThicknesses[0], 2.0f);
         EXPECT_FALSE(state.tempTrajectory.valid);
         EXPECT_EQ(context.recorder.pinPulledCalls, 0);
         EXPECT_EQ(context.recorder.throwStrengthCalls, 0);
@@ -520,6 +526,8 @@ TEST(GrenadePredictionTest, ReusesTrajectoryForIdenticalInputOnConsecutiveHighFr
 
         EXPECT_EQ(context.recorder.simulateCalls, 1);
         EXPECT_EQ(context.recorder.drawCalls, 2);
+        EXPECT_FLOAT_EQ(context.recorder.drawnThicknesses[0], 2.0f);
+        EXPECT_FLOAT_EQ(context.recorder.drawnThicknesses[1], 2.0f);
         EXPECT_TRUE(context.recorder.transactionalDraws[0]);
         EXPECT_TRUE(context.recorder.transactionalDraws[1]);
         EXPECT_EQ(context.recorder.drawnFirstPoints[0].x, context.recorder.drawnFirstPoints[1].x);
@@ -534,6 +542,7 @@ TEST(GrenadePredictionTest, HidesUnownedLiveTrajectoryInSameCallbackAndKeepsCach
         GTEST_SKIP();
     } else {
         GrenadePredictionBranchTestContext context;
+        context.configStorage.trajectoryThickness = grenade_prediction_vars::TrajectoryThickness::ValueType{1.234f};
         context.recorder.pinPulled = true;
         GrenadePredictionBranchPlayerPawn playerPawn;
         GrenadePredictionBranchActiveWeapon activeWeapon;
@@ -545,6 +554,7 @@ TEST(GrenadePredictionTest, HidesUnownedLiveTrajectoryInSameCallbackAndKeepsCach
 
         prediction.handleGrenadePrediction(playerPawn, activeWeapon, localPawn, true);
         ASSERT_EQ(context.recorder.drawCalls, 1);
+        EXPECT_FLOAT_EQ(context.recorder.drawnThicknesses[0], 1.23f);
         ASSERT_TRUE(state.tempTrajectory.valid);
 
         state.lastCommittedTrajectory = state.tempTrajectory;
@@ -563,6 +573,7 @@ TEST(GrenadePredictionTest, HidesUnownedLiveTrajectoryInSameCallbackAndKeepsCach
         EXPECT_EQ(context.recorder.hiddenPanels[previousHideCalls], &state.liveContainerPanelHandle);
         EXPECT_EQ(context.recorder.drawCalls, 2);
         EXPECT_EQ(context.recorder.drawnPanels[1], &state.lastCacheContainerPanelHandle);
+        EXPECT_FLOAT_EQ(context.recorder.drawnThicknesses[1], 1.23f);
         EXPECT_FALSE(context.recorder.transactionalDraws[1]);
         EXPECT_TRUE(state.lastCommittedTrajectory.valid);
     }

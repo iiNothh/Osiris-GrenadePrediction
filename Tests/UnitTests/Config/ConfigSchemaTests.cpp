@@ -1,5 +1,6 @@
 #include <any>
 #include <cstddef>
+#include <limits>
 #include <set>
 #include <string_view>
 #include <vector>
@@ -123,7 +124,8 @@ TEST_F(ConfigSchemaTest, NormalizesLoadedGrenadePredictionCacheDuration) {
     EXPECT_CALL(mockConfigConversion, uint(testing::_, testing::_, testing::_)).Times(testing::AnyNumber());
 
     EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
-    EXPECT_CALL(mockConfigConversion, floatValue(testing::_, testing::_, testing::_))
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::Eq(std::u8string_view{u8"Thickness"}), testing::_, testing::_));
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::Eq(std::u8string_view{u8"CacheDuration"}), testing::_, testing::_))
         .WillOnce(testing::WithArgs<0, 1>([this](const char8_t* id, auto valueSetter) {
             EXPECT_EQ(std::u8string_view{id}, u8"CacheDuration");
             EXPECT_CALL(mockConfig, setVariableWithoutAutoSave(ConfigVariableTypes::indexOf<grenade_prediction_vars::CacheDuration>(), testing::_))
@@ -136,6 +138,50 @@ TEST_F(ConfigSchemaTest, NormalizesLoadedGrenadePredictionCacheDuration) {
 
     configSchema.performConversion(mockConfigConversion);
 }
+
+struct ConfigSchemaTrajectoryThicknessCase {
+    float input;
+    float expected;
+};
+
+class ConfigSchemaTrajectoryThicknessTest : public ConfigSchemaTest, public testing::WithParamInterface<ConfigSchemaTrajectoryThicknessCase> {};
+
+TEST_P(ConfigSchemaTrajectoryThicknessTest, ClampsAndSnapsLoadedTrajectoryThickness)
+{
+    EXPECT_CALL(mockConfigConversion, beginRoot());
+    EXPECT_CALL(mockConfigConversion, endRoot());
+    EXPECT_CALL(mockConfigConversion, beginObject(testing::_)).Times(testing::AnyNumber());
+    EXPECT_CALL(mockConfigConversion, endObject()).Times(testing::AnyNumber());
+    EXPECT_CALL(mockConfigConversion, boolean(testing::_, testing::_, testing::_)).Times(testing::AnyNumber());
+    EXPECT_CALL(mockConfigConversion, uint(testing::_, testing::_, testing::_)).Times(testing::AnyNumber());
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::Eq(std::u8string_view{u8"CacheDuration"}), testing::_, testing::_));
+
+    EXPECT_CALL(mockHookContext, config()).WillOnce(testing::ReturnRef(mockConfig));
+    EXPECT_CALL(mockConfig, setVariableWithoutAutoSave(ConfigVariableTypes::indexOf<grenade_prediction_vars::TrajectoryThickness>(), testing::_))
+        .WillOnce(testing::WithArg<1>([this](std::any value) {
+            const auto thickness = std::any_cast<grenade_prediction_vars::TrajectoryThickness::ValueType>(value);
+            EXPECT_FLOAT_EQ(static_cast<float>(thickness), GetParam().expected);
+        }));
+    EXPECT_CALL(mockConfigConversion, floatValue(testing::Eq(std::u8string_view{u8"Thickness"}), testing::_, testing::_))
+        .WillOnce(testing::WithArg<1>([this](auto valueSetter) {
+            valueSetter(GetParam().input);
+        }));
+
+    configSchema.performConversion(mockConfigConversion);
+}
+
+INSTANTIATE_TEST_SUITE_P(BoundsSnappingAndNonFiniteValues, ConfigSchemaTrajectoryThicknessTest, testing::Values(
+    ConfigSchemaTrajectoryThicknessCase{-1.0f, 0.5f},
+    ConfigSchemaTrajectoryThicknessCase{0.01f, 0.5f},
+    ConfigSchemaTrajectoryThicknessCase{1.234f, 1.23f},
+    ConfigSchemaTrajectoryThicknessCase{1.235f, 1.24f},
+    ConfigSchemaTrajectoryThicknessCase{2.0f, 2.0f},
+    ConfigSchemaTrajectoryThicknessCase{2.996f, 3.0f},
+    ConfigSchemaTrajectoryThicknessCase{3.0f, 3.0f},
+    ConfigSchemaTrajectoryThicknessCase{4.0f, 3.0f},
+    ConfigSchemaTrajectoryThicknessCase{std::numeric_limits<float>::quiet_NaN(), 0.5f},
+    ConfigSchemaTrajectoryThicknessCase{-std::numeric_limits<float>::infinity(), 0.5f},
+    ConfigSchemaTrajectoryThicknessCase{std::numeric_limits<float>::infinity(), 3.0f}));
 
 TEST_F(ConfigSchemaTest, EachConfigVariableIsSavedOnce) {
     EXPECT_CALL(mockConfigConversion, beginRoot());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <CS2/Panorama/StyleProperties.h>
+#include <Platform/Macros/PlatformSpecific.h>
 #include <Utils/TypedStaticStringPool.h>
 
 namespace cs2
@@ -11,6 +12,7 @@ constexpr auto kStylePropertySymbolNames = TypedStaticStringPool{}
     .add<CStylePropertyOpacity>("opacity")
     .add<CStylePropertyZIndex>("z-index")
     .add<CStylePropertyRotate2DCentered>("pre-transform-rotate2d")
+    WIN64_ONLY(.add<CStylePropertyScale2DCentered>("pre-transform-scale2d"))
     .add<CStylePropertyHeight>("height")
     .add<CStylePropertyImageShadow>("img-shadow")
     .add<CStylePropertyPosition>("position")

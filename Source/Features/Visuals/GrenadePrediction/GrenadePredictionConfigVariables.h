@@ -11,6 +11,10 @@ namespace grenade_prediction_vars
     constexpr std::uint32_t kCacheDurationSliderScale = 100;
     constexpr auto kCacheDurationSliderIncrement = 1.0f / kCacheDurationSliderScale;
     constexpr auto kCacheDurationSliderDecimalPlaces = 2U;
+    constexpr std::uint32_t kTrajectoryThicknessSliderScale = 100;
+    constexpr auto kTrajectoryThicknessSliderIncrement = 0.01f;
+    constexpr auto kTrajectoryThicknessSliderDecimalPlaces = 2U;
+    constexpr RangeConstrainedVariableParams<float> kTrajectoryThickness{.min = 0.5f, .max = 3.0f, .def = 2.0f};
 
     [[nodiscard]] constexpr LastTrajectoryVisibilityMode normalizeLastTrajectoryVisibilityMode(std::uint8_t value) noexcept
     {
@@ -34,7 +38,24 @@ namespace grenade_prediction_vars
         return snappedValue;
     }
 
+    [[nodiscard]] constexpr float normalizeTrajectoryThickness(float value) noexcept
+    {
+        if (!(value >= kTrajectoryThickness.min))
+            return kTrajectoryThickness.min;
+        if (value >= kTrajectoryThickness.max)
+            return kTrajectoryThickness.max;
+
+        const auto snappedUnits = static_cast<std::uint32_t>(static_cast<double>(value) * static_cast<double>(kTrajectoryThicknessSliderScale) + 0.5);
+        const auto snappedValue = static_cast<float>(static_cast<double>(snappedUnits) / static_cast<double>(kTrajectoryThicknessSliderScale));
+        if (snappedValue <= kTrajectoryThickness.min)
+            return kTrajectoryThickness.min;
+        if (snappedValue >= kTrajectoryThickness.max)
+            return kTrajectoryThickness.max;
+        return snappedValue;
+    }
+
     CONFIG_VARIABLE(Enabled, bool, false);
+    CONFIG_VARIABLE_RANGE(TrajectoryThickness, kTrajectoryThickness);
     constexpr HueVariableParams kTrajectoryHue{color::HueInteger{0}, color::HueInteger{359}, color::HueInteger{0}};
     constexpr HueVariableParams kBounceHue{color::HueInteger{0}, color::HueInteger{359}, color::HueInteger{120}};
     CONFIG_VARIABLE_HUE(TrajectoryHue, kTrajectoryHue);

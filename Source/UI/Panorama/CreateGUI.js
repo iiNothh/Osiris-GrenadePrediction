@@ -821,6 +821,20 @@ u8R"(
   createHueSlider(grenadePredictionMaster, "Trajectory Color", 'grenade_prediction_trajectory_hue', 0, 359);
   separator(grenadePredictionMaster);
   createHueSlider(grenadePredictionMaster, "Bounce Color", 'grenade_prediction_bounce_hue', 0, 359);
+  separator(grenadePredictionMaster);
+  var trajectoryThicknessDecimalPlaces = 2;
+  var trajectoryThicknessTextEntryFilter = function (text, slider, decimalPlaces) {
+    if (!/^-?\d*(?:\.\d*)?$/.test(text))
+      return false;
+
+    var decimalPoint = text.indexOf('.');
+    if (decimalPoint !== -1 && text.length - decimalPoint - 1 > decimalPlaces)
+      return false;
+
+    var value = Number(text);
+    return !Number.isFinite(value) || value <= 0 || (value >= slider.min && value <= slider.max);
+  };
+  createFloatSlider(grenadePredictionMaster, 'Trajectory thickness (pixels)', 'grenade_prediction_trajectory_thickness', 0.50, 3.00, 0.01, trajectoryThicknessDecimalPlaces, trajectoryThicknessTextEntryFilter);
 
   var grenadePredictionCache = createSection(grenadePredictionTab, 'Cache');
   createDropDown(grenadePredictionCache, 'Last Trajectory Visibility', 'visuals', 'grenade_prediction_last_trajectory_visibility', ['Explode', 'Always', 'Off', 'Custom']);
