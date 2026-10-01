@@ -1636,6 +1636,9 @@
     <ClInclude Include="GameClient\MemAllocState.h">
       <Filter>GameClient</Filter>
     </ClInclude>
+    <ClInclude Include="GameClient\ConfigMaxCoordState.h">
+      <Filter>GameClient</Filter>
+    </ClInclude>
     <ClInclude Include="GameClient\FileNameSymbolTableState.h">
       <Filter>GameClient</Filter>
     </ClInclude>
@@ -2021,6 +2024,9 @@
       <Filter>GameClient\Entities</Filter>
     </ClInclude>
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunchState.h">
+      <Filter>GameClient</Filter>
+    </ClInclude>
+    <ClInclude Include="GameClient\GrenadePrediction\GrenadeMovementOrigin.h">
       <Filter>GameClient</Filter>
     </ClInclude>
     <ClInclude Include="MemoryPatterns\PatternTypes\CollisionPropertyPatternTypes.h">

@@ -19,6 +19,7 @@
 #include <GameClient/Panorama/PanelFactory.h>
 #include <GameClient/GlobalVars.h>
 #include <GameClient/Panorama/PanoramaTransformFactory.h>
+#include <Utils/Optional.h>
 
 struct BombStatusPanelState;
 struct FeaturesStates;
@@ -217,6 +218,11 @@ struct HookContext {
     [[nodiscard]] auto& memAllocState() noexcept
     {
         return fullGlobalContext.memAllocState;
+    }
+
+    [[nodiscard]] Optional<float> configMaxCoord() noexcept
+    {
+        return fullGlobalContext.configMaxCoordState.current();
     }
 
     [[nodiscard]] auto& glowSceneObjectState() noexcept

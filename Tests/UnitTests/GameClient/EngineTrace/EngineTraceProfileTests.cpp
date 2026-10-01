@@ -473,6 +473,30 @@ TEST(EngineTraceGrenadeTest, UsesOneBindingSnapshotForTheWholeTraceCall)
     EXPECT_EQ(recorder.traceShapeCalls, 1);
 }
 
+TEST(EngineTraceGrenadeTest, ReusesResolvedBindingsAndReloadsThePhysicsWorldBeforeEveryTrace)
+{
+    GrenadeEngineTraceContext context;
+    GrenadeTraceRecorder recorder{
+        .physicsWorldPointerSlotStorage = &context.physicsWorldPointerSlot
+    };
+    ActiveRecorderGuard activeRecorderGuard{recorder};
+    GrenadeEngineTrace trace{context};
+    const auto bindings = trace.resolveGrenadeHullTraceBindings();
+
+    context.physicsWorldPointerSlot = nullptr;
+    EXPECT_FALSE(trace.traceGrenadeHull(bindings, grenadeRequest({}, {})).hasValue());
+    EXPECT_EQ(recorder.filterConstructionCalls, 0);
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
+
+    context.physicsWorldPointerSlot = &context.physicsWorld;
+    recorder.clearManagerOnFilterConstruction = true;
+    EXPECT_FALSE(trace.traceGrenadeHull(bindings, grenadeRequest({}, {})).hasValue());
+    EXPECT_EQ(context.patternSearchResultsCalls, 1);
+    EXPECT_EQ(context.patternGetCalls, 13);
+    EXPECT_EQ(recorder.filterConstructionCalls, 1);
+    EXPECT_EQ(recorder.traceShapeCalls, 0);
+}
+
 TEST(EngineTraceGrenadeTest, FailsClosedWhenManagerBecomesNullBeforeTraceInvocation)
 {
     GrenadeEngineTraceContext context;

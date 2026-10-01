@@ -13,12 +13,9 @@
 #include <Utils/ByteStorage.h>
 
 namespace engine_trace::grenade {
-    [[nodiscard]] inline bool applyFilterOverlay(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout,
+    [[nodiscard]] inline bool applyFilterOverlayWithValidatedLayout(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout,
         const TraceFilterParameters& parameters = {}) noexcept
     {
-        if (!hasValidFilterOverlayLayout(layout))
-            return false;
-
         if (parameters.interactsExclude.hasValue() != parameters.interactsAs.hasValue())
             return false;
 
@@ -27,6 +24,12 @@ namespace engine_trace::grenade {
         filter.storage[layout.flagsOffset] |= std::byte{0x02};
         filter.storage[layout.candidateCollectionModeOffset] = std::byte{0x01};
         return true;
+    }
+
+    [[nodiscard]] inline bool applyFilterOverlay(cs2::CTraceFilter& filter, const FilterOverlayLayout& layout,
+        const TraceFilterParameters& parameters = {}) noexcept
+    {
+        return hasValidFilterOverlayLayout(layout) && applyFilterOverlayWithValidatedLayout(filter, layout, parameters);
     }
 
     struct TraceBindings {
@@ -64,10 +67,10 @@ namespace engine_trace::grenade {
         };
     }
 
-    [[nodiscard]] inline bool hasValidBindings(const TraceBindings& bindings) noexcept
+    [[nodiscard]] inline bool hasValidImmutableBindings(const TraceBindings& bindings) noexcept
     {
         if (bindings.traceShape == nullptr || bindings.buildQueryShape == nullptr
-            || bindings.physicsWorldPointerSlotStorage == nullptr || *bindings.physicsWorldPointerSlotStorage == nullptr
+            || bindings.physicsWorldPointerSlotStorage == nullptr
             || bindings.constructFilter == nullptr || bindings.addSecondExcludedEntity == nullptr
             || !hasValidTraceOutputLayout(bindings.outputLayout) || !bindings.outputLayout.rawEntityHandleOffset.hasValue()
             || !isValidCGameTraceRawEntityHandleOffset(bindings.outputLayout.rawEntityHandleOffset.value(),
@@ -75,6 +78,11 @@ namespace engine_trace::grenade {
             || !hasValidFilterOverlayLayout(bindings.filterOverlayLayout))
             return false;
         return true;
+    }
+
+    [[nodiscard]] inline bool hasValidBindings(const TraceBindings& bindings) noexcept
+    {
+        return hasValidImmutableBindings(bindings) && *bindings.physicsWorldPointerSlotStorage != nullptr;
     }
 
     struct LaunchEndpointTraceBindings {
@@ -146,14 +154,9 @@ namespace engine_trace::grenade {
         return hasValidBindings(bindings);
     }
 
-    template <typename HookContext>
-    [[nodiscard]] Optional<TraceResult> traceHull(HookContext& hookContext, const HullTraceRequest& request) noexcept
+    [[nodiscard]] inline Optional<TraceResult> traceHull(const TraceBindings& bindings, const HullTraceRequest& request) noexcept
     {
-        if (!request.isValid())
-            return {};
-
-        const auto bindings = resolveBindings(hookContext);
-        if (!hasValidBindings(bindings))
+        if (!request.isValid() || bindings.physicsWorldPointerSlotStorage == nullptr || *bindings.physicsWorldPointerSlotStorage == nullptr)
             return {};
 
         const auto queryShape = makeQueryShape(bindings.buildQueryShape, request);
@@ -163,7 +166,7 @@ namespace engine_trace::grenade {
                 != &filter)
             return {};
 
-        if (!applyFilterOverlay(filter, bindings.filterOverlayLayout, request.filter))
+        if (!applyFilterOverlayWithValidatedLayout(filter, bindings.filterOverlayLayout, request.filter))
             return {};
         if (request.excludedEntities.second != nullptr)
             bindings.addSecondExcludedEntity(&filter, request.excludedEntities.first, request.excludedEntities.second);
@@ -172,6 +175,18 @@ namespace engine_trace::grenade {
         if (physicsWorldPointerSlot == nullptr)
             return {};
         bindings.traceShape(physicsWorldPointerSlot, &queryShape, &request.start, &request.end, &filter, &output);
-        return decodeTraceOutput(output, bindings.outputLayout);
+        return decodeValidatedTraceOutput(output, bindings.outputLayout);
+    }
+
+    template <typename HookContext>
+    [[nodiscard]] Optional<TraceResult> traceHull(HookContext& hookContext, const HullTraceRequest& request) noexcept
+    {
+        if (!request.isValid())
+            return {};
+
+        const auto bindings = resolveBindings(hookContext);
+        if (!hasValidBindings(bindings))
+            return {};
+        return traceHull(bindings, request);
     }
 }

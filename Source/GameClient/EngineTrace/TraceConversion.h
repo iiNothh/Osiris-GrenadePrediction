@@ -40,4 +40,19 @@ namespace engine_trace {
             result.rawEntityHandle = output.readValue<std::int32_t>(layout.rawEntityHandleOffset.value());
         return result;
     }
+
+    [[nodiscard]] inline Optional<TraceResult> decodeValidatedTraceOutput(const cs2::CGameTrace &output, const TraceOutputLayout &layout) noexcept
+    {
+        TraceResult result{
+            .fraction = output.readValue<float>(layout.fractionOffset),
+            .endPos = output.readValue<cs2::Vector>(layout.endPositionOffset),
+            .normal = output.readValue<cs2::Vector>(layout.normalOffset)
+        };
+        if (!result.isValid())
+            return {};
+
+        if (result.fraction < 1.0f)
+            result.rawEntityHandle = output.readValue<std::int32_t>(layout.rawEntityHandleOffset.value());
+        return result;
+    }
 }

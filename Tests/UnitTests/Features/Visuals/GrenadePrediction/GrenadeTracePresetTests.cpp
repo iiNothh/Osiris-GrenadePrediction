@@ -28,11 +28,20 @@ struct RecordingTrace {
 
     [[nodiscard]] bool isGrenadeHullTraceAvailable() const noexcept { return true; }
 
+    struct GrenadeHullTraceBindings {};
+
+    [[nodiscard]] GrenadeHullTraceBindings resolveGrenadeHullTraceBindings() const noexcept { return {}; }
+
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const engine_trace::HullTraceRequest& request) noexcept
     {
         grenadeRequest = request;
         grenadeCalled = true;
         return TraceResult{};
+    }
+
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const GrenadeHullTraceBindings&, const engine_trace::HullTraceRequest& request) noexcept
+    {
+        return traceGrenadeHull(request);
     }
 };
 
@@ -101,9 +110,10 @@ TEST(GrenadeTracePresetTest, SelectsTheGenericAndGrenadeFacadeOperations)
     std::byte secondExcluded{};
     constexpr cs2::Vector start{1.0f, 2.0f, 3.0f};
     constexpr cs2::Vector end{4.0f, 5.0f, 6.0f};
+    const auto bindings = trace.resolveGrenadeHullTraceBindings();
 
     ASSERT_TRUE(grenade_trace_preset::traceSpawnHull(trace, start, end, &firstExcluded).hasValue());
-    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, start, end, {&firstExcluded, &secondExcluded}).hasValue());
+    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, bindings, start, end, {&firstExcluded, &secondExcluded}).hasValue());
 
     EXPECT_TRUE(trace.genericCalled);
     EXPECT_TRUE(trace.grenadeCalled);
@@ -115,8 +125,9 @@ TEST(GrenadeTracePresetTest, PreservesSecondExclusionSlotForPaneContinuation)
 {
     RecordingTrace trace;
     std::byte pane{};
+    const auto bindings = trace.resolveGrenadeHullTraceBindings();
 
-    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, {}, {}, {nullptr, &pane}).hasValue());
+    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, bindings, {}, {}, {nullptr, &pane}).hasValue());
 
     EXPECT_TRUE(trace.grenadeCalled);
     expectInFlightGrenadeRequest(trace.grenadeRequest, {}, {}, nullptr, &pane);
@@ -132,8 +143,9 @@ TEST(GrenadeTracePresetTest, ForwardsCustomFilterForInFlightTrace)
         .collisionGroup = cs2::CollisionGroup::Default,
         .queryFlags = cs2::PhysicsQueryFlag::RespectIgnoredPairs
     };
+    const auto bindings = trace.resolveGrenadeHullTraceBindings();
 
-    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, {}, {}, {&firstExcluded, &secondExcluded}, filter).hasValue());
+    ASSERT_TRUE(grenade_trace_preset::traceInFlightHull(trace, bindings, {}, {}, {&firstExcluded, &secondExcluded}, filter).hasValue());
 
     EXPECT_EQ(trace.grenadeRequest.excludedEntities.first, &firstExcluded);
     EXPECT_EQ(trace.grenadeRequest.excludedEntities.second, &secondExcluded);

@@ -2,6 +2,7 @@
 
 #include <Config/ConfigState.h>
 #include <CS2/Classes/CLoopModeGame.h>
+#include <GameClient/ConfigMaxCoordState.h>
 #include <GameClient/ConVars/ConVarsBase.h>
 #include <GameClient/FileNameSymbolTableState.h>
 #include <GameClient/Hud/HudState.h>
@@ -47,6 +48,7 @@ struct FullGlobalContext {
         : patternSearchResults{memoryPatterns}
         , fileNameSymbolTableState{tier0Dll}
         , memAllocState{tier0Dll}
+        , configMaxCoordState{tier0Dll}
         , stylePropertySymbolsAndVMTs{StylePropertySymbolMap{patternSearchResults.get<PointerToStylePropertySymbols>()}, VmtFinder{panoramaDLL.getVmtFinderParams()}}
         , hooks{
             peepEventsHook,
@@ -62,6 +64,7 @@ struct FullGlobalContext {
     GlowSceneObjectState glowSceneObjectState;
     HudState hudState;
     MemAllocState memAllocState;
+    ConfigMaxCoordState configMaxCoordState;
     StylePropertiesSymbolsAndVMTs stylePropertySymbolsAndVMTs;
     std::optional<ConVarsBase> conVars;
     std::optional<PanoramaSymbols> panoramaSymbols;

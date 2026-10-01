@@ -9,17 +9,23 @@
 #include <GameClient/EngineTrace/HullTraceRequest.h>
 #include <GameClient/EngineTrace/TraceResult.h>
 #include <Features/Visuals/GrenadePrediction/GrenadeSimulator.h>
+#include <Utils/Optional.h>
 
 struct ScriptedGrenadeTrace {
     static constexpr int kCapacity = 64;
     Optional<TraceResult> results[kCapacity]{};
+    bool resultUsesRequestEnd[kCapacity]{};
+    cs2::Vector starts[kCapacity]{};
+    cs2::Vector ends[kCapacity]{};
     int resultCount{};
     int calls{};
     int genericCalls{};
+    int inFlightBindingResolutionCalls{};
     int inFlightCalls{};
     int pointHullCalls{};
     bool inFlightTraceAvailable{true};
     Optional<TraceResult> fallback{};
+    bool fallbackUsesRequestEnd{};
     void* lastExcludedFirst{};
     void* lastExcludedSecond{};
     void* lastSkipEntity{};
@@ -31,7 +37,18 @@ struct ScriptedGrenadeTrace {
         if (resultCount < kCapacity)
             results[resultCount++] = result;
     }
-    void clearAfterScript() noexcept { fallback = TraceResult{1.0f, {}, {}}; }
+    void pushClear() noexcept
+    {
+        if (resultCount < kCapacity) {
+            resultUsesRequestEnd[resultCount] = true;
+            push(TraceResult{1.0f, {}, {}});
+        }
+    }
+    void clearAfterScript() noexcept
+    {
+        fallback = TraceResult{1.0f, {}, {}};
+        fallbackUsesRequestEnd = true;
+    }
     [[nodiscard]] Optional<TraceResult> traceHull(const engine_trace::HullTraceRequest& request) noexcept
     {
         lastStart = request.start;
@@ -41,6 +58,14 @@ struct ScriptedGrenadeTrace {
         return nextResult();
     }
     [[nodiscard]] bool isGrenadeHullTraceAvailable() const noexcept { return inFlightTraceAvailable; }
+    struct GrenadeHullTraceBindings {
+        bool available{};
+    };
+    [[nodiscard]] GrenadeHullTraceBindings resolveGrenadeHullTraceBindings() noexcept
+    {
+        ++inFlightBindingResolutionCalls;
+        return {inFlightTraceAvailable};
+    }
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const engine_trace::HullTraceRequest& request) noexcept
     {
         lastStart = request.start;
@@ -52,11 +77,29 @@ struct ScriptedGrenadeTrace {
             ++pointHullCalls;
         return inFlightTraceAvailable ? nextResult() : Optional<TraceResult>{};
     }
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const GrenadeHullTraceBindings& bindings, const engine_trace::HullTraceRequest& request) noexcept
+    {
+        lastStart = request.start;
+        lastEnd = request.end;
+        lastExcludedFirst = request.excludedEntities.first;
+        lastExcludedSecond = request.excludedEntities.second;
+        ++inFlightCalls;
+        if (request.mins == SmokeInfernoPlacement::kPointHullMins && request.maxs == SmokeInfernoPlacement::kPointHullMaxs)
+            ++pointHullCalls;
+        return bindings.available ? nextResult() : Optional<TraceResult>{};
+    }
 private:
     [[nodiscard]] Optional<TraceResult> nextResult() noexcept
     {
         const auto index = calls++;
-        return index < resultCount ? results[index] : fallback;
+        if (index < kCapacity) {
+            starts[index] = lastStart;
+            ends[index] = lastEnd;
+        }
+        auto result = index < resultCount ? results[index] : fallback;
+        if ((index < resultCount ? resultUsesRequestEnd[index] : fallbackUsesRequestEnd) && result.hasValue())
+            result = TraceResult{1.0f, lastEnd, {}};
+        return result;
     }
 };
 
@@ -102,6 +145,9 @@ struct GrenadeSimulatorTestHookContext {
     ScriptedGrenadeTrace trace;
     ScriptedGrenadeEntitySystem entitySystem;
     ScriptedEntityClassifier classifier{&entitySystem.dynamicPropClass};
+    Optional<float> maxCoord{16384.0f};
+    int maxCoordReads{};
+    [[nodiscard]] Optional<float> configMaxCoord() noexcept { ++maxCoordReads; return maxCoord; }
     [[nodiscard]] ScriptedEntityClassifier& entityClassifier() noexcept { return classifier; }
     template <template <typename> typename T>
     [[nodiscard]] decltype(auto) make() noexcept
@@ -119,9 +165,9 @@ template <typename HookContext>
 struct GrenadeSimulatorTestAccess {
     using Simulator = GrenadeSimulator<HookContext>;
     [[nodiscard]] static typename Simulator::StepResult step(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
-        void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
+        void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity, Trajectory* trajectory = nullptr) noexcept
     {
-        typename Simulator::SimulationScratch scratch{nullptr, simulator.configuredPlayerCollisionSnapshot};
+        typename Simulator::SimulationScratch scratch{trajectory, simulator.configuredPlayerCollisionSnapshot};
         return simulator.step(scratch, position, velocity, kind, skipEntity, gravity);
     }
     [[nodiscard]] static bool shouldDetonate(GrenadeKind kind, int tick) noexcept { return Simulator::shouldDetonate(kind, tick); }
@@ -130,9 +176,9 @@ struct GrenadeSimulatorTestAccess {
         return simulator.applyContactResponse(trace, velocity, kind);
     }
     [[nodiscard]] static typename Simulator::StepResult movementSubstep(Simulator& simulator, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
-        void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity) noexcept
+        void* skipEntity = nullptr, float gravity = grenade_prediction_params::kDefaultServerGravity, Trajectory* trajectory = nullptr) noexcept
     {
-        typename Simulator::SimulationScratch scratch{nullptr, nullptr};
+        typename Simulator::SimulationScratch scratch{trajectory, nullptr};
         typename Simulator::StepResult result;
         const auto collision = simulator.movementSubstep(scratch, position, velocity, kind, skipEntity, result, gravity);
         result.traceSucceeded = collision.traceSucceeded;

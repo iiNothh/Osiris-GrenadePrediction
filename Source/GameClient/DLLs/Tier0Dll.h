@@ -29,4 +29,13 @@ struct Tier0Dll : DynamicLibrary {
     {
         return getFunctionAddress("g_pMemAlloc").as<cs2::IMemAlloc**>();
     }
+
+    [[nodiscard]] float* configMaxCoordPointer() const noexcept
+    {
+#if IS_WIN64()
+        return getFunctionAddress("g_flConfigMaxCoord").as<float*>();
+#elif IS_LINUX()
+        return nullptr;
+#endif
+    }
 };

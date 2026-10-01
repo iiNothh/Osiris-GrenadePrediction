@@ -32,9 +32,9 @@ namespace grenade_trace_preset {
     }
 
     template <typename EngineTrace>
-    [[nodiscard]] Optional<TraceResult> traceInFlightHull(EngineTrace&& trace, cs2::Vector start, cs2::Vector end,
+    [[nodiscard]] Optional<TraceResult> traceInFlightHull(EngineTrace&& trace, const auto& bindings, cs2::Vector start, cs2::Vector end,
         engine_trace::TraceFilterExcludedEntities excludedEntities, engine_trace::TraceFilterParameters filter = engine_trace::grenade::kInFlightFilter) noexcept
     {
-        return trace.traceGrenadeHull(makeRequest(start, end, excludedEntities, filter));
+        return trace.traceGrenadeHull(bindings, makeRequest(start, end, excludedEntities, filter));
     }
 }

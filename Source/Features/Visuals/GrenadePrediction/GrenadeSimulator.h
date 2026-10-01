@@ -1,5 +1,7 @@
 #pragma once
 
+#include <utility>
+
 #include <CS2/Classes/Vector.h>
 #include <CS2/EngineTrace/CGameTrace.h>
 #include <GameClient/Entities/GrenadeKind.h>
@@ -14,6 +16,7 @@
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/EngineTrace/TraceResult.h>
 #include <GameClient/GrenadePrediction/GrenadeLaunchState.h>
+#include <GameClient/GrenadePrediction/GrenadeMovementOrigin.h>
 #include <Utils/Math.h>
 
 template <typename HookContext> struct GrenadeSimulatorTestAccess;
@@ -31,7 +34,10 @@ public:
         const float strength = normalizeThrowStrength(throwStrength);
         const float pitch = adjustedThrowPitch(viewAngles.x);
         const float nativeVelocity = baseVelocity * 0.9f;
-        const float clampedVelocity = nativeVelocity < 15.0f ? 15.0f : nativeVelocity > 750.0f ? 750.0f : nativeVelocity;
+        const float clampedVelocity =
+            nativeVelocity < 15.0f ? 15.0f
+            : nativeVelocity > 750.0f ? 750.0f
+            : nativeVelocity;
         return forwardFromAngles(pitch, viewAngles.y) * ((strength * 0.7f + 0.3f) * clampedVelocity);
     }
 
@@ -107,10 +113,12 @@ private:
     {
         return pitch - (90.0f - Math::abs(pitch)) * 10.0f / 90.0f;
     }
+
     [[nodiscard]] static float normalizeThrowStrength(float strength) noexcept
     {
         return strength > 0.4f && strength < 0.6f ? 0.5f : strength;
     }
+
     [[nodiscard]] static cs2::Vector forwardFromAngles(float pitch, float yaw) noexcept
     {
         float sinePitch, cosinePitch, sineYaw, cosineYaw;
@@ -118,6 +126,7 @@ private:
         Math::sincos(yaw * 3.14159265f / 180.0f, sineYaw, cosineYaw);
         return {cosinePitch * cosineYaw, cosinePitch * sineYaw, -sinePitch};
     }
+
     struct CollisionResult {
         bool traceSucceeded{true};
         bool impactDetonate{};
@@ -126,17 +135,24 @@ private:
     };
 
     struct SimulationScratch {
+        using InFlightTraceBindings = decltype(std::declval<HookContext&>().template make<EngineTrace>().resolveGrenadeHullTraceBindings());
+
         Trajectory* trajectoryOutput;
         const GrenadePlayerCollisionSnapshot* playerCollisionSnapshot;
+        InFlightTraceBindings inFlightTraceBindings{};
+        bool inFlightTraceBindingsResolved{};
         bool playerResponseUsed{};
         cs2::CEntityHandle passedPaneHandle{};
         bool hasPassedPane{};
     };
 
-    [[nodiscard]] static bool isValidSimulationInput(const GrenadeLaunchState& launch, GrenadeKind kind, float serverGravity) noexcept
+    [[nodiscard]] static bool isValidSimulationInput(const GrenadeLaunchState& launch, GrenadeKind kind,
+        float serverGravity) noexcept
     {
-        return !(kind == GrenadeKind::None || !launch.origin.isFinite() || !launch.velocity.isFinite() || !Math::isFinite(serverGravity) || serverGravity <= 0.0f);
+        return !(kind == GrenadeKind::None || !launch.origin.isFinite() || !launch.velocity.isFinite()
+            || !Math::isFinite(serverGravity) || serverGravity <= 0.0f);
     }
+
     static void markTrajectoryComplete(Trajectory& trajectory, cs2::Vector position, GrenadeKind kind, bool landedOnSurface) noexcept
     {
         trajectory.endPos = position;
@@ -144,46 +160,65 @@ private:
         if (kind == GrenadeKind::Molotov || kind == GrenadeKind::Incendiary)
             trajectory.validLanding = landedOnSurface;
     }
+
     static void appendTerminalPointIfNeeded(Trajectory& trajectory) noexcept
     {
-        if (trajectory.valid && trajectory.pointsCount && trajectory.points[trajectory.pointsCount - 1].squareDistTo(trajectory.endPos) > 1.0f
+        if (trajectory.valid && trajectory.pointsCount
+            && trajectory.points[trajectory.pointsCount - 1].squareDistTo(trajectory.endPos) > 1.0f
             && trajectory.pointsCount < Trajectory::kPointsCapacity)
             static_cast<void>(trajectory.appendPoint(trajectory.endPos));
     }
+
     [[nodiscard]] static bool validTrace(const Optional<TraceResult>& trace) noexcept
     {
         return trace.hasValue() && Math::isFinite(trace.value().fraction) && trace.value().fraction >= 0.0f && trace.value().fraction <= 1.0f
             && trace.value().endPos.isFinite() && trace.value().normal.isFinite();
     }
+
     void invalidate(Trajectory& trajectory, cs2::Vector start) noexcept
     {
         trajectory.clear();
         trajectory.endPos = start;
     }
+
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
         return grenade_trace_preset::traceSpawnHull(hookContext.template make<EngineTrace>(), start, end, skipEntity);
     }
-    [[nodiscard]] Optional<TraceResult> traceInFlight(const SimulationScratch& scratch, cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
+
+    [[nodiscard]] Optional<TraceResult> traceInFlight(SimulationScratch& scratch, cs2::Vector start, cs2::Vector end, void* skipEntity) noexcept
     {
-        if (auto* const passedPane = resolvePassedPane(scratch)) {
-            return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), start, end,
+        auto* const passedPane = resolvePassedPane(scratch);
+        if (passedPane) {
+            return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), inFlightTraceBindings(scratch), start, end,
                 {skipEntity, passedPane}));
         }
-        return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), start, end,
+        return validateInFlightTrace(scratch, grenade_trace_preset::traceInFlightHull(hookContext.template make<EngineTrace>(), inFlightTraceBindings(scratch), start, end,
             {skipEntity}));
     }
+
+    [[nodiscard]] auto& inFlightTraceBindings(SimulationScratch& scratch) noexcept
+    {
+        if (!scratch.inFlightTraceBindingsResolved) {
+            scratch.inFlightTraceBindings = hookContext.template make<EngineTrace>().resolveGrenadeHullTraceBindings();
+            scratch.inFlightTraceBindingsResolved = true;
+        }
+        return scratch.inFlightTraceBindings;
+    }
+
     [[nodiscard]] static Optional<TraceResult> validateInFlightTrace(const SimulationScratch& scratch, Optional<TraceResult> trace) noexcept
     {
         if (trace.hasValue() && isRejectedInFlightHit(scratch, trace.value()))
             return {};
         return trace;
     }
+
     [[nodiscard]] static bool isRejectedInFlightHit(const SimulationScratch& scratch, const TraceResult& trace) noexcept
     {
         return trace.fraction < 1.0f
             && (!trace.rawEntityHandle.hasValue() || (scratch.hasPassedPane && trace.rawEntityHandle.value() == static_cast<std::int32_t>(scratch.passedPaneHandle.value)));
     }
+
     [[nodiscard]] StepResult step(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity, float serverGravity) noexcept
     {
         StepResult result;
@@ -209,6 +244,7 @@ private:
         }
         return result;
     }
+
     [[nodiscard]] CollisionResult movementSubstep(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind, void* skipEntity,
         StepResult& result, float serverGravity) noexcept
     {
@@ -221,32 +257,34 @@ private:
         const auto trace = traceInFlight(scratch, position, position + movement, skipEntity);
         if (!validTrace(trace))
             return {.traceSucceeded = false};
-        if (trace.value().fraction >= 1.0f) {
-            position = position + movement;
+        if (!commitMovementOrigin(position, trace.value()))
+            return {.traceSucceeded = false};
+        if (trace.value().fraction >= 1.0f)
             return {};
-        }
         cs2::CEntityHandle dynamicPropHandle{};
         if (!scratch.hasPassedPane && getDynamicPropHandle(trace.value(), dynamicPropHandle)) {
             scratch.passedPaneHandle = dynamicPropHandle;
             scratch.hasPassedPane = true;
-            position = trace.value().endPos;
             velocity = velocity * 0.4f;
             result.hit = true;
-            return continueAfterDynamicProp(scratch, position, velocity, movement, trace.value().fraction, kind, skipEntity, result);
+            return {};
         }
         return resolveOrdinaryContact(scratch, position, velocity, kind, skipEntity, result, trace.value());
     }
+
     [[nodiscard]] CollisionResult resolveOrdinaryContact(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity, GrenadeKind kind,
         void* skipEntity, StepResult& result, const TraceResult& trace) noexcept
     {
         if (isUnresolvedNonWorldEntity(trace))
             return {.traceSucceeded = false};
-        position = trace.endPos;
         result.hit = true;
         ++result.contactsCount;
-        appendWorldContactPoint(scratch, position);
-        if (correctSmokeInfernoContact(scratch, position, kind))
+        appendWorldContactPoint(scratch, trace.endPos);
+        auto correctedPosition = trace.endPos;
+        if (correctSmokeInfernoContact(scratch, correctedPosition, kind)) {
+            position = correctedPosition;
             return {.smokePlacementComplete = true};
+        }
         const auto response = applyContactResponse(trace, velocity, kind);
         if (response.stopped || response.impactDetonate)
             return response;
@@ -254,30 +292,25 @@ private:
         const auto continuation = traceInFlight(scratch, position, position + velocity * remainingTime, skipEntity);
         if (!validTrace(continuation))
             return {.traceSucceeded = false};
+        if (!commitMovementOrigin(position, continuation.value()))
+            return {.traceSucceeded = false};
         if (isUnresolvedNonWorldEntity(continuation.value()))
             return {.traceSucceeded = false};
-        position = continuation.value().fraction >= 1.0f ? position + velocity * remainingTime : continuation.value().endPos;
         return {};
     }
-    [[nodiscard]] CollisionResult continueAfterDynamicProp(SimulationScratch& scratch, cs2::Vector& position, cs2::Vector& velocity,
-        cs2::Vector movement, float impactFraction, GrenadeKind kind, void* skipEntity, StepResult& result) noexcept
+
+    [[nodiscard]] bool commitMovementOrigin(cs2::Vector& position, const TraceResult& trace) noexcept
     {
-        const auto continuationMovement = movement * ((1.0f - impactFraction) * 0.4f);
-        const auto continuation = traceInFlight(scratch, position, position + continuationMovement, skipEntity);
-        if (!validTrace(continuation) || isUnresolvedNonWorldEntity(continuation.value()))
-            return {.traceSucceeded = false};
-        if (continuation.value().fraction >= 1.0f) {
-            position = position + continuationMovement;
-            return {};
+        if (trace.fraction == 0.0f)
+            return true;
+        if constexpr (requires { hookContext.configMaxCoord(); }) {
+            const auto maxCoord = hookContext.configMaxCoord();
+            return maxCoord.hasValue() && GrenadeMovementOrigin::commit(position, trace.endPos, maxCoord.value());
+        } else {
+            return false;
         }
-        position = continuation.value().endPos;
-        result.hit = true;
-        ++result.contactsCount;
-        appendWorldContactPoint(scratch, position);
-        if (correctSmokeInfernoContact(scratch, position, kind))
-            return {.smokePlacementComplete = true};
-        return applyContactResponse(continuation.value(), velocity, kind);
     }
+
     [[nodiscard]] CollisionResult applyContactResponse(const TraceResult& trace, cs2::Vector& velocity, GrenadeKind kind) noexcept
     {
         auto bounce = clipVelocity(velocity, trace.normal, 2.0f) * grenade_prediction_params::kElasticity;
@@ -302,28 +335,39 @@ private:
         velocity = bounce;
         return {};
     }
+
     [[nodiscard]] static cs2::Vector clipVelocity(cs2::Vector velocity, cs2::Vector normal, float overbounce) noexcept
     {
-        const float projected = -velocity.dot(normal) * overbounce;
+        const float zProduct = velocity.z * normal.z;
+        const float yProduct = velocity.y * normal.y;
+        const float xProduct = velocity.x * normal.x;
+        const float zySum = zProduct + yProduct;
+        const float dot = zySum + xProduct;
+        const float projected = -dot * overbounce;
         const float backoff = (projected > 0.0f ? projected : 0.0f) + grenade_prediction_params::kClipPushOff;
         return velocity + normal * backoff;
     }
+
     void appendWorldContactPoint(const SimulationScratch& scratch, cs2::Vector point) noexcept
     {
         if (scratch.trajectoryOutput && scratch.trajectoryOutput->appendPoint(point))
             static_cast<void>(scratch.trajectoryOutput->appendWorldContactMarker());
     }
+
     void appendPlayerResponsePoint(const SimulationScratch& scratch, cs2::Vector point) noexcept
     {
         if (scratch.trajectoryOutput && scratch.trajectoryOutput->appendPoint(point))
             static_cast<void>(scratch.trajectoryOutput->appendPlayerResponseMarker());
     }
-    [[nodiscard]] bool correctSmokeInfernoContact(const SimulationScratch& scratch, cs2::Vector& position, GrenadeKind kind) noexcept
+
+    [[nodiscard]] bool correctSmokeInfernoContact(SimulationScratch& scratch, cs2::Vector& position, GrenadeKind kind) noexcept
     {
         if (!smokeInfernoScan)
             return false;
         const auto endpoint = SmokeInfernoPlacement::correctedEndpoint(kind, position, *smokeInfernoScan,
-            [this](const engine_trace::HullTraceRequest& request) noexcept { return hookContext.template make<EngineTrace>().traceGrenadeHull(request); });
+            [this, &scratch](const engine_trace::HullTraceRequest& request) noexcept {
+                return hookContext.template make<EngineTrace>().traceGrenadeHull(inFlightTraceBindings(scratch), request);
+            });
         if (!endpoint.hasValue())
             return false;
         position = endpoint.value();
@@ -331,6 +375,7 @@ private:
             static_cast<void>(scratch.trajectoryOutput->appendTerminalPoint(position));
         return true;
     }
+
     [[nodiscard]] bool getDynamicPropHandle(const TraceResult& traceResult, cs2::CEntityHandle& dynamicPropHandle) const noexcept
     {
         if constexpr (!requires(HookContext& context, cs2::CEntityHandle handle) {
@@ -351,6 +396,7 @@ private:
             return true;
         }
     }
+
     [[nodiscard]] bool isUnresolvedNonWorldEntity(const TraceResult& traceResult) const noexcept
     {
         if (traceResult.fraction >= 1.0f || !traceResult.rawEntityHandle.hasValue() || traceResult.rawEntityHandle.value() == cs2::engine_trace::kWorldEntityHandle)
@@ -364,6 +410,7 @@ private:
             return !entity || !entity->identity || entity->identity->entity != entity || entity->identity->handle != handle || !entity->identity->entityClass;
         }
     }
+
     [[nodiscard]] void* resolvePassedPane(const SimulationScratch& scratch) const noexcept
     {
         if (!scratch.hasPassedPane)
@@ -376,6 +423,7 @@ private:
             return entity && entity->identity && entity->identity->entity == entity && entity->identity->handle == scratch.passedPaneHandle ? entity : nullptr;
         }
     }
+
     [[nodiscard]] static bool shouldDetonate(GrenadeKind kind, int tick) noexcept
     {
         const float elapsed = static_cast<float>(tick + 1) * grenade_prediction_params::kSimDt;

@@ -291,6 +291,7 @@
     <ClInclude Include="Features\Visuals\ViewmodelMod\ViewmodelModConfigVariables.h" />
     <ClInclude Include="Features\Visuals\ViewmodelMod\ViewmodelModParams.h" />
     <ClInclude Include="Features\Visuals\VisualFeaturesStates.h" />
+    <ClInclude Include="GameClient\ConfigMaxCoordState.h" />
     <ClInclude Include="GameClient\ConVars\ConVarsBase.h" />
     <ClInclude Include="GameClient\ConVars\ConVarTypes.h" />
     <ClInclude Include="GameClient\ConVars\CvarSystem.h" />
@@ -341,6 +342,7 @@
     <ClInclude Include="GameClient\GameSceneNode.h" />
     <ClInclude Include="GameClient\GlobalVars.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunchState.h" />
+    <ClInclude Include="GameClient\GrenadePrediction\GrenadeMovementOrigin.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GatheredGrenadeLaunch.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GatheredGrenadeLaunchParams.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanel.h" />

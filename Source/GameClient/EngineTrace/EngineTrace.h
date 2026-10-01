@@ -46,9 +46,40 @@ public:
         return engine_trace::grenade::isTraceAvailable(hookContext);
     }
 
+    class GrenadeHullTraceBindings {
+    public:
+        GrenadeHullTraceBindings() = default;
+
+        [[nodiscard]] bool hasValidatedImmutableBindings() const noexcept { return hasValidImmutableBindings; }
+
+    private:
+        explicit GrenadeHullTraceBindings(engine_trace::grenade::TraceBindings bindings, bool hasValidImmutableBindings) noexcept
+            : bindings{bindings}, hasValidImmutableBindings{hasValidImmutableBindings}
+        {
+        }
+
+        engine_trace::grenade::TraceBindings bindings{};
+        bool hasValidImmutableBindings{};
+
+        friend class EngineTrace<HookContext>;
+    };
+
+    [[nodiscard]] GrenadeHullTraceBindings resolveGrenadeHullTraceBindings() const noexcept
+    {
+        auto bindings = engine_trace::grenade::resolveBindings(hookContext);
+        return GrenadeHullTraceBindings{bindings, engine_trace::grenade::hasValidImmutableBindings(bindings)};
+    }
+
     [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const engine_trace::HullTraceRequest& request) const noexcept
     {
         return engine_trace::grenade::traceHull(hookContext, request);
+    }
+
+    [[nodiscard]] Optional<TraceResult> traceGrenadeHull(const GrenadeHullTraceBindings& bindings, const engine_trace::HullTraceRequest& request) const noexcept
+    {
+        if (!bindings.hasValidatedImmutableBindings())
+            return {};
+        return engine_trace::grenade::traceHull(bindings.bindings, request);
     }
 
 private:

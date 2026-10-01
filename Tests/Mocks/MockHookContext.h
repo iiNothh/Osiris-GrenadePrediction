@@ -2,6 +2,7 @@
 
 #include <gmock/gmock.h>
 #include <Features/FeaturesStates.h>
+#include <Features/Visuals/GrenadePrediction/GrenadePredictionPerHookState.h>
 #include <Features/Hud/BombPlantAlert/BombPlantAlertPanelFactory.h>
 #include <Features/Hud/BombTimer/BombTimer.h>
 #include <Features/Hud/BombTimer/BombTimerPanelFactory.h>
@@ -9,6 +10,7 @@
 #include <GameClient/Panorama/PanelHandle.h>
 #include <GameClient/Crosshair.h>
 #include <GameClient/WorldToScreen/ViewToProjectionMatrix.h>
+#include <Utils/Optional.h>
 
 struct ConfigState;
 struct MockConfig;
@@ -53,6 +55,7 @@ struct MockHookContext {
     MOCK_METHOD(MockBombTimerPanel&, makeBombTimerPanel, ());
     MOCK_METHOD(MockPostRoundTimerPanel&, makePostRoundTimerPanel, ());
     MOCK_METHOD(Optional<float>, localPlayerBulletInaccuracy, ());
+    MOCK_METHOD(Optional<float>, configMaxCoord, ());
     MOCK_METHOD(MockPlantedC4&, plantedC4, ());
 
     template <template <typename> typename T, typename... Args>
