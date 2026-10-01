@@ -423,6 +423,9 @@
     <ClInclude Include="Utils\ManuallyDestructible.h">
       <Filter>Utils</Filter>
     </ClInclude>
+    <ClInclude Include="Utils\DecimalFloatParser.h">
+      <Filter>Utils</Filter>
+    </ClInclude>
     <ClInclude Include="Utils\MemorySection.h">
       <Filter>Utils</Filter>
     </ClInclude>

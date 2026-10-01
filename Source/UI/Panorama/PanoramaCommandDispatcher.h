@@ -28,6 +28,7 @@ struct PanoramaCommandDispatcher {
 private:
     [[nodiscard]] std::string_view parseNextCommand() noexcept
     {
+        parser.skipWhitespace();
         return parser.getLine(' ');
     }
 

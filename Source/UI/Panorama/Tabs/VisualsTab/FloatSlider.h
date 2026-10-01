@@ -34,7 +34,6 @@ public:
         panel().children()[1].clientPanel().template as<TextEntry>().setText(text);
     }
 
-private:
     [[nodiscard]] static bool formatFixed(float value, std::uint32_t decimalPrecision, char* output, std::uint32_t outputSize) noexcept
     {
         // Keep the conversion below inside the exactly representable signed int range.
@@ -78,6 +77,7 @@ private:
         return true;
     }
 
+private:
     [[nodiscard]] decltype(auto) panel() const noexcept
     {
         return hookContext.template make<PanoramaUiPanel>(panel_);

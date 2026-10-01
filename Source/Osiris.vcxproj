@@ -603,6 +603,7 @@
     <ClInclude Include="Utils\CString.h" />
     <ClInclude Include="Utils\DynamicArray.h" />
     <ClInclude Include="Utils\EnumFlags.h" />
+    <ClInclude Include="Utils\DecimalFloatParser.h" />
     <ClInclude Include="Utils\FieldFieldOffset.h" />
     <ClInclude Include="Utils\FieldOffset.h" />
     <ClInclude Include="Utils\FlagsBuilder.h" />
