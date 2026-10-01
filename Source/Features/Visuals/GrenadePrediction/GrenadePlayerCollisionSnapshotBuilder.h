@@ -68,6 +68,11 @@ private:
         }
 
         auto* const player = static_cast<cs2::C_BaseEntity*>(identity.entity);
+        if (player->identity != &identity) {
+            scratch.playerDataInvalid = true;
+            return;
+        }
+
         auto entity = hookContext.template make<BaseEntity>(player);
         const auto team = entity.optionalTeamNumber();
         const auto origin = entity.absOrigin();

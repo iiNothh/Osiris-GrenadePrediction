@@ -18,8 +18,7 @@
 #include <GameClient/Entities/PlayerPawn.h>
 #include <GameClient/EngineTrace/EngineTrace.h>
 #include <GameClient/GlobalVars.h>
-#include <GameClient/GrenadePrediction/GrenadeLaunch.h>
-#include <GameClient/GrenadePrediction/UnpinnedGrenadeLaunch.h>
+#include <GameClient/GrenadePrediction/GatheredGrenadeLaunch.h>
 #include <GameClient/Panorama/PanoramaUiEngine.h>
 #include <HookContext/HookContextMacros.h>
 #include <Platform/GrenadePredictionCapabilities.h>
@@ -202,15 +201,20 @@ private:
             state.invalidateTempTrajectory();
     }
 
-    [[nodiscard]] Optional<GrenadeLaunchState> prepareHeldGrenadeLaunch(auto&& playerPawn, cs2::C_BaseCSGrenade* weapon,
-        cs2::C_CSPlayerPawn* pawn, auto& simulator) noexcept
+    [[nodiscard]] Optional<GrenadeLaunchState> prepareHeldGrenadeLaunch(auto&& playerPawn, cs2::C_BaseCSGrenade* weapon, cs2::C_CSPlayerPawn* pawn, auto& simulator) noexcept
     {
         const auto& observation = state().throwObservation;
         const auto route = selectGrenadeLaunchRoute(observation.hasRetainedThrowStrength, observation.hasPinBaseline, observation.previousPinPulled);
         return prepareGrenadeLaunch(observation.isFinalized(), route,
-            [&]() noexcept { return hookContext.template make<GrenadeLaunch<HookContext>>().get(weapon, pawn); },
-            [&]() noexcept { return hookContext.template make<UnpinnedGrenadeLaunch<HookContext>>().get(weapon, pawn); },
-            [&]() noexcept { return computeHeldGrenadeLaunchFallback(playerPawn, simulator, observation.retainedThrowStrength, pawn); });
+            [&]() noexcept {
+                return hookContext.template make<GatheredGrenadeLaunch<HookContext>>().get(weapon, pawn, observation.retainedThrowStrength);
+            },
+            [&]() noexcept {
+                return hookContext.template make<GatheredGrenadeLaunch<HookContext>>().get(weapon, pawn, 1.0f);
+            },
+            [&]() noexcept {
+                return computeHeldGrenadeLaunchFallback(playerPawn, simulator, observation.retainedThrowStrength, pawn);
+            });
     }
 
     void simulateHeldTrajectoryIfNeeded(auto& simulator, const GrenadeLaunchState& launch, GrenadeKind kind, cs2::C_CSPlayerPawn* pawn,
@@ -233,7 +237,8 @@ private:
     {
         auto& state = this->state();
         if (!state.liveGrenadeAuthority.blocksHeldPrediction() && state.ownsTempTrajectory(weaponHandle, state.throwObservation.sequence))
-            drawTrajectory(state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState, true);
+            drawTrajectory(
+                state.tempTrajectory, state.liveContainerPanelHandle, state.livePresentationState, true);
         else
             hideLivePrediction();
         applyCachedTrajectoryPresentation(hasCurtime, curtime);
@@ -278,7 +283,8 @@ private:
     [[nodiscard]] static bool acceptedProjectilePresent(const GrenadePredictionState& state, bool hasCurtime, float curtime) noexcept
     {
         return state.liveGrenadeAuthority.hasAcceptedLiveProjectile() && !state.liveGrenadeAuthority.isFlashbangInEarlyHideWindow(hasCurtime ? Optional<float>{curtime} : Optional<float>{})
-            && state.liveGrenadeCache.contains(state.liveGrenadeAuthority.acceptedLiveProjectile());
+            && state.liveGrenadeCache.contains(
+                state.liveGrenadeAuthority.acceptedLiveProjectile());
     }
     HookContext& hookContext;
 };

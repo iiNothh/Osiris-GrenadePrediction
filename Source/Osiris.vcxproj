@@ -85,6 +85,7 @@
     <ClInclude Include="CS2\Constants\AspectRatio.h" />
     <ClInclude Include="CS2\Constants\BombsiteIndex.h" />
     <ClInclude Include="CS2\Constants\ColorConstants.h" />
+    <ClInclude Include="CS2\Constants\CollisionGroup.h" />
     <ClInclude Include="CS2\Constants\DllNames.h" />
     <ClInclude Include="CS2\Constants\EntityHandle.h" />
     <ClInclude Include="CS2\Constants\EntityClasses.h" />
@@ -209,7 +210,6 @@
     <ClInclude Include="Features\Visuals\GrenadePrediction\GrenadeTrajectoryPresentationState.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\HeldGrenadeSimulationInput.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeLaunchFallback.h" />
-    <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadePredictionUpdateScheduler.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Held\GrenadeThrowObservation.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeAuthority.h" />
     <ClInclude Include="Features\Visuals\GrenadePrediction\Live\LiveGrenadeCache.h" />
@@ -340,9 +340,9 @@
     <ClInclude Include="GameClient\FileSystem.h" />
     <ClInclude Include="GameClient\GameSceneNode.h" />
     <ClInclude Include="GameClient\GlobalVars.h" />
-    <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunch.h" />
     <ClInclude Include="GameClient\GrenadePrediction\GrenadeLaunchState.h" />
-    <ClInclude Include="GameClient\GrenadePrediction\UnpinnedGrenadeLaunch.h" />
+    <ClInclude Include="GameClient\GrenadePrediction\GatheredGrenadeLaunch.h" />
+    <ClInclude Include="GameClient\GrenadePrediction\GatheredGrenadeLaunchParams.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanel.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanelContext.h" />
     <ClInclude Include="GameClient\Hud\BombStatus\BombStatusPanelManager.h" />

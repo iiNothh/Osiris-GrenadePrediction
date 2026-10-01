@@ -78,11 +78,12 @@ struct GrenadePredictionBranchRecorder {
     int drawCalls{};
     int pinPulledCalls{};
     int throwStrengthCalls{};
-    int nativeLaunchCalls{};
-    int unpinnedLaunchCalls{};
+    float gatheredLaunchStrengths[4]{};
+    int gatheredLaunchCalls{};
     int fallbackLaunchCalls{};
     int simulateCalls{};
     bool pinPulled{};
+    float throwStrength{1.0f};
     GrenadeLaunchState launch{{1.0f, 2.0f, 3.0f}, {4.0f, 5.0f, 6.0f}};
 
     void resetPresentationCalls() noexcept
@@ -132,26 +133,18 @@ struct GrenadePredictionBranchGrenadeWeapon {
     [[nodiscard]] Optional<float> throwStrength() const noexcept
     {
         ++recorder.throwStrengthCalls;
-        return 1.0f;
+        return recorder.throwStrength;
     }
 };
 
-struct GrenadePredictionBranchGrenadeLaunch {
+struct GrenadePredictionBranchGatheredGrenadeLaunch {
     GrenadePredictionBranchRecorder& recorder;
 
-    [[nodiscard]] Optional<GrenadeLaunchState> get(cs2::C_BaseCSGrenade*, cs2::C_CSPlayerPawn*) const noexcept
+    [[nodiscard]] Optional<GrenadeLaunchState> get(cs2::C_BaseCSGrenade*, cs2::C_CSPlayerPawn*, float throwStrength) const noexcept
     {
-        ++recorder.nativeLaunchCalls;
-        return recorder.launch;
-    }
-};
-
-struct GrenadePredictionBranchUnpinnedGrenadeLaunch {
-    GrenadePredictionBranchRecorder& recorder;
-
-    [[nodiscard]] Optional<GrenadeLaunchState> get(cs2::C_BaseCSGrenade*, cs2::C_CSPlayerPawn*) const noexcept
-    {
-        ++recorder.unpinnedLaunchCalls;
+        if (recorder.gatheredLaunchCalls < 4)
+            recorder.gatheredLaunchStrengths[recorder.gatheredLaunchCalls] = throwStrength;
+        ++recorder.gatheredLaunchCalls;
         return recorder.launch;
     }
 };
@@ -276,12 +269,8 @@ struct GrenadePredictionBranchTestContext {
     template <typename T>
     [[nodiscard]] decltype(auto) make() noexcept
     {
-        if constexpr (std::is_same_v<T, GrenadeLaunch<GrenadePredictionBranchTestContext>>) {
-            return GrenadePredictionBranchGrenadeLaunch{recorder};
-        } else {
-            static_assert(std::is_same_v<T, UnpinnedGrenadeLaunch<GrenadePredictionBranchTestContext>>);
-            return GrenadePredictionBranchUnpinnedGrenadeLaunch{recorder};
-        }
+        static_assert(std::is_same_v<T, GatheredGrenadeLaunch<GrenadePredictionBranchTestContext>>);
+        return GrenadePredictionBranchGatheredGrenadeLaunch{recorder};
     }
 
     FeaturesStates featuresStatesStorage{};
@@ -422,7 +411,7 @@ TEST(GrenadePredictionTest, SuppressionAfterInvalidIdentityHidesHeldPredictionWi
         EXPECT_FALSE(state.tempTrajectory.valid);
         EXPECT_EQ(context.recorder.pinPulledCalls, 0);
         EXPECT_EQ(context.recorder.throwStrengthCalls, 0);
-        EXPECT_EQ(context.recorder.nativeLaunchCalls, 0);
+        EXPECT_EQ(context.recorder.gatheredLaunchCalls, 0);
         EXPECT_EQ(context.recorder.fallbackLaunchCalls, 0);
         EXPECT_EQ(context.recorder.simulateCalls, 0);
         EXPECT_TRUE(state.throwObservation.hasActivePostThrowSuppression());
@@ -453,9 +442,10 @@ TEST(GrenadePredictionTest, SwitchingAwayThenBackObservesBothWeaponsAndAllowsHel
 
         ASSERT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
         ASSERT_EQ(state.throwObservation.observedWeapon, otherWeapon);
-        ASSERT_EQ(context.recorder.nativeLaunchCalls, 0);
-        ASSERT_EQ(context.recorder.unpinnedLaunchCalls, 1);
+        ASSERT_EQ(context.recorder.gatheredLaunchCalls, 1);
+        EXPECT_FLOAT_EQ(context.recorder.gatheredLaunchStrengths[0], 1.0f);
         context.recorder.pinPulled = true;
+        context.recorder.throwStrength = 0.5f;
         activeWeapon.baseEntityStorage.entityHandle = originalWeapon;
         context.globalVarsStorage.currentTime = 10.6f;
 
@@ -464,8 +454,9 @@ TEST(GrenadePredictionTest, SwitchingAwayThenBackObservesBothWeaponsAndAllowsHel
         EXPECT_EQ(state.throwObservation.observedWeapon, originalWeapon);
         EXPECT_FALSE(state.throwObservation.hasActivePostThrowSuppression());
         EXPECT_EQ(context.recorder.throwStrengthCalls, 1);
-        EXPECT_EQ(context.recorder.nativeLaunchCalls, 1);
-        EXPECT_EQ(context.recorder.unpinnedLaunchCalls, 1);
+        EXPECT_EQ(context.recorder.gatheredLaunchCalls, 2);
+        EXPECT_FLOAT_EQ(context.recorder.gatheredLaunchStrengths[0], 1.0f);
+        EXPECT_FLOAT_EQ(context.recorder.gatheredLaunchStrengths[1], 0.5f);
         EXPECT_EQ(context.recorder.fallbackLaunchCalls, 0);
         EXPECT_EQ(context.recorder.simulateCalls, 2);
     }
@@ -581,7 +572,7 @@ TEST(GrenadePredictionPlatformCapabilitiesTest, ReportsLiveProjectileSupportThro
 {
     EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsLiveProjectilePrediction, IS_WIN64());
     EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsHeldPrediction, IS_WIN64());
-    EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsNativeUnpinnedHeldLaunch, IS_WIN64());
+    EXPECT_EQ(GrenadePredictionPlatformCapabilities::supportsGatheredHeldLaunch, IS_WIN64());
 }
 
 }

@@ -52,7 +52,7 @@ TEST(GrenadePredictionThrowObservationTest, DoesNotPrepareLaunchWhenZeroThrowTim
     ASSERT_TRUE(observation.consumeActualExecution(true, 10.1f));
 
     ASSERT_FALSE(observation.observeThrowTime(weapon, 0.0f));
-    const auto launch = prepareGrenadeLaunch(observation.isFinalized(), GrenadeLaunchRoute::Native,
+    const auto launch = prepareGrenadeLaunch(observation.isFinalized(), GrenadeLaunchRoute::RetainedGathered,
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         []() noexcept -> Optional<GrenadeLaunchState> { return {}; },
         [&]() noexcept -> Optional<GrenadeLaunchState> {

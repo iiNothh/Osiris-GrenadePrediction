@@ -6,8 +6,8 @@
 enum class GrenadeLaunchRoute {
     Unavailable,
     Manual,
-    Native,
-    NativeUnpinned
+    RetainedGathered,
+    KnownUnpinnedFullStrength
 };
 
 [[nodiscard]] constexpr GrenadeLaunchRoute selectGrenadeLaunchRoute(bool hasRetainedThrowStrength, bool hasPinBaseline, bool pinPulled) noexcept
@@ -15,27 +15,33 @@ enum class GrenadeLaunchRoute {
     if (!hasPinBaseline)
         return GrenadeLaunchRoute::Unavailable;
     if (hasRetainedThrowStrength)
-        return GrenadeLaunchRoute::Native;
+        return GrenadeLaunchRoute::RetainedGathered;
     if (!pinPulled)
-        return GrenadeLaunchRoute::NativeUnpinned;
+        return GrenadeLaunchRoute::KnownUnpinnedFullStrength;
     return GrenadeLaunchRoute::Manual;
 }
 
-template <typename NativeProvider, typename NativeUnpinnedProvider, typename ManualProvider>
-[[nodiscard]] Optional<GrenadeLaunchState> prepareGrenadeLaunch(bool finalized, GrenadeLaunchRoute route, NativeProvider&& nativeProvider,
-    NativeUnpinnedProvider&& nativeUnpinnedProvider, ManualProvider&& manualProvider) noexcept
+template <typename RetainedGatheredProvider, typename KnownUnpinnedFullStrengthProvider, typename ManualProvider>
+[[nodiscard]] Optional<GrenadeLaunchState> prepareGrenadeLaunch(bool finalized, GrenadeLaunchRoute route,
+    RetainedGatheredProvider&& retainedGatheredProvider,
+    KnownUnpinnedFullStrengthProvider&& knownUnpinnedFullStrengthProvider,
+    ManualProvider&& manualProvider) noexcept
 {
     if (finalized)
         return {};
-    if (route == GrenadeLaunchRoute::Native) {
-        auto nativeState = nativeProvider();
-        if (nativeState.hasValue())
-            return nativeState;
+    switch (route) {
+    case GrenadeLaunchRoute::RetainedGathered: {
+        auto retainedGatheredState = retainedGatheredProvider();
+        if (retainedGatheredState.hasValue())
+            return retainedGatheredState;
         return manualProvider();
     }
-    if (route == GrenadeLaunchRoute::NativeUnpinned)
-        return nativeUnpinnedProvider();
-    if (route == GrenadeLaunchRoute::Manual)
+    case GrenadeLaunchRoute::KnownUnpinnedFullStrength:
+        return knownUnpinnedFullStrengthProvider();
+    case GrenadeLaunchRoute::Manual:
         return manualProvider();
-    return {};
+    case GrenadeLaunchRoute::Unavailable:
+    default:
+        return {};
+    }
 }

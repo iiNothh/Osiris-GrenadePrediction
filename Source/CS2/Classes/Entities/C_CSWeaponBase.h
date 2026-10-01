@@ -13,15 +13,11 @@ enum class CSWeaponMode : std::int32_t {
     Secondary,
     Max
 };
-struct C_CSPlayerPawn;
-struct Vector;
-
 struct C_CSWeaponBase : C_BaseModelEntity {
     using m_iClip1 = std::int32_t;
     using m_weaponMode = CSWeaponMode;
     using sceneObjectUpdaterHandle = SceneObjectUpdaterHandle_t*;
     using GetInaccuracy = float(C_CSWeaponBase* thisptr, float* movementInaccuracy, float* airSpeedInaccuracy);
-    using BuildGrenadeLaunch = char(C_CSWeaponBase* thisptr, C_CSPlayerPawn* playerPawn, Vector* origin, Vector* velocity, bool unknown);
 };
 
 }

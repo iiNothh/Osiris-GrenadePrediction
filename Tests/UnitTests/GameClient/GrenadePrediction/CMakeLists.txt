@@ -1,5 +1,4 @@
 target_sources(UnitTests PRIVATE
-    GrenadeLaunchTests.cpp
-    UnpinnedGrenadeLaunchTests.cpp
+    GatheredGrenadeLaunchTests.cpp
     GrenadeWeaponTests.cpp
 )

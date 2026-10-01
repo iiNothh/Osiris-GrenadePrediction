@@ -190,6 +190,29 @@ TEST(GrenadePlayerCollisionSnapshotBuilderTest, RejectsInvalidIdentityAndPlayerD
     EXPECT_EQ(snapshot.revision, 10);
 }
 
+TEST(GrenadePlayerCollisionSnapshotBuilderTest, RejectsMismatchedPlayerIdentityBackReference)
+{
+    GrenadePlayerCollisionSnapshotBuilderTestContext context;
+    SnapshotBuilderPlayer localPlayer;
+    SnapshotBuilderPlayer candidate;
+    localPlayer.set(&context.playerClass, 1, TeamNumber::CT, {});
+    candidate.set(&context.playerClass, 2, TeamNumber::TT, {});
+    registerPlayers(context, localPlayer, candidate);
+    SnapshotBuilder builder{context};
+    GrenadePlayerCollisionCollectionScratch scratch;
+    GrenadePlayerCollisionSnapshot snapshot{.count = 1, .status = GrenadePlayerCollisionSnapshotStatus::Available, .revision = 3};
+
+    candidate.identity.entity = &localPlayer.entity;
+    builder.begin(scratch);
+    observe(builder, scratch, candidate);
+    builder.finish(snapshot, scratch, &localPlayer.entity);
+
+    EXPECT_TRUE(scratch.playerDataInvalid);
+    EXPECT_EQ(snapshot.status, GrenadePlayerCollisionSnapshotStatus::Unavailable);
+    EXPECT_EQ(snapshot.count, 0);
+    EXPECT_EQ(snapshot.revision, 4);
+}
+
 TEST(GrenadePlayerCollisionSnapshotBuilderTest, RejectsOverflowedCollection)
 {
     GrenadePlayerCollisionSnapshotBuilderTestContext context;

@@ -6,7 +6,6 @@
 #include <CS2/Classes/CViewRender.h>
 #include <CS2/Classes/Entities/CCSPlayerController.h>
 #include <CS2/Classes/Entities/C_CSPlayerPawn.h>
-#include <CS2/Classes/Entities/C_CSWeaponBase.h>
 #include <CS2/Classes/Glow.h>
 #include <CS2/Classes/VMatrix.h>
 #include <CS2/Panorama/CPanel2D.h>
@@ -24,7 +23,6 @@ STRONG_TYPE_ALIAS(ViewRenderPointer, cs2::CViewRender**);
 STRONG_TYPE_ALIAS(LocalPlayerControllerPointer, cs2::CCSPlayerController**);
 STRONG_TYPE_ALIAS(ManageGlowSceneObjectPointer, cs2::ManageGlowSceneObject*);
 STRONG_TYPE_ALIAS(PointerToClientMode, cs2::ClientModeCSNormal*);
-STRONG_TYPE_ALIAS(BuildGrenadeLaunchFunction, cs2::C_CSWeaponBase::BuildGrenadeLaunch*);
 STRONG_TYPE_ALIAS(GatherGrenadeLaunchInputsFunction, cs2::C_CSPlayerPawn::GatherGrenadeLaunchInputs*);
 
 #if IS_WIN64()
